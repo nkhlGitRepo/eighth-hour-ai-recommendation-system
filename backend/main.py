@@ -12,6 +12,7 @@ from typing import List, Optional
 
 from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator, IntakeState
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
+from py_src.modules.m5_recommendation_engine import RecommendationEngine
 from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.consent_tracker import ConsentTracker
@@ -34,7 +35,8 @@ app.add_middleware(
 profiler = BodyShapeProfiler()
 catalog = CatalogKB([])  # Will be populated from website
 consent_tracker = ConsentTracker()
-intake_orchestrator = IntakeOrchestrator()  # Shares consent_tracker with orchestrator
+intake_orchestrator = IntakeOrchestrator()
+recommendation_engine = RecommendationEngine(catalog, consent_tracker)
 
 
 # =========================================================================
@@ -545,6 +547,74 @@ async def resume_intake_session(request: IntakeResumeRequest):
         raise HTTPException(status_code=404, detail=str(err))
     except Exception as err:
         logger.error("Intake session resume failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
+# PHASE 2: RECOMMENDATION ENGINE ENDPOINTS
+# =========================================================================
+
+
+@app.get("/recommendations/{session_id}")
+async def get_session_recommendations(
+    session_id: str,
+    k: int = 10,
+    category_filter: Optional[List[str]] = None,
+    occasion_filter: Optional[str] = None,
+):
+    """
+    Get personalized recommendations for a completed intake session.
+
+    Query params:
+    - session_id: ID of completed intake session
+    - k: Number of recommendations to return (default 10)
+    - category_filter: Optional list of categories to restrict to (e.g., ["Tops", "Dresses"])
+    - occasion_filter: Optional occasion to filter by (e.g., "work", "casual")
+
+    Returns:
+    {
+      "session_id": "uuid-...",
+      "recommendations": [
+        {
+          "sku": "top-123",
+          "name": "Fitted Top",
+          "category": "Tops",
+          "price": 59.99,
+          ...
+        },
+        ...
+      ]
+    }
+    """
+    try:
+        # Retrieve the completed session
+        session = intake_orchestrator.get_session(session_id)
+
+        # Verify session is complete
+        if session.status != "complete":
+            raise ModuleError(
+                f"Session must be complete to get recommendations (status={session.status})",
+                "M5"
+            )
+
+        # Generate recommendations
+        recommendations = recommendation_engine.generate_recommendations(
+            session,
+            k=k,
+            category_filter=category_filter,
+            occasion_filter=occasion_filter,
+        )
+
+        return {
+            "session_id": session_id,
+            "recommendations": recommendations,
+        }
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except Exception as err:
+        logger.error("Recommendation retrieval failed", err)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
