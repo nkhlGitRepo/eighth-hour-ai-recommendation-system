@@ -14,6 +14,7 @@ from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator, IntakeStat
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
 from py_src.modules.m5_recommendation_engine import RecommendationEngine
 from py_src.modules.m6_catalog_kb import CatalogKB
+from py_src.modules.m7_fit_checker import FitChecker
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.utils.errors import ModuleError, GuardrailError
@@ -37,6 +38,7 @@ catalog = CatalogKB([])  # Will be populated from website
 consent_tracker = ConsentTracker()
 intake_orchestrator = IntakeOrchestrator()
 recommendation_engine = RecommendationEngine(catalog, consent_tracker)
+fit_checker = FitChecker(consent_tracker)
 
 
 # =========================================================================
@@ -615,6 +617,76 @@ async def get_session_recommendations(
         raise HTTPException(status_code=403, detail=str(err))
     except Exception as err:
         logger.error("Recommendation retrieval failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
+# PHASE 3: FIT CHECKING ENDPOINTS
+# =========================================================================
+
+
+@app.post("/fit-check/{session_id}/{product_sku}")
+async def check_product_fit(session_id: str, product_sku: str):
+    """
+    Get fit assessment for a specific product based on user measurements.
+
+    Path params:
+    - session_id: ID of completed intake session
+    - product_sku: SKU of product to check fit for
+
+    Returns:
+    {
+      "product_sku": "top-123",
+      "fit_scores": { "XS": 0.65, "S": 0.92, "M": 0.88, "L": 0.45 },
+      "recommended_size": "S",
+      "fit_notes": [
+        "Size S fits perfectly.",
+        "Size M is slightly loose in waist."
+      ],
+      "confidence": 0.92
+    }
+    """
+    try:
+        # Retrieve the completed session
+        session = intake_orchestrator.get_session(session_id)
+
+        # Verify session is complete
+        if session.status != "complete":
+            raise ModuleError(
+                "Session must be complete to check fit",
+                "M7"
+            )
+
+        # Verify user has measurements
+        if not session.body_measurements:
+            raise ModuleError(
+                "Session missing body measurements",
+                "M7"
+            )
+
+        # Get product from catalog
+        product = catalog.get_item(product_sku)
+        if not product:
+            raise ModuleError(
+                f"Product {product_sku} not found in catalog",
+                "M7"
+            )
+
+        # Check fit
+        fit_assessment = fit_checker.check_fit(
+            user_id=session.user_id,
+            measurements=session.body_measurements.to_dict(),
+            product=product,
+            session_id=session_id,
+        )
+
+        return fit_assessment
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except Exception as err:
+        logger.error("Fit check failed", err)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
