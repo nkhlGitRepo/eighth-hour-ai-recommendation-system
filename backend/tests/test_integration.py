@@ -177,3 +177,212 @@ class TestIntegration:
         profile = self.profiler.profile(MEASUREMENTS["pear"])
         results = self.catalog.retrieve({"shape_class": profile["shape_class"]})
         assert len(results) > 0
+
+
+class TestPhase1IntakeFlow:
+    """Integration tests for Phase 1 intake orchestration workflow."""
+
+    def test_phase1_full_intake_flow(self):
+        """Customer completes full intake flow: consent → photo → measurements → profile → preferences."""
+        from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator
+
+        orchestrator = IntakeOrchestrator()
+        user_id = "intake_flow_user"
+
+        # 1. Create session
+        session = orchestrator.create_session(user_id=user_id)
+        assert session.status == "initiated"
+
+        # 2. Record consent
+        session = orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        assert session.status == "photo_capture"
+
+        # 3. Upload photo
+        session = orchestrator.upload_photo(
+            session.session_id,
+            photo_ref="s3://bucket/photo.jpg",
+            height_cm=165.0,
+        )
+        assert session.status == "measurement_extraction"
+
+        # 4. Extract measurements (M2 → M3)
+        session = orchestrator.extract_measurements(session.session_id)
+        assert session.status == "profile_generation"
+        assert session.body_measurements is not None
+        assert session.shape_profile is not None
+
+        # 5. Capture preferences
+        session = orchestrator.capture_preferences(
+            session.session_id,
+            preferred_colors=["black", "navy"],
+            preferred_silhouettes=["fitted"],
+            occasions=["work"],
+        )
+        assert session.status == "complete"
+        assert session.style_profile is not None
+
+    def test_phase1_m2_m3_integration(self):
+        """M2 measurements feed into M3 shape profiling."""
+        from py_src.modules.m2_sizing_integration import SizingIntegration
+        from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
+
+        sizing = SizingIntegration()
+        profiler = BodyShapeProfiler()
+
+        # Extract measurements via M2
+        measurements = sizing.extract_measurements(
+            photo_ref="s3://bucket/photo.jpg",
+            height_cm=165.0,
+        )
+
+        # Profile using M2 output
+        profile = profiler.profile(measurements.to_dict())
+
+        assert profile["shape_class"] in ["pear", "hourglass", "apple", "athletic", "straight", "balanced"]
+        assert profile["ratios"] is not None
+        assert len(profile["fit_notes"]) > 0
+
+    def test_phase1_m3_m6_integration_via_intake(self):
+        """M3 shape profile integrates with M6 for recommendations."""
+        from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator
+
+        orchestrator = IntakeOrchestrator()
+        user_id = "m3_m6_user"
+
+        # Complete intake to get shape profile
+        session = orchestrator.create_session(user_id=user_id)
+        orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/photo.jpg")
+        session = orchestrator.extract_measurements(session.session_id)
+
+        # Shape profile should be available
+        assert session.shape_profile is not None
+        shape_class = session.shape_profile["shape_class"]
+        assert shape_class is not None
+
+        # Verify profiler is available for Phase 2 recommendations
+        assert orchestrator.profiler.PROFILE_VERSION == "1.0.0"
+
+    def test_phase1_preference_capture_via_intake(self):
+        """M4 preference capture through intake flow."""
+        from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator
+
+        orchestrator = IntakeOrchestrator()
+        session = orchestrator.create_session(user_id="pref_capture_user")
+
+        orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/photo.jpg")
+        orchestrator.extract_measurements(session.session_id)
+
+        # Set to preferences_capture state for testing
+        session.status = "preferences_capture"
+
+        session = orchestrator.capture_preferences(
+            session.session_id,
+            preferred_colors=["black"],
+            preferred_silhouettes=["fitted"],
+            occasions=["work"],
+            coverage_prefs={"neckline": "moderate"},
+            free_text_notes="Minimalist style",
+        )
+
+        assert session.style_profile is not None
+        assert len(session.style_profile.preferred_colors) == 1
+        assert session.style_profile.preferred_colors[0] == "black"
+
+    def test_phase1_manual_fallback_flow(self):
+        """Customer uses manual measurement entry when needed."""
+        from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator
+
+        orchestrator = IntakeOrchestrator()
+        session = orchestrator.create_session(user_id="manual_user")
+
+        orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/photo.jpg")
+
+        # Set high confidence threshold to force manual entry
+        session = orchestrator.extract_measurements(
+            session.session_id,
+            confidence_threshold=0.99,
+        )
+        assert session.status == "manual_entry"
+
+        # User provides manual measurements
+        session = orchestrator.confirm_measurements(
+            session.session_id,
+            manual_overrides={
+                "bust": 88.0,
+                "waist": 70.0,
+                "hips": 102.0,
+                "height": 165.0,
+            },
+        )
+
+        assert session.status == "preferences_capture"
+        assert session.body_measurements is not None
+        assert session.shape_profile is not None
+
+    def test_phase1_consent_enforced_across_flow(self):
+        """Consent is enforced throughout intake flow."""
+        from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator
+        from py_src.utils.errors import GuardrailError
+
+        orchestrator = IntakeOrchestrator()
+        session = orchestrator.create_session(user_id="consent_user")
+
+        # Can't proceed without consent
+        with pytest.raises(GuardrailError):
+            orchestrator.record_consent(
+                session.session_id,
+                photo_consent=False,
+                measurement_consent=True,
+            )
+
+        # Properly recorded consent
+        session = orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        assert orchestrator.consent_tracker.has_photo_consent("consent_user")
+        assert orchestrator.consent_tracker.has_measurement_consent("consent_user")
+
+    def test_phase1_event_log_tracks_intake(self):
+        """Event log tracks all intake state transitions."""
+        from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator
+
+        orchestrator = IntakeOrchestrator()
+        session = orchestrator.create_session(user_id="event_log_user")
+
+        orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/photo.jpg")
+
+        session = orchestrator.get_session(session.session_id)
+        events = session.event_log
+
+        # Verify all transitions logged
+        assert len(events) >= 2
+        assert events[0]["from_state"] == "initiated"
+        assert events[0]["to_state"] == "photo_capture"
+        assert events[1]["from_state"] == "photo_capture"
+        assert events[1]["to_state"] == "measurement_extraction"

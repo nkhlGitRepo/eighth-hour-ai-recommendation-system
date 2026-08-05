@@ -10,9 +10,17 @@ class AuditLogger:
 
     # PII-safe event names (no user data in event name)
     EVENTS = {
+        # Phase 0 events
         "PROFILE_CREATED": "User created body shape profile",
         "PROFILE_RETRIEVED": "User retrieved profile",
         "RECOMMENDATION_RETRIEVED": "User requested recommendations",
+        # Phase 1 events
+        "INTAKE_STARTED": "User started intake flow",
+        "INTAKE_COMPLETED": "User completed intake flow",
+        "MEASUREMENTS_EXTRACTED": "Body measurements extracted from photo",
+        "PREFERENCES_CAPTURED": "User style preferences captured",
+        "PHOTO_UPLOADED": "User photo uploaded",
+        # General events
         "CONSENT_RECORDED": "Consent recorded",
         "CONSENT_WITHDRAWN": "Consent withdrawn",
         "ACCESS_GRANTED": "Access granted to resource",
