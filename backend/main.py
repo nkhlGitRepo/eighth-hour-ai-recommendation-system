@@ -15,6 +15,8 @@ from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
 from py_src.modules.m5_recommendation_engine import RecommendationEngine
 from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.modules.m7_fit_checker import FitChecker
+from py_src.modules.m8_recommendation_history import RecommendationHistory
+from py_src.modules.m9_new_releases_feed import NewReleasesFeed
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.utils.errors import ModuleError, GuardrailError
@@ -39,6 +41,12 @@ consent_tracker = ConsentTracker()
 intake_orchestrator = IntakeOrchestrator()
 recommendation_engine = RecommendationEngine(catalog, consent_tracker)
 fit_checker = FitChecker(consent_tracker)
+recommendation_history = RecommendationHistory(consent_tracker=consent_tracker)
+new_releases_feed = NewReleasesFeed(
+    catalog=catalog,
+    fit_checker=fit_checker,
+    consent_tracker=consent_tracker,
+)
 
 
 # =========================================================================
@@ -680,6 +688,25 @@ async def check_product_fit(session_id: str, product_sku: str):
             session_id=session_id,
         )
 
+        # Save to history (M8) - non-critical, don't fail the fit check if save fails
+        try:
+            recommendation_history.save_fit_check(
+                user_id=session.user_id,
+                session_id=session_id,
+                product_sku=product_sku,
+                fit_result=fit_assessment,
+            )
+        except GuardrailError as err:
+            logger.warn(
+                "Fit check result not saved to history (guardrail): consent verification failed",
+                {"error": str(err), "product_sku": product_sku}
+            )
+        except Exception as err:
+            logger.warn(
+                "Fit check result not saved to history (unexpected error)",
+                {"error": str(err), "product_sku": product_sku, "type": type(err).__name__}
+            )
+
         return fit_assessment
     except ModuleError as err:
         raise HTTPException(status_code=400, detail=str(err))
@@ -687,6 +714,205 @@ async def check_product_fit(session_id: str, product_sku: str):
         raise HTTPException(status_code=403, detail=str(err))
     except Exception as err:
         logger.error("Fit check failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
+# M9 — NEW RELEASES FEED ENDPOINT
+# =========================================================================
+
+
+@app.get("/new-releases/{session_id}")
+async def get_new_releases(session_id: str, limit: int = 20):
+    """
+    Get personalized new releases feed for a user based on their profiles.
+
+    Path params:
+    - session_id: ID of completed intake session
+
+    Query params:
+    - limit: Maximum number of items (1-100, default 20)
+
+    Returns:
+    [
+      {
+        "sku": "top-123",
+        "name": "Navy Fitted Top",
+        "category": "Tops",
+        "match_score": 0.92,
+        "matched_attributes": ["Flatters hourglass shapes", "Available in your colors (navy)"],
+        "reason": "We think you'll like this because it flatters hourglass shapes.",
+        "availability": {
+          "recommended_size": "M",
+          "available_sizes": ["XS", "S", "M", "L", "XL"]
+        }
+      },
+      ...
+    ]
+    """
+    try:
+        # Retrieve the completed session
+        session = intake_orchestrator.get_session(session_id)
+
+        # Verify session is complete
+        if session.status != "complete":
+            raise ModuleError(
+                "Session must be complete to view new releases",
+                "M9"
+            )
+
+        # Verify user has profiles
+        if not session.body_measurements or not session.shape_profile:
+            raise ModuleError(
+                "Session missing measurements or shape profile",
+                "M9"
+            )
+
+        # Generate personalized feed
+        feed = new_releases_feed.generate_feed(
+            user_id=session.user_id,
+            body_shape_profile=session.shape_profile,
+            style_profile=session.style_profile.to_dict() if session.style_profile else None,
+            measurements=session.body_measurements.to_dict(),
+            limit=limit,
+        )
+
+        return feed
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except Exception as err:
+        logger.error("New releases feed failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
+# M8 — RECOMMENDATION HISTORY ENDPOINTS
+# =========================================================================
+
+
+@app.get("/history/{user_id}")
+async def get_user_history(user_id: str, limit: int = 20):
+    """
+    Get fit check history for a user.
+
+    Path params:
+    - user_id: User identifier
+
+    Query params:
+    - limit: Maximum records to return (1-100, default 20)
+
+    Returns:
+    [
+      {
+        "check_id": "check_abc123",
+        "product_sku": "top-123",
+        "recommended_size": "M",
+        "confidence": 1.0,
+        "fit_scores": {"XS": 0.6, "S": 0.8, "M": 1.0, "L": 0.7},
+        "fit_notes": ["Fits perfectly."],
+        "checked_at": 1234567890.5
+      },
+      ...
+    ]
+    """
+    try:
+        history = recommendation_history.get_user_history(user_id, limit=limit)
+        return history
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        logger.error("History retrieval failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/history/session/{session_id}")
+async def get_session_checks(user_id: str, session_id: str):
+    """
+    Get fit checks from a specific session.
+
+    Path params:
+    - session_id: Session identifier
+
+    Query params:
+    - user_id: User identifier (for access control)
+
+    Returns:
+    [
+      {
+        "check_id": "check_abc123",
+        "product_sku": "top-123",
+        "recommended_size": "M",
+        "confidence": 1.0,
+        "fit_scores": {...},
+        "fit_notes": [...],
+        "checked_at": 1234567890.5
+      },
+      ...
+    ]
+    """
+    try:
+        checks = recommendation_history.get_session_checks(user_id, session_id)
+        return checks
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+
+@app.get("/history/product/{product_sku}")
+async def get_product_trend(user_id: str, product_sku: str, limit: int = 10):
+    """
+    Get fit check history for a specific product (trend analysis).
+
+    Path params:
+    - product_sku: Product to analyze
+
+    Query params:
+    - user_id: User identifier
+    - limit: Maximum records to return (1-100, default 10)
+
+    Returns fit checks for this product over time, showing how assessment changes.
+    """
+    try:
+        trend = recommendation_history.get_product_trend(user_id, product_sku, limit=limit)
+        return trend
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+
+
+@app.get("/trends/{user_id}")
+async def get_user_trends(user_id: str):
+    """
+    Get aggregate trend analysis for a user's fit preferences.
+
+    Path params:
+    - user_id: User identifier
+
+    Returns:
+    {
+      "most_checked_products": [("top-123", 15), ("top-456", 10), ...],
+      "avg_confidence_by_size": {"M": 0.92, "L": 0.87, ...},
+      "preferred_sizes": [("M", 20), ("L", 15), ...],
+      "total_checks": 50,
+      "date_range": {
+        "earliest": 1234567890.0,
+        "latest": 1234567950.0
+      }
+    }
+    """
+    try:
+        analysis = recommendation_history.analyze_user_trends(user_id)
+        return analysis
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except Exception as err:
+        logger.error("Trend analysis failed", err)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

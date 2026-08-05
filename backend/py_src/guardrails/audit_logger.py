@@ -20,6 +20,14 @@ class AuditLogger:
         "MEASUREMENTS_EXTRACTED": "Body measurements extracted from photo",
         "PREFERENCES_CAPTURED": "User style preferences captured",
         "PHOTO_UPLOADED": "User photo uploaded",
+        # Phase 3 events
+        "FIT_CHECK_COMPLETED": "Product fit assessment completed",
+        "FIT_CHECK_SAVED_TO_HISTORY": "Fit check saved to user history",
+        "HISTORY_RETRIEVED": "User history retrieved",
+        "HISTORY_DELETED": "User history deleted (GDPR right-to-be-forgotten)",
+        "SESSION_CHECKS_RETRIEVED": "Session fit checks retrieved",
+        "TREND_ANALYSIS_COMPLETED": "Fit preference trend analysis completed",
+        "NEW_RELEASES_FEED_GENERATED": "Personalized new releases feed generated",
         # General events
         "CONSENT_RECORDED": "Consent recorded",
         "CONSENT_WITHDRAWN": "Consent withdrawn",

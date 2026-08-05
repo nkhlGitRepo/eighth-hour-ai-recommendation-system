@@ -7,6 +7,7 @@ Swappable backend: SQLite (dev) or PostgreSQL (prod).
 
 import json
 import sqlite3
+import time
 from typing import Optional, Dict, TYPE_CHECKING
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError
@@ -67,6 +68,30 @@ class SQLiteSessionRepository(SessionRepository):
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_user_id ON intake_sessions(user_id)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS fit_check_history (
+                    check_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    session_id TEXT,
+                    product_sku TEXT NOT NULL,
+                    fit_scores TEXT NOT NULL,
+                    recommended_size TEXT NOT NULL,
+                    fit_notes TEXT,
+                    confidence REAL NOT NULL,
+                    checked_at REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_fit_user_id ON fit_check_history(user_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_fit_session_id ON fit_check_history(session_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_fit_product_sku ON fit_check_history(product_sku)"
             )
             conn.commit()
         logger.info("Session database initialized", {"path": self.db_path})
@@ -177,6 +202,110 @@ class SQLiteSessionRepository(SessionRepository):
         except Exception as err:
             logger.error("Session deletion failed", err)
             raise
+
+    def save_fit_check(self, user_id: str, session_id: str, product_sku: str, fit_result: dict) -> str:
+        """Save a fit check result to history. Returns check_id."""
+        import uuid
+        check_id = f"check_{uuid.uuid4().hex[:12]}"
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    """
+                    INSERT INTO fit_check_history
+                    (check_id, user_id, session_id, product_sku, fit_scores, recommended_size, fit_notes, confidence, checked_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        check_id,
+                        user_id,
+                        session_id,
+                        product_sku,
+                        json.dumps(fit_result.get("fit_scores", {})),
+                        fit_result.get("recommended_size"),
+                        json.dumps(fit_result.get("fit_notes", [])),
+                        fit_result.get("confidence", 0),
+                        time.time(),
+                    ),
+                )
+                conn.commit()
+            logger.debug("Fit check saved", {"check_id": check_id, "product_sku": product_sku})
+            return check_id
+        except Exception as err:
+            logger.error("Fit check save failed", err)
+            raise
+
+    def get_fit_check_history(self, user_id: str, limit: int = 20) -> list:
+        """Get most recent fit checks for a user."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT * FROM fit_check_history
+                    WHERE user_id = ?
+                    ORDER BY checked_at DESC
+                    LIMIT ?
+                    """,
+                    (user_id, limit),
+                ).fetchall()
+
+            return [self._row_to_fit_check(row) for row in rows]
+        except Exception as err:
+            logger.error("Fit check history retrieval failed", err)
+            raise
+
+    def get_fit_check_by_session(self, session_id: str) -> list:
+        """Get all fit checks for a specific session."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT * FROM fit_check_history
+                    WHERE session_id = ?
+                    ORDER BY checked_at DESC
+                    """,
+                    (session_id,),
+                ).fetchall()
+
+            return [self._row_to_fit_check(row) for row in rows]
+        except Exception as err:
+            logger.error("Session fit check retrieval failed", err)
+            raise
+
+    def get_fit_check_trend(self, user_id: str, product_sku: str, limit: int = 10) -> list:
+        """Get fit check history for a specific product across all sessions (trend analysis)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                rows = conn.execute(
+                    """
+                    SELECT * FROM fit_check_history
+                    WHERE user_id = ? AND product_sku = ?
+                    ORDER BY checked_at DESC
+                    LIMIT ?
+                    """,
+                    (user_id, product_sku, limit),
+                ).fetchall()
+
+            return [self._row_to_fit_check(row) for row in rows]
+        except Exception as err:
+            logger.error("Fit check trend retrieval failed", err)
+            raise
+
+    def _row_to_fit_check(self, row) -> dict:
+        """Convert database row to fit check dict."""
+        return {
+            "check_id": row["check_id"],
+            "user_id": row["user_id"],
+            "session_id": row["session_id"],
+            "product_sku": row["product_sku"],
+            "fit_scores": json.loads(row["fit_scores"]) if row["fit_scores"] else {},
+            "recommended_size": row["recommended_size"],
+            "fit_notes": json.loads(row["fit_notes"]) if row["fit_notes"] else [],
+            "confidence": row["confidence"],
+            "checked_at": row["checked_at"],
+        }
 
     def _row_to_session(self, row) -> "IntakeSession":
         """Convert database row to IntakeSession object."""

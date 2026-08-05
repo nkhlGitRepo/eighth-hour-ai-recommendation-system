@@ -14,6 +14,8 @@ Guardrails applied:
 from typing import Optional, Dict, List, Any
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
+from py_src.utils.sizing import validate_measurements
+from py_src.constants import STANDARD_SIZE_CHART, STANDARD_SIZES
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
@@ -22,18 +24,9 @@ from py_src.guardrails.consent_tracker import ConsentTracker
 class FitChecker:
     """Assess product sizing fit for a user."""
 
-    # Standard size ordering for Eighth Hour's sizing scale
-    SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL"]
-
-    # Standard size measurements (cm) - typical garment measurements per size
-    STANDARD_SIZE_CHART = {
-        "XS": {"bust": 78, "waist": 60, "hips": 85},
-        "S": {"bust": 84, "waist": 66, "hips": 91},
-        "M": {"bust": 90, "waist": 72, "hips": 97},
-        "L": {"bust": 96, "waist": 78, "hips": 103},
-        "XL": {"bust": 102, "waist": 84, "hips": 109},
-        "XXL": {"bust": 108, "waist": 90, "hips": 115},
-    }
+    # Reference to shared constants (imported at module level)
+    SIZE_ORDER = STANDARD_SIZES
+    STANDARD_SIZE_CHART = STANDARD_SIZE_CHART
 
     def __init__(self, consent_tracker: Optional[ConsentTracker] = None):
         """
@@ -143,33 +136,11 @@ class FitChecker:
 
     def _validate_measurements(self, measurements: Dict[str, float]) -> None:
         """Validate measurement dict has required fields with valid values."""
-        required = {"bust", "waist", "hips", "height"}
-        if not required.issubset(measurements.keys()):
-            missing = required - set(measurements.keys())
-            raise ModuleError(
-                f"Missing measurements: {missing}",
-                "M7"
-            )
-
-        for field in required:
-            value = measurements[field]
-            if not isinstance(value, (int, float)) or value <= 0:
-                raise ModuleError(
-                    f"Invalid measurement {field}={value}: must be positive number",
-                    "M7"
-                )
-
-            # Sanity check ranges (cm)
-            if field == "height" and (value < 140 or value > 210):
-                raise ModuleError(
-                    f"Invalid height {value}cm: expected 140-210cm",
-                    "M7"
-                )
-            elif field in ["bust", "waist", "hips"] and (value < 60 or value > 140):
-                raise ModuleError(
-                    f"Invalid {field} {value}cm: expected 60-140cm",
-                    "M7"
-                )
+        try:
+            validate_measurements(measurements)
+        except ModuleError as err:
+            # Re-raise with M7 context
+            raise ModuleError(err.message, "M7")
 
     def _validate_product(self, product: Dict[str, Any]) -> None:
         """Validate product dict has required fields."""
