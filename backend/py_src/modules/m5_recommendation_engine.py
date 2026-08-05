@@ -10,10 +10,11 @@ Guardrails applied:
 - InputValidator: Validate session data completeness
 """
 
+from typing import Optional, List, Dict, Any
+from py_src.modules.m1_intake_orchestrator import IntakeSession
 from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
-from py_src.guardrails.input_validation import InputValidator
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
 
@@ -35,11 +36,11 @@ class RecommendationEngine:
 
     def generate_recommendations(
         self,
-        session,
+        session: IntakeSession,
         k: int = 10,
-        category_filter: list = None,
-        occasion_filter: str = None,
-    ) -> list:
+        category_filter: Optional[List[str]] = None,
+        occasion_filter: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Generate personalized recommendations from an intake session.
 
@@ -176,7 +177,8 @@ class RecommendationEngine:
         style_profile = session.style_profile
         measurements = session.body_measurements.to_dict()
 
-        # Colors from style profile (capitalize to match catalog format)
+        # Colors from style profile: M4 validates lowercase (e.g., "black", "navy")
+        # but catalog expects title case (e.g., "Black", "Navy") for M6 matching
         raw_colors = style_profile.preferred_colors or []
         preferred_colors = [color.capitalize() for color in raw_colors]
 

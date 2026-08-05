@@ -9,6 +9,7 @@ import json
 import sqlite3
 from typing import Optional, Dict, TYPE_CHECKING
 from py_src.utils.logger import logger
+from py_src.utils.errors import ModuleError
 
 if TYPE_CHECKING:
     from py_src.modules.m1_intake_orchestrator import IntakeSession
@@ -212,19 +213,34 @@ class SQLiteSessionRepository(SessionRepository):
 
         # Reconstruct measurements object
         if row["body_measurements"]:
-            m_dict = json.loads(row["body_measurements"])
-            session.body_measurements = Measurements(
-                bust=m_dict["bust"],
-                waist=m_dict["waist"],
-                hips=m_dict["hips"],
-                height=m_dict["height"],
-                shoulder=m_dict.get("shoulder"),
-                inseam=m_dict.get("inseam"),
-                unit=m_dict.get("unit", "cm"),
-                confidence_scores=m_dict.get("confidence_scores"),
-                provider=m_dict.get("provider", "mock"),
-                provider_version=m_dict.get("provider_version", "1.0"),
-            )
+            try:
+                m_dict = json.loads(row["body_measurements"])
+                # Validate required measurement fields
+                required = {"bust", "waist", "hips", "height"}
+                missing = required - set(m_dict.keys())
+                if missing:
+                    raise ModuleError(
+                        f"Session data corrupted: measurements missing {missing}",
+                        "SessionRepository"
+                    )
+                session.body_measurements = Measurements(
+                    bust=m_dict["bust"],
+                    waist=m_dict["waist"],
+                    hips=m_dict["hips"],
+                    height=m_dict["height"],
+                    shoulder=m_dict.get("shoulder"),
+                    inseam=m_dict.get("inseam"),
+                    unit=m_dict.get("unit", "cm"),
+                    confidence_scores=m_dict.get("confidence_scores"),
+                    provider=m_dict.get("provider", "mock"),
+                    provider_version=m_dict.get("provider_version", "1.0"),
+                )
+            except (json.JSONDecodeError, KeyError, ValueError) as err:
+                logger.error("Session reconstruction failed", {"error": str(err), "session_id": row["session_id"]})
+                raise ModuleError(
+                    f"Failed to deserialize session measurements: {str(err)}",
+                    "SessionRepository"
+                )
 
         # Reconstruct style profile object
         if row["style_profile"]:
