@@ -86,11 +86,12 @@ class TestM1MeasurementValidation:
         orchestrator.upload_photo(session.session_id, "s3://bucket/photo.jpg")
         session = orchestrator.extract_measurements(session.session_id)
 
-        # Verify measurements are correct
+        # Verify measurements are correct values
         assert session.body_measurements is not None
         assert session.body_measurements.bust == 88.0
         assert session.body_measurements.waist == 70.0
         assert session.body_measurements.hips == 102.0
+        assert session.body_measurements.height == 165.0
 
         # Verify profile is generated and correct
         assert session.shape_profile is not None
@@ -98,10 +99,27 @@ class TestM1MeasurementValidation:
         assert session.shape_profile["shape_class"] in [
             "pear", "hourglass", "apple", "athletic", "straight", "balanced"
         ]
+        # Mock returns hourglass for these measurements
+        assert session.shape_profile["shape_class"] == "hourglass"
+
+        # Verify shape profile has all required fields
         assert "ratios" in session.shape_profile
         assert "size_recommendation_by_category" in session.shape_profile
         assert "fit_notes" in session.shape_profile
         assert len(session.shape_profile["fit_notes"]) > 0
+
+        # Verify ratios are reasonable
+        ratios = session.shape_profile["ratios"]
+        assert "bust_waist" in ratios
+        assert "waist_hip" in ratios
+        assert ratios["bust_waist"] == pytest.approx(88.0 / 70.0, rel=0.01)
+        assert ratios["waist_hip"] == pytest.approx(70.0 / 102.0, rel=0.01)
+
+        # Verify size recommendations exist for standard categories
+        categories = session.shape_profile["size_recommendation_by_category"]
+        assert len(categories) > 0
+        for category, size_rec in categories.items():
+            assert isinstance(size_rec, str)  # Should be string size like "M"
 
     def test_manual_override_measurements_generate_profile(self, orchestrator):
         """Manual measurement overrides should generate correct profile."""
@@ -222,6 +240,44 @@ class TestM1PreferenceIntegration:
         assert "wrong_silhouette" not in session.style_profile.preferred_silhouettes
         assert "work" in session.style_profile.occasions
         assert "invalid_occasion" not in session.style_profile.occasions
+
+    def test_all_invalid_preferences_rejected(self, orchestrator):
+        """M4 rejects if ALL preferences are invalid (guardrail)."""
+        session = orchestrator.create_session(user_id="test_user")
+        orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/photo.jpg")
+        orchestrator.extract_measurements(session.session_id)
+
+        # All invalid preferences - should be rejected
+        with pytest.raises(ModuleError, match="No valid colors"):
+            orchestrator.capture_preferences(
+                session.session_id,
+                preferred_colors=["invalid1", "invalid2"],
+                preferred_silhouettes=["wrong1", "wrong2"],
+                occasions=["badoccasion"],
+            )
+
+    def test_empty_preferences_succeeds(self, orchestrator):
+        """Flow completes successfully with no preferences specified."""
+        session = orchestrator.create_session(user_id="test_user")
+        orchestrator.record_consent(
+            session.session_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/photo.jpg")
+        orchestrator.extract_measurements(session.session_id)
+
+        # Capture with no preferences
+        session = orchestrator.capture_preferences(session.session_id)
+
+        assert session.status == IntakeState.COMPLETE.value
+        assert len(session.style_profile.preferred_colors) == 0
+        assert len(session.style_profile.occasions) == 0
 
 
 class TestM1ConsentEnforcement:

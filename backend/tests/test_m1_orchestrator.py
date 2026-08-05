@@ -37,13 +37,19 @@ class TestIntakeSessionCreation:
     """Test creating and retrieving intake sessions."""
 
     def test_create_session(self, orchestrator):
-        """Create a new intake session."""
+        """Create a new intake session and verify persistence."""
         session = orchestrator.create_session(user_id="test_user")
         assert session.user_id == "test_user"
         assert session.status == IntakeState.INITIATED.value
         assert len(session.photo_refs) == 0
         assert session.body_measurements is None
         assert session.shape_profile is None
+
+        # Verify persistence: retrieve from database
+        retrieved = orchestrator.get_session(session.session_id)
+        assert retrieved.user_id == "test_user"
+        assert retrieved.status == IntakeState.INITIATED.value
+        assert retrieved.session_id == session.session_id
 
     def test_create_session_invalid_user_id(self, orchestrator):
         """Reject invalid user_id."""
@@ -66,7 +72,7 @@ class TestConsentFlow:
     """Test consent recording and state transitions."""
 
     def test_record_consent_success(self, orchestrator):
-        """Record consent and transition to photo_capture."""
+        """Record consent and verify persistence."""
         session = orchestrator.create_session(user_id="test_user")
         updated = orchestrator.record_consent(
             session.session_id,
@@ -76,6 +82,14 @@ class TestConsentFlow:
         assert updated.status == IntakeState.PHOTO_CAPTURE.value
         assert updated.consent_record["photo"] is True
         assert updated.consent_record["measurements"] is True
+        assert "timestamp" in updated.consent_record
+
+        # Verify persistence: retrieve from database
+        retrieved = orchestrator.get_session(session.session_id)
+        assert retrieved.consent_record["photo"] is True
+        assert retrieved.consent_record["measurements"] is True
+        # Verify state transition persisted
+        assert retrieved.status == IntakeState.PHOTO_CAPTURE.value
 
     def test_record_consent_photo_only(self, orchestrator):
         """Reject consent if only photo accepted."""
