@@ -1,17 +1,35 @@
 """Comprehensive tests for M1 to catch edge cases and ensure rigorous verification."""
 
 import pytest
+import tempfile
+import os
 from py_src.modules.m1_intake_orchestrator import (
     IntakeOrchestrator,
     IntakeState,
 )
+from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.utils.errors import ModuleError, GuardrailError
 
 
 @pytest.fixture
 def orchestrator():
-    """Fresh orchestrator instance for each test."""
-    return IntakeOrchestrator()
+    """Fresh orchestrator instance with isolated database for each test."""
+    # Create a temporary database file for this test
+    temp_db = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+    db_path = temp_db.name
+    temp_db.close()
+
+    # Create orchestrator with temp database
+    repo = SQLiteSessionRepository(db_path=db_path)
+    orch = IntakeOrchestrator(session_repo=repo)
+
+    yield orch
+
+    # Clean up the temp database after test
+    try:
+        os.unlink(db_path)
+    except:
+        pass
 
 
 class TestM1StateGuards:

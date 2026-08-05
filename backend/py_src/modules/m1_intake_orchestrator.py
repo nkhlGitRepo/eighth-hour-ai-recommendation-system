@@ -19,6 +19,7 @@ from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.modules.m2_sizing_integration import SizingIntegration, Measurements
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
 from py_src.modules.m4_style_preference import PreferenceCapture, StyleProfile
+from py_src.persistence.session_repository import SessionRepository, SQLiteSessionRepository
 import time
 import uuid
 
@@ -103,9 +104,9 @@ class IntakeSession:
 class IntakeOrchestrator:
     """Orchestrates the multi-screen intake flow."""
 
-    def __init__(self):
-        # In-memory session store (Phase 1 only; Phase 2 uses DB)
-        self._sessions = {}
+    def __init__(self, session_repo: SessionRepository = None):
+        # Session persistence layer (defaults to SQLite)
+        self.session_repo = session_repo or SQLiteSessionRepository()
         self.sizing = SizingIntegration()
         self.profiler = BodyShapeProfiler()
         self.preferences = PreferenceCapture()
@@ -118,7 +119,7 @@ class IntakeOrchestrator:
             raise ModuleError("Invalid user_id", "M1")
 
         session = IntakeSession(user_id)
-        self._sessions[session.session_id] = session
+        self.session_repo.save(session)
 
         AuditLogger.log_event(
             "INTAKE_STARTED",
@@ -131,18 +132,18 @@ class IntakeOrchestrator:
 
     def get_session(self, session_id: str) -> IntakeSession:
         """Retrieve an intake session."""
-        if session_id not in self._sessions:
+        session = self.session_repo.get(session_id)
+        if not session:
             raise ModuleError(f"Session {session_id} not found", "M1")
-        return self._sessions[session_id]
+        return session
 
     def resume_session(self, user_id: str) -> IntakeSession:
         """Resume the most recent incomplete session for a user."""
-        for session_id, session in self._sessions.items():
-            if session.user_id == user_id and session.status != IntakeState.COMPLETE.value:
-                logger.info("Resuming intake session", {"user_id": user_id, "session_id": session_id})
-                return session
-
-        raise ModuleError(f"No resumable session found for user {user_id}", "M1")
+        session = self.session_repo.get_by_user(user_id)
+        if not session:
+            raise ModuleError(f"No resumable session found for user {user_id}", "M1")
+        logger.info("Resuming intake session", {"user_id": user_id, "session_id": session.session_id})
+        return session
 
     def record_consent(
         self,
@@ -198,6 +199,7 @@ class IntakeOrchestrator:
         )
 
         logger.debug("Consent recorded", {"session_id": session_id, "user_id": session.user_id})
+        self.session_repo.save(session)
         return session
 
     def upload_photo(
@@ -244,6 +246,7 @@ class IntakeOrchestrator:
         )
 
         logger.debug("Photo uploaded", {"session_id": session_id, "photo_ref": photo_ref})
+        self.session_repo.save(session)
         return session
 
     def extract_measurements(
@@ -337,6 +340,7 @@ class IntakeOrchestrator:
                 "error_fallback"
             )
 
+        self.session_repo.save(session)
         return session
 
     def confirm_measurements(
@@ -394,6 +398,7 @@ class IntakeOrchestrator:
             "user_confirmed_measurements"
         )
 
+        self.session_repo.save(session)
         return session
 
     def _generate_profile(self, session: IntakeSession):
@@ -489,4 +494,5 @@ class IntakeOrchestrator:
         )
 
         logger.info("Intake completed", {"session_id": session.session_id, "user_id": session.user_id})
+        self.session_repo.save(session)
         return session
