@@ -165,16 +165,20 @@ class RecommendationsPage {
       document.querySelectorAll('input[name="category"]:checked')
     ).map(el => el.value);
 
+    console.log('Selected categories:', selectedCategories);
+    console.log('Total recommendations:', this.recommendations.length);
+
     if (selectedCategories.length === 0) {
       this.filteredRecommendations = [...this.recommendations];
     } else {
-      this.filteredRecommendations = this.recommendations.filter(rec =>
-        selectedCategories.includes(rec.category)
-      );
-      // If no results with filter, show all (filter was too strict)
-      if (this.filteredRecommendations.length === 0) {
-        this.filteredRecommendations = [...this.recommendations];
-      }
+      this.filteredRecommendations = this.recommendations.filter(rec => {
+        const matches = selectedCategories.includes(rec.category);
+        if (!matches) {
+          console.log(`Filtered out: ${rec.name} (category: ${rec.category})`);
+        }
+        return matches;
+      });
+      console.log('Filtered recommendations count:', this.filteredRecommendations.length);
     }
 
     this.displayRecommendations();
