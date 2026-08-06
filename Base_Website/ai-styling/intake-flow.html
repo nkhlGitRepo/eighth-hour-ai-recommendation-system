@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Get Your Style Profile — Eighth Hour</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="intake-flow.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="logo" href="../index.html">EIGHTH HOUR</a>
+      <a href="../index.html" class="close-intake">← Back to Shop</a>
+    </div>
+  </header>
+
+  <main class="intake-container">
+    <div class="intake-modal">
+      <!-- Progress indicator -->
+      <div class="intake-progress">
+        <div class="progress-steps">
+          <div class="step active" data-step="1">
+            <span class="step-number">1</span>
+            <span class="step-label">Consent</span>
+          </div>
+          <div class="step" data-step="2">
+            <span class="step-number">2</span>
+            <span class="step-label">Measurements</span>
+          </div>
+          <div class="step" data-step="3">
+            <span class="step-number">3</span>
+            <span class="step-label">Shape Profile</span>
+          </div>
+          <div class="step" data-step="4">
+            <span class="step-number">4</span>
+            <span class="step-label">Style Prefs</span>
+          </div>
+          <div class="step" data-step="5">
+            <span class="step-number">5</span>
+            <span class="step-label">Complete</span>
+          </div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width: 20%"></div>
+        </div>
+      </div>
+
+      <!-- Screen 1: Consent -->
+      <div class="intake-screen active" id="screen-consent" data-screen="consent">
+        <h1>Get Your Personalized Style Profile</h1>
+        <p class="subtitle">In 5 minutes, we'll create recommendations tailored to your shape and style.</p>
+
+        <div class="consent-section">
+          <h3>Consent to Data Processing</h3>
+          <label class="checkbox-label">
+            <input type="checkbox" id="photoConsent" />
+            <span>I consent to photo capture and measurement extraction</span>
+          </label>
+          <p class="consent-note">We use your photo to extract body measurements. Your photo is not stored.</p>
+
+          <label class="checkbox-label">
+            <input type="checkbox" id="measurementConsent" />
+            <span>I consent to using my measurements for personalized recommendations</span>
+          </label>
+          <p class="consent-note">Your measurements help us find the perfect fit and style for you.</p>
+        </div>
+
+        <div class="intake-actions">
+          <button class="btn btn-primary" id="consentNext" disabled>Continue</button>
+        </div>
+        <p class="intake-note">You can withdraw consent at any time from your profile settings.</p>
+      </div>
+
+      <!-- Screen 2: Measurements -->
+      <div class="intake-screen" id="screen-measurements" data-screen="measurements">
+        <h2>Your Measurements</h2>
+        <p class="subtitle">Tell us your body measurements for an accurate fit.</p>
+
+        <div class="measurements-grid">
+          <div class="measurement-input">
+            <label for="bust">Bust (cm)</label>
+            <input type="number" id="bust" placeholder="e.g., 88" min="60" max="140" />
+            <span class="measurement-help">Measure around fullest part</span>
+          </div>
+          <div class="measurement-input">
+            <label for="waist">Waist (cm)</label>
+            <input type="number" id="waist" placeholder="e.g., 70" min="50" max="130" />
+            <span class="measurement-help">Measure natural waist</span>
+          </div>
+          <div class="measurement-input">
+            <label for="hips">Hips (cm)</label>
+            <input type="number" id="hips" placeholder="e.g., 102" min="60" max="150" />
+            <span class="measurement-help">Measure fullest part</span>
+          </div>
+          <div class="measurement-input">
+            <label for="height">Height (cm)</label>
+            <input type="number" id="height" placeholder="e.g., 165" min="140" max="210" />
+            <span class="measurement-help">Your total height</span>
+          </div>
+        </div>
+
+        <div class="intake-actions">
+          <button class="btn btn-secondary" id="measurementsPrev">Back</button>
+          <button class="btn btn-primary" id="measurementsNext" disabled>Continue</button>
+        </div>
+        <p class="intake-note">Don't know your exact measurements? <a href="#" id="photoCapture">Use photo measurement</a></p>
+      </div>
+
+      <!-- Screen 3: Shape Profile -->
+      <div class="intake-screen" id="screen-profile" data-screen="profile">
+        <h2>Your Shape Profile</h2>
+        <p class="subtitle">Based on your measurements, here's your shape and sizing recommendations.</p>
+
+        <div id="profileContent" class="profile-display">
+          <div class="loading">Analyzing your measurements...</div>
+        </div>
+
+        <div class="intake-actions">
+          <button class="btn btn-secondary" id="profilePrev">Back</button>
+          <button class="btn btn-primary" id="profileNext" disabled>Continue to Style</button>
+        </div>
+      </div>
+
+      <!-- Screen 4: Style Preferences -->
+      <div class="intake-screen" id="screen-preferences" data-screen="preferences">
+        <h2>Your Style Preferences</h2>
+        <p class="subtitle">Help us personalize recommendations by sharing your style preferences.</p>
+
+        <div class="preference-section">
+          <h4>Preferred Colors</h4>
+          <div class="color-options">
+            <label class="option-label">
+              <input type="checkbox" name="color" value="Black" />
+              <span>Black</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="color" value="Navy" />
+              <span>Navy</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="color" value="White" />
+              <span>White</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="color" value="Cream" />
+              <span>Cream</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="color" value="Brown" />
+              <span>Brown</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="color" value="Earth Tones" />
+              <span>Earth Tones</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="preference-section">
+          <h4>Preferred Silhouettes</h4>
+          <div class="silhouette-options">
+            <label class="option-label">
+              <input type="checkbox" name="silhouette" value="Fitted" />
+              <span>Fitted</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="silhouette" value="Flowing" />
+              <span>Flowing</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="silhouette" value="Structured" />
+              <span>Structured</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="silhouette" value="Layered" />
+              <span>Layered</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="preference-section">
+          <h4>Occasions</h4>
+          <div class="occasion-options">
+            <label class="option-label">
+              <input type="checkbox" name="occasion" value="Work" />
+              <span>Work</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="occasion" value="Casual" />
+              <span>Casual</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="occasion" value="Dinner" />
+              <span>Dinner</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="occasion" value="Weekend" />
+              <span>Weekend</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="intake-actions">
+          <button class="btn btn-secondary" id="preferencesPrev">Back</button>
+          <button class="btn btn-primary" id="preferencesNext">Get Recommendations</button>
+        </div>
+      </div>
+
+      <!-- Screen 5: Complete -->
+      <div class="intake-screen" id="screen-complete" data-screen="complete">
+        <div class="completion-section">
+          <div class="checkmark">✓</div>
+          <h1>Profile Complete!</h1>
+          <p>Your personalized style recommendations are ready.</p>
+
+          <div class="recommendation-preview" id="recommendationPreview">
+            <div class="loading">Loading your recommendations...</div>
+          </div>
+
+          <div class="intake-actions">
+            <button class="btn btn-primary" id="viewRecommendations">View All Recommendations</button>
+            <button class="btn btn-secondary" id="continueShopping">Continue Shopping</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="intake-flow.js"></script>
+</body>
+</html>

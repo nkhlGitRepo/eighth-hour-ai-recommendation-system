@@ -1,0 +1,333 @@
+/* Fit Checker Widget Styles */
+
+.fit-checker-container {
+  margin: 2rem 0;
+  padding: 1.5rem;
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.fit-checker-container h3 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.fit-recommendation {
+  margin-bottom: 2rem;
+}
+
+.recommendation-box {
+  background: white;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.recommendation-label {
+  color: #999;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.recommendation-size {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 0.75rem;
+}
+
+.confidence-badge {
+  display: inline-block;
+  background: #333;
+  color: white;
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.fit-scores {
+  margin-bottom: 2rem;
+}
+
+.fit-scores-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 1rem;
+}
+
+.score-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.score-bar-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 50px;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.score-bar-row.recommended {
+  background: #f0f0f0;
+  border: 1px solid #333;
+}
+
+.size-label {
+  font-weight: 600;
+  color: #333;
+  text-align: center;
+  font-size: 1rem;
+}
+
+.score-bar {
+  height: 24px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #333 0%, #666 100%);
+  transition: width 0.3s ease;
+}
+
+.score-value {
+  text-align: right;
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.fit-notes {
+  margin-bottom: 2rem;
+}
+
+.fit-notes-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.75rem;
+}
+
+.fit-notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: white;
+  border-radius: 6px;
+}
+
+.fit-notes-list li {
+  padding: 0.75rem 1rem;
+  color: #666;
+  border-bottom: 1px solid #eee;
+  font-size: 0.95rem;
+}
+
+.fit-notes-list li:last-child {
+  border-bottom: none;
+}
+
+.fit-notes-list li::before {
+  content: '✓ ';
+  color: #333;
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.fit-actions {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+.fit-feedback-btn {
+  padding: 0.75rem 1.5rem;
+  background: white;
+  border: 2px solid #333;
+  border-radius: 6px;
+  color: #333;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.95rem;
+}
+
+.fit-feedback-btn:hover {
+  background: #333;
+  color: white;
+}
+
+/* Feedback Modal */
+.fit-feedback-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fit-feedback-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.feedback-option {
+  margin-bottom: 1rem;
+}
+
+.feedback-option input {
+  display: none;
+}
+
+.feedback-option label {
+  display: block;
+  padding: 1rem;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.feedback-option input:checked ~ label,
+.feedback-option label:hover {
+  border-color: #333;
+  background: #f9f9f9;
+}
+
+.feedback-option input:checked ~ label {
+  border-color: #333;
+  font-weight: 600;
+}
+
+.option-name {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.option-desc {
+  display: block;
+  color: #999;
+  font-size: 0.9rem;
+}
+
+.modal-actions {
+  padding: 1.5rem;
+  border-top: 1px solid #eee;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.95rem;
+}
+
+.btn-primary {
+  background: #333;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #000;
+}
+
+.btn-secondary {
+  background: #f0f0f0;
+  color: #333;
+  border: 1px solid #ddd;
+}
+
+.btn-secondary:hover {
+  background: #e0e0e0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .fit-checker-container {
+    padding: 1rem;
+    margin: 1.5rem 0;
+  }
+
+  .recommendation-size {
+    font-size: 2rem;
+  }
+
+  .score-bar-row {
+    grid-template-columns: 35px 1fr 40px;
+    gap: 0.75rem;
+    padding: 0.5rem;
+  }
+
+  .modal-body {
+    padding: 1rem;
+  }
+
+  .modal-actions {
+    padding: 1rem;
+  }
+}
