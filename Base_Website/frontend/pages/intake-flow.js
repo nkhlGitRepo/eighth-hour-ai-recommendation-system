@@ -120,13 +120,6 @@ class IntakeFlow {
     photoConsent?.addEventListener('change', () => this.updateConsentButton());
     measurementConsent?.addEventListener('change', () => this.updateConsentButton());
     document.getElementById('consentNext')?.addEventListener('click', () => this.handleConsent());
-    document.getElementById('consentSkip')?.addEventListener('click', () => {
-      if (this.sessionId) {
-        this.goToStep(2);
-      } else {
-        alert('Please accept consent to continue.');
-      }
-    });
 
     // Measurements screen
     ['bust', 'waist', 'hips', 'height'].forEach(field => {
