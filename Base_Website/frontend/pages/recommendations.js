@@ -120,28 +120,22 @@ class RecommendationsPage {
   displayRecommendations() {
     const container = document.getElementById('recommendationsList');
 
-    // If no filtered results but we have recommendations, show all (filters might be too strict)
-    const toDisplay = this.filteredRecommendations.length > 0 ? this.filteredRecommendations : this.recommendations;
-
-    if (toDisplay.length === 0) {
+    if (this.filteredRecommendations.length === 0) {
       container.innerHTML = `
         <div style="grid-column: 1/-1; padding: 3rem 1rem; text-align: center;">
-          <h2 style="margin-top: 0; color: #333;">No Recommendations Available</h2>
+          <h2 style="margin-top: 0; color: #333;">No Results Found</h2>
           <p style="color: #666; margin-bottom: 2rem;">
-            We couldn't find products matching your preferences right now.
-            Please check back soon or update your style preferences.
+            No recommendations match your selected filters.
           </p>
-          <a href="intake-flow.html" class="btn btn-primary" style="display: inline-block; margin-bottom: 1rem;">Update Style Preferences</a>
-          <br/>
-          <a href="../collection.html" style="color: #666; text-decoration: underline;">Browse All Products →</a>
+          <button onclick="document.querySelectorAll('input[name=category]').forEach(cb => cb.checked = false); this.dispatchEvent(new Event('change'));" class="btn btn-secondary" style="display: inline-block; margin-bottom: 1rem;">Clear Filters</button>
         </div>
       `;
       return;
     }
 
-    container.innerHTML = toDisplay
+    container.innerHTML = this.filteredRecommendations
       .map(rec => `
-        <a href="../product.html?slug=${rec.slug}" class="product-link">
+        <a href="../../product.html?slug=${rec.slug}" class="product-link">
           <div class="product-image" style="background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
             <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='280'%3E%3Crect fill='%23f0f0f0' width='220' height='280'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12' fill='%23999'%3E${encodeURIComponent(rec.name)}%3C/text%3E%3C/svg%3E" alt="${rec.name}" style="width: 100%; display: block;" />
           </div>
@@ -165,20 +159,12 @@ class RecommendationsPage {
       document.querySelectorAll('input[name="category"]:checked')
     ).map(el => el.value);
 
-    console.log('Selected categories:', selectedCategories);
-    console.log('Total recommendations:', this.recommendations.length);
-
     if (selectedCategories.length === 0) {
       this.filteredRecommendations = [...this.recommendations];
     } else {
-      this.filteredRecommendations = this.recommendations.filter(rec => {
-        const matches = selectedCategories.includes(rec.category);
-        if (!matches) {
-          console.log(`Filtered out: ${rec.name} (category: ${rec.category})`);
-        }
-        return matches;
-      });
-      console.log('Filtered recommendations count:', this.filteredRecommendations.length);
+      this.filteredRecommendations = this.recommendations.filter(rec =>
+        selectedCategories.includes(rec.category)
+      );
     }
 
     this.displayRecommendations();
