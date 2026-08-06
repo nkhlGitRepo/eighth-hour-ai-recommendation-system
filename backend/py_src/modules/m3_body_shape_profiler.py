@@ -161,15 +161,16 @@ class BodyShapeProfiler:
 
     def _recommend_sizes(self, shape_class, bust, waist, hips):
         """Generate size recommendations per category."""
-        # Use consistent sizing based on bust/chest (standard for all sizes)
+        # Bust boundaries per standard sizing guidelines
+        # XS: 76-80cm, S: 84-88cm, M: 92-96cm, L: 100-104cm, XL: 110-116cm
         size_by_bust = {
-            "XXS": (78, 85),
-            "XS": (85, 91),
-            "S": (91, 97),
-            "M": (97, 103),
-            "L": (103, 109),
-            "XL": (109, 115),
-            "XXL": (115, 150),
+            "XXS": (70, 76),
+            "XS": (76, 84),
+            "S": (84, 92),
+            "M": (92, 100),
+            "L": (100, 108),
+            "XL": (108, 117),
+            "XXL": (117, 150),
         }
 
         size_by_waist = {
