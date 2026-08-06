@@ -182,16 +182,16 @@ class BodyShapeProfiler:
             "XXL": (96, 150),
         }
 
-        # Hip boundaries: adjusted to better align with actual hip measurements
-        # Most bodies have hips 8-12cm larger than bust, so offset the chart accordingly
+        # Hip boundaries per standard sizing guidelines
+        # XS: 83-89cm, S: 89-95cm, M: 95-101cm, L: 101-107cm, XL: 107-114cm, XXL: 114+cm
         size_by_hip = {
-            "XXS": (88, 96),
-            "XS": (96, 104),
-            "S": (104, 112),
-            "M": (112, 120),
-            "L": (120, 128),
-            "XL": (128, 136),
-            "XXL": (136, 150),
+            "XXS": (70, 83),
+            "XS": (83, 89),
+            "S": (89, 95),
+            "M": (95, 101),
+            "L": (101, 107),
+            "XL": (107, 114),
+            "XXL": (114, 150),
         }
 
         def find_size(measurement, chart):
@@ -203,6 +203,8 @@ class BodyShapeProfiler:
         bust_size = find_size(bust, size_by_bust)
         waist_size = find_size(waist, size_by_waist)
         hip_size = find_size(hips, size_by_hip)
+
+        logger.info(f"M3 size calculation: bust={bust}→{bust_size}, waist={waist}→{waist_size}, hips={hips}→{hip_size}")
 
         # Standard sizing approach:
         # Tops/Dresses/Outerwear: use bust
