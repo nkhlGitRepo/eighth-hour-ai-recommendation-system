@@ -288,10 +288,11 @@ class IntakeFlow {
 
   async loadRecommendations() {
     try {
-      const response = await fetch(`${API_BASE}/recommendations/${this.sessionId}?k=4`);
+      const response = await fetch(`${API_BASE}/recommendations/${this.sessionId}?k=4&user_id=${this.userId}`);
       if (!response.ok) throw new Error('Failed to load recommendations');
       const data = await response.json();
       this.recommendations = data.recommendations || [];
+      console.log('Loaded recommendations:', this.recommendations.length);
     } catch (error) {
       console.error('Recommendations error:', error);
       this.recommendations = [];
