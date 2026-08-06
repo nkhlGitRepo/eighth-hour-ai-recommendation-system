@@ -1,40 +1,65 @@
-/* Recommendations Page Styles */
+/* Recommendations Page Styling */
 
 .recommendations-header {
   text-align: center;
   margin-bottom: 3rem;
-  padding: 2rem 0;
 }
 
 .recommendations-header h1 {
+  margin-top: 0;
   font-size: 2rem;
-  margin-bottom: 0.5rem;
-  color: #333;
+  color: var(--color-text);
 }
 
 .recommendations-header .subtitle {
-  color: #666;
-  font-size: 1.1rem;
+  color: var(--color-muted);
+  font-size: 1rem;
 }
 
 .recommendations-sidebar {
-  float: right;
-  width: 25%;
-  margin-left: 2rem;
-  margin-bottom: 2rem;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 250px;
+  padding: 2rem 1rem;
+  background: var(--color-bg);
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-line);
+}
+
+.recommendations-main {
+  margin-left: 250px;
+  padding: 2rem;
+  min-height: 100vh;
+}
+
+@media (max-width: 1024px) {
+  .recommendations-sidebar {
+    position: static;
+    width: auto;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--color-line);
+    padding: 1.5rem 2rem;
+  }
+
+  .recommendations-main {
+    margin-left: 0;
+  }
 }
 
 .filter-section {
-  background: #f9f9f9;
-  padding: 1.5rem;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .filter-section h3 {
-  font-size: 1rem;
+  margin-top: 0;
   margin-bottom: 1rem;
-  color: #333;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text);
 }
 
 .filter-group {
@@ -46,171 +71,115 @@
 .filter-option {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   cursor: pointer;
-  font-size: 0.95rem;
-  color: #666;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: background 0.2s;
 }
 
-.filter-option input {
-  cursor: pointer;
-  accent-color: #333;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
+.filter-option:hover {
+  background: rgba(156, 122, 60, 0.1);
 }
 
-.filter-option input:checked ~ span {
-  color: #333;
-  font-weight: 600;
+.filter-option input[type="checkbox"] {
+  accent-color: var(--color-accent);
 }
 
 .profile-summary {
-  font-size: 0.9rem;
-  color: #666;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 1rem;
 }
 
 .profile-item {
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #ddd;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .profile-item:last-child {
-  border-bottom: none;
   margin-bottom: 0;
   padding-bottom: 0;
+  border-bottom: none;
 }
 
 .profile-label {
-  color: #999;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
 }
 
 .profile-value {
+  font-size: 1rem;
   font-weight: 600;
-  color: #333;
-  margin-top: 0.25rem;
-}
-
-.recommendations-main {
-  overflow: auto;
+  color: var(--color-text);
 }
 
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 2rem;
-  overflow: visible;
+  margin-top: 2rem;
 }
 
-.loading {
-  text-align: center;
-  color: #999;
-  padding: 3rem 2rem;
-  font-style: italic;
-  grid-column: 1 / -1;
+@media (max-width: 768px) {
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1.5rem;
+  }
 }
 
-/* Product card in recommendations */
-.product-card {
+.product-link {
+  display: block;
   text-decoration: none;
   color: inherit;
-  display: block;
-  transition: opacity 0.3s ease;
+  transition: transform 0.2s;
 }
 
-.product-card:hover {
-  opacity: 0.8;
+.product-link:hover {
+  transform: translateY(-2px);
 }
 
-.product-card-image {
+.product-image {
   width: 100%;
-  aspect-ratio: 1;
-  background: #f5f5f5;
+  aspect-ratio: 3/4;
+  background: var(--color-bg);
   border-radius: 8px;
   margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 
-.product-card-image img {
+.product-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.product-card-name {
+.product-link h3 {
+  margin: 0.5rem 0 0.25rem 0;
   font-size: 0.95rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 0.5rem;
+  color: var(--color-text);
 }
 
-.product-card-category {
+.product-link p {
+  margin: 0.25rem 0;
+  color: var(--color-muted);
   font-size: 0.85rem;
-  color: #999;
-  margin-bottom: 0.75rem;
 }
 
-.product-card-price {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #333;
+.loading {
+  text-align: center;
+  color: var(--color-muted);
+  padding: 3rem 1rem;
 }
 
-.product-card-why {
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
-  color: #666;
-  line-height: 1.4;
-  padding-top: 0.75rem;
-  border-top: 1px solid #eee;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .recommendations-sidebar {
-    float: none;
-    width: 100%;
-    margin-left: 0;
-    margin-bottom: 2rem;
-  }
-
-  .recommendations-header {
-    margin-bottom: 2rem;
-  }
-
-  .recommendations-header h1 {
-    font-size: 1.5rem;
-  }
-
-  .product-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 1.5rem;
-  }
-}
-
-@media (max-width: 600px) {
-  .recommendations-header h1 {
-    font-size: 1.25rem;
-  }
-
-  .recommendations-header .subtitle {
-    font-size: 1rem;
-  }
-
-  .product-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-
-  .filter-section {
-    padding: 1rem;
-  }
-
-  .filter-option {
-    font-size: 0.9rem;
-  }
+.wrap {
+  position: relative;
 }

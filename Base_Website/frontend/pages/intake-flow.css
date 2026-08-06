@@ -1,32 +1,32 @@
-/* Intake Flow Styles */
+/* Intake Flow - Modular styling for 5-step intake modal */
 
 .intake-container {
-  min-height: 100vh;
   display: flex;
-  align-items: center;
   justify-content: center;
-  padding: 2rem;
-  background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%);
+  align-items: center;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+  background: var(--color-bg);
 }
 
 .intake-modal {
-  background: white;
+  background: var(--color-surface);
   border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  max-width: 600px;
   width: 100%;
-  max-width: 700px;
-  padding: 3rem;
+  padding: 2rem;
 }
 
-/* Progress indicator */
 .intake-progress {
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .progress-steps {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
+  gap: 0.5rem;
 }
 
 .step {
@@ -34,131 +34,126 @@
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: #999;
-  font-size: 0.9rem;
   flex: 1;
+  opacity: 0.4;
+  transition: opacity 0.2s;
 }
 
-.step.active .step-number {
-  background: #333;
-  color: white;
+.step.active {
+  opacity: 1;
 }
 
 .step-number {
   width: 40px;
   height: 40px;
+  background: var(--color-line);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #ddd;
   font-weight: 600;
-  transition: all 0.3s ease;
+  color: var(--color-text);
 }
 
-.step.active {
-  color: #333;
+.step.active .step-number {
+  background: var(--color-accent);
+  color: white;
+}
+
+.step-label {
+  font-size: 0.75rem;
+  text-align: center;
+  color: var(--color-text);
 }
 
 .progress-bar {
-  height: 4px;
-  background: #eee;
+  height: 3px;
+  background: var(--color-line);
   border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-fill {
   height: 100%;
-  background: #333;
+  background: var(--color-accent);
   transition: width 0.3s ease;
 }
 
-/* Screen transitions */
 .intake-screen {
   display: none;
-  animation: slideIn 0.3s ease;
+  animation: fadeIn 0.3s ease;
 }
 
 .intake-screen.active {
   display: block;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* Screen content */
 .intake-screen h1 {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  color: #333;
+  margin-top: 0;
+  font-size: 1.8rem;
+  color: var(--color-text);
 }
 
 .intake-screen h2 {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-  color: #333;
+  margin-top: 0;
+  font-size: 1.4rem;
+  color: var(--color-text);
 }
 
 .subtitle {
-  color: #666;
-  margin-bottom: 2rem;
-  font-size: 1rem;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+  margin-top: -0.5rem;
 }
 
-/* Consent section */
 .consent-section {
-  margin: 2rem 0;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: var(--color-bg);
+  border-radius: 8px;
 }
 
 .consent-section h3 {
-  font-size: 1.1rem;
-  margin-bottom: 1.5rem;
-  color: #333;
+  margin-top: 0;
+  font-size: 1rem;
+  color: var(--color-text);
 }
 
 .checkbox-label {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
   cursor: pointer;
 }
 
-.checkbox-label input {
-  margin-top: 4px;
-  cursor: pointer;
-  accent-color: #333;
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.checkbox-label span {
-  font-size: 1rem;
-  color: #333;
+.checkbox-label input[type="checkbox"] {
+  margin-top: 0.25rem;
+  accent-color: var(--color-accent);
 }
 
 .consent-note {
-  color: #999;
-  font-size: 0.9rem;
-  margin-left: 2rem;
-  margin-bottom: 1.5rem;
+  margin: 0.5rem 0 0 2rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
 }
 
-/* Measurements grid */
 .measurements-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
-  margin: 2rem 0;
+  margin: 1.5rem 0;
+}
+
+@media (max-width: 480px) {
+  .measurements-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .measurement-input {
@@ -169,115 +164,95 @@
 
 .measurement-input label {
   font-weight: 600;
-  color: #333;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
 }
 
 .measurement-input input {
   padding: 0.75rem;
-  border: 2px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--color-line);
+  border-radius: 4px;
   font-size: 1rem;
-  transition: border-color 0.3s ease;
-}
-
-.measurement-input input:focus {
-  outline: none;
-  border-color: #333;
 }
 
 .measurement-help {
-  font-size: 0.85rem;
-  color: #999;
+  font-size: 0.8rem;
+  color: var(--color-muted);
 }
 
-/* Preferences */
 .preference-section {
-  margin-bottom: 2rem;
+  margin: 1.5rem 0;
 }
 
 .preference-section h4 {
-  font-size: 1rem;
+  margin-top: 0;
   margin-bottom: 1rem;
-  color: #333;
+  font-size: 0.95rem;
+  color: var(--color-text);
 }
 
 .color-options,
 .silhouette-options,
 .occasion-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
 }
 
 .option-label {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border: 2px solid #ddd;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-line);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.option-label input {
-  cursor: pointer;
-  accent-color: #333;
-  width: 18px;
-  height: 18px;
+  transition: all 0.2s;
 }
 
 .option-label:hover {
-  border-color: #999;
+  background: var(--color-bg);
 }
 
-.option-label input:checked ~ span {
-  color: #333;
+.option-label input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+.option-label input[type="checkbox"]:checked + span {
   font-weight: 600;
+  color: var(--color-accent);
 }
 
-.option-label input:checked {
-  background: #333;
-}
-
-.option-label span {
-  color: #666;
-  font-size: 0.95rem;
-}
-
-/* Profile display */
 .profile-display {
-  margin: 2rem 0;
-  padding: 1.5rem;
-  background: #f9f9f9;
-  border-radius: 8px;
+  margin: 1.5rem 0;
 }
 
 .profile-item {
-  margin-bottom: 1.5rem;
-}
-
-.profile-item:last-child {
-  margin-bottom: 0;
+  padding: 1rem;
+  background: var(--color-bg);
+  border-radius: 8px;
+  margin-bottom: 1rem;
 }
 
 .profile-label {
-  font-weight: 600;
-  color: #333;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
 }
 
 .profile-value {
-  color: #666;
-  font-size: 1.1rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .profile-ratios {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
-  margin-top: 1rem;
+  margin-top: 0.75rem;
 }
 
 .ratio-item {
@@ -285,191 +260,47 @@
 }
 
 .ratio-label {
-  color: #999;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  margin-bottom: 0.25rem;
 }
 
 .ratio-value {
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--color-accent);
 }
 
-/* Completion section */
+.intake-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin: 2rem 0 1rem 0;
+}
+
+.intake-note {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  text-align: center;
+  margin: 1rem 0 0 0;
+}
+
 .completion-section {
   text-align: center;
 }
 
 .checkmark {
   font-size: 3rem;
-  color: #333;
   margin-bottom: 1rem;
-  animation: scaleIn 0.5s ease;
-}
-
-@keyframes scaleIn {
-  from {
-    transform: scale(0);
-  }
-  to {
-    transform: scale(1);
-  }
-}
-
-.completion-section h1 {
-  margin-bottom: 0.5rem;
-}
-
-.completion-section > p {
-  color: #666;
-  margin-bottom: 2rem;
-  font-size: 1.1rem;
 }
 
 .recommendation-preview {
   margin: 2rem 0;
-  text-align: left;
 }
 
-.recommendation-preview .loading {
-  text-align: center;
-  color: #999;
-  padding: 2rem;
-}
-
-.rec-items {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
-}
-
-.rec-item {
-  padding: 1rem;
-  background: #f9f9f9;
-  border-radius: 6px;
-  text-align: center;
-}
-
-.rec-item-name {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 0.5rem;
-  font-size: 0.95rem;
-}
-
-.rec-item-price {
-  color: #666;
-  font-size: 0.9rem;
-}
-
-/* Buttons */
-.intake-actions {
-  display: flex;
-  gap: 1rem;
-  margin-top: 2rem;
-}
-
-.btn {
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  flex: 1;
-}
-
-.btn-primary {
-  background: #333;
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: #000;
-}
-
-.btn-primary:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.btn-secondary {
-  background: #f0f0f0;
-  color: #333;
-  border: 1px solid #ddd;
-}
-
-.btn-secondary:hover {
-  background: #e0e0e0;
-}
-
-/* Notes */
-.intake-note {
-  color: #999;
-  font-size: 0.9rem;
-  text-align: center;
-  margin-top: 1.5rem;
-}
-
-.intake-note a {
-  color: #333;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-/* Loading state */
 .loading {
   text-align: center;
-  color: #999;
+  color: var(--color-muted);
   padding: 2rem;
-  font-style: italic;
-}
-
-/* Close button */
-.close-intake {
-  color: #666;
-  text-decoration: none;
   font-size: 0.95rem;
-  transition: color 0.3s ease;
-}
-
-.close-intake:hover {
-  color: #333;
-}
-
-/* Responsive */
-@media (max-width: 600px) {
-  .intake-modal {
-    padding: 2rem 1.5rem;
-  }
-
-  .intake-screen h1 {
-    font-size: 1.5rem;
-  }
-
-  .measurements-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .color-options,
-  .silhouette-options,
-  .occasion-options {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .progress-steps {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .step {
-    width: 100%;
-  }
-
-  .rec-items {
-    grid-template-columns: 1fr;
-  }
 }

@@ -1,0 +1,629 @@
+[
+  {
+    "slug": "crepe-silk-pintuck-straight-skirt",
+    "name": "Crepe Silk Pintuck Straight Skirt",
+    "category": "Skirts",
+    "fabric": "Natural Crepe",
+    "price": 255.0,
+    "colors": [
+      "Pageant Blue"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Crepe Silk Pintuck Straight Skirt from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "crepe-silk-pleated-dress",
+    "name": "Crepe Silk Pleated Dress",
+    "category": "Dresses",
+    "fabric": "Natural Crepe",
+    "price": 270.0,
+    "colors": [
+      "Pageant Blue",
+      "Potent Purple",
+      "Purple Potion"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Crepe Silk Pleated Dress from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "crepe-silk-textured-long-top",
+    "name": "Crepe Silk Textured Long Top",
+    "category": "Tops",
+    "fabric": "Natural Crepe",
+    "price": 320.0,
+    "colors": [
+      "Pageant Blue",
+      "Kombu Green"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Crepe Silk Textured Long Top from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "crepe-silk-vest",
+    "name": "Crepe Silk Vest",
+    "category": "Vests",
+    "fabric": "Natural Crepe",
+    "price": 225.0,
+    "colors": [
+      "Pageant Blue"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Crepe Silk Vest from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "crepe-silk-vest-and-skirt-set",
+    "name": "Crepe Silk Vest and Skirt Set",
+    "category": "Co-ord Sets",
+    "fabric": "Natural Crepe",
+    "price": 475.0,
+    "colors": [
+      "Pageant Blue"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Crepe Silk Vest and Skirt Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-overlap-vest-and-pintuck-trouser-set",
+    "name": "Mulberry Silk Overlap Vest and Pintuck Trouser Set",
+    "category": "Co-ord Sets",
+    "fabric": "Handwoven Silk",
+    "price": 465.0,
+    "colors": [
+      "Chocolate Truffle",
+      "Sky Captain",
+      "Fig",
+      "Fudge"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Overlap Vest and Pintuck Trouser Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-asymmetrical-wrap-skirt",
+    "name": "Mulberry Silk Asymmetrical Wrap Skirt",
+    "category": "Skirts",
+    "fabric": "Handwoven Silk",
+    "price": 320.0,
+    "colors": [
+      "Forest Night",
+      "Nomad",
+      "Duffel Bag",
+      "Fig"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Asymmetrical Wrap Skirt from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-wide-neck-vest-and-pant-set",
+    "name": "Mulberry Silk Wide Neck Vest and Pant Set",
+    "category": "Co-ord Sets",
+    "fabric": "Handwoven Silk",
+    "price": 490.0,
+    "colors": [
+      "Pure Cashmere",
+      "Duffel Bag",
+      "Ebony"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Wide Neck Vest and Pant Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-vest-and-skirt-set",
+    "name": "Mulberry Silk Vest and Skirt Set",
+    "category": "Co-ord Sets",
+    "fabric": "Handwoven Silk",
+    "price": 420.0,
+    "colors": [
+      "Burnt Russet",
+      "Nomad"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Vest and Skirt Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-vest",
+    "name": "Mulberry Silk Vest",
+    "category": "Vests",
+    "fabric": "Handwoven Silk",
+    "price": 200.0,
+    "colors": [
+      "Burnt Russet",
+      "Sepia Tint",
+      "Nomad"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Vest from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-v-neck-top-with-kantha-embroidery",
+    "name": "Mulberry Silk V-Neck Top with Kantha Embroidery",
+    "category": "Tops",
+    "fabric": "Handwoven Silk",
+    "price": 290.0,
+    "colors": [
+      "Pure Cashmere"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk V-Neck Top with Kantha Embroidery from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-pintuck-cap-sleeve-top",
+    "name": "Mulberry Silk Pintuck Cap Sleeve Top",
+    "category": "Tops",
+    "fabric": "Handwoven Silk",
+    "price": 225.0,
+    "colors": [
+      "Chocolate Truffle"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Pintuck Cap Sleeve Top from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-pintuck-wrap-skirt",
+    "name": "Mulberry Silk Pintuck Wrap Skirt",
+    "category": "Skirts",
+    "fabric": "Handwoven Silk",
+    "price": 270.0,
+    "colors": [
+      "Fudge",
+      "Chocolate Truffle",
+      "Ebony"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Pintuck Wrap Skirt from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-pintuck-boat-neck-vest",
+    "name": "Mulberry Silk Pintuck Wide Neck Vest",
+    "category": "Vests",
+    "fabric": "Handwoven Silk",
+    "price": 225.0,
+    "colors": [
+      "Forest Night",
+      "Pure Cashmere",
+      "Duffel Bag",
+      "Ebony"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Pintuck Wide Neck Vest from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-pintuck-vest",
+    "name": "Mulberry Silk Pintuck Vest",
+    "category": "Vests",
+    "fabric": "Handwoven Silk",
+    "price": 225.0,
+    "colors": [
+      "Sky Captain"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Pintuck Vest from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-pintuck-trousers",
+    "name": "Mulberry Silk Pintuck Trousers",
+    "category": "Trousers",
+    "fabric": "Handwoven Silk",
+    "price": 270.0,
+    "colors": [
+      "Chocolate Truffle",
+      "Ebony",
+      "Forest Night",
+      "Pure Cashmere",
+      "Moonless Night",
+      "Nomad",
+      "Fig",
+      "Fudge",
+      "Duffel Bag",
+      "Sky Captain"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Pintuck Trousers from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-pintuck-straight-skirt",
+    "name": "Mulberry Silk Pintuck Straight Skirt",
+    "category": "Skirts",
+    "fabric": "Handwoven Silk",
+    "price": 225.0,
+    "colors": [
+      "Burnt Russet",
+      "Sky Captain",
+      "Nomad"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Pintuck Straight Skirt from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-pintuck-overlap-vest",
+    "name": "Mulberry Silk Pintuck Overlap Vest",
+    "category": "Vests",
+    "fabric": "Handwoven Silk",
+    "price": 215.0,
+    "colors": [
+      "Ebony",
+      "Moonless Night",
+      "Pure Cashmere"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Pintuck Overlap Vest from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-pintuck-vest-and-skirt-set",
+    "name": "Mulberry Pintuck Vest and Skirt Set",
+    "category": "Co-ord Sets",
+    "fabric": "Handwoven Silk",
+    "price": 440.0,
+    "colors": [
+      "Sky Captain"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Pintuck Vest and Skirt Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-overlap-vest",
+    "name": "Mulberry Silk Overlap Vest",
+    "category": "Vests",
+    "fabric": "Handwoven Silk",
+    "price": 200.0,
+    "colors": [
+      "Chocolate Truffle",
+      "Sky Captain",
+      "Fudge",
+      "Fig"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Overlap Vest from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-overlap-pintuck-vest-and-trouser-set",
+    "name": "Mulberry Silk Overlap Pintuck Vest and Trouser Set",
+    "category": "Co-ord Sets",
+    "fabric": "Handwoven Silk",
+    "price": 475.0,
+    "colors": [
+      "Ebony",
+      "Moonless Night",
+      "Pure Cashmere"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Overlap Pintuck Vest and Trouser Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-embroidered-wrap-skirt-set",
+    "name": "Mulberry Silk Embroidered Wrap Skirt Set",
+    "category": "Co-ord Sets",
+    "fabric": "Handwoven Silk",
+    "price": 585.0,
+    "colors": [
+      "Fudge",
+      "Chocolate Truffle"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered Wrap Skirt Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-embroidered-v-neck-top",
+    "name": "Mulberry Silk Embroidered V-Neck Top",
+    "category": "Tops",
+    "fabric": "Handwoven Silk",
+    "price": 320.0,
+    "colors": [
+      "Chocolate Truffle",
+      "Fudge"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered V-Neck Top from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-embroidered-raglan-cut-top",
+    "name": "Mulberry Silk Embroidered Raglan Cut Top",
+    "category": "Tops",
+    "fabric": "Handwoven Silk",
+    "price": 340.0,
+    "colors": [
+      "White Alyssum"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered Raglan Cut Top from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "crepe-silk-embroidered-long-top",
+    "name": "Mulberry Silk Embroidered Long Top",
+    "category": "Tops",
+    "fabric": "Handwoven Silk",
+    "price": 300.0,
+    "colors": [
+      "White Alyssum"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered Long Top from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-embroidered-dress",
+    "name": "Mulberry Silk Embroidered Dress",
+    "category": "Dresses",
+    "fabric": "Handwoven Silk",
+    "price": 355.0,
+    "colors": [
+      "Forest Night",
+      "Duffel Bag",
+      "Chocolate Truffle"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered Dress from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-embroidered-cap-sleeve-top",
+    "name": "Mulberry Silk Embroidered Cap Sleeve Top",
+    "category": "Tops",
+    "fabric": "Handwoven Silk",
+    "price": 225.0,
+    "colors": [
+      "Sky Captain",
+      "White Alyssum"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered Cap Sleeve Top from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-embroidered-boat-wrap-skirt-set",
+    "name": "Mulberry Silk Embroidered Boat Wrap Skirt Set",
+    "category": "Co-ord Sets",
+    "fabric": "Handwoven Silk",
+    "price": 700.0,
+    "colors": [
+      "Forest Night",
+      "Fig",
+      "Duffel Bag"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered Boat Wrap Skirt Set from our collection",
+    "length": "Regular"
+  },
+  {
+    "slug": "mulberry-silk-embroidered-boat-neck-top",
+    "name": "Mulberry Silk Embroidered Boat Neck Top",
+    "category": "Tops",
+    "fabric": "Handwoven Silk",
+    "price": 380.0,
+    "colors": [
+      "Forest Night",
+      "Pure Cashmere",
+      "Duffel Bag",
+      "Fig"
+    ],
+    "sizes": [
+      "XS",
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "description": "Mulberry Silk Embroidered Boat Neck Top from our collection",
+    "length": "Regular"
+  }
+]

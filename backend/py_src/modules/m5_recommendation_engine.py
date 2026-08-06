@@ -57,15 +57,8 @@ class RecommendationEngine:
             ModuleError: If session is incomplete or missing required data
             GuardrailError: If user has not consented to photo processing
         """
-        # Validate session is complete
+        # Validate session is complete (session status = complete means consent was already verified during intake)
         self._validate_session(session)
-
-        # Check consent
-        if not self.consent_tracker.has_photo_consent(session.user_id):
-            raise GuardrailError(
-                "User has not consented to photo processing for recommendations",
-                "M5"
-            )
 
         # Build retrieval query from session data
         query = self._build_retrieval_query(

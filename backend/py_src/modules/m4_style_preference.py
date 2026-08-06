@@ -23,6 +23,7 @@ class StyleProfile:
 
     # Valid options for each preference dimension
     VALID_COLORS = [
+        # Generic preference colors
         "black",
         "navy",
         "cream",
@@ -33,6 +34,24 @@ class StyleProfile:
         "pastels",
         "bright",
         "monochrome",
+        # Actual product colors (from catalog)
+        "Ebony",
+        "Moonless Night",
+        "Chocolate Truffle",
+        "Sky Captain",
+        "Forest Night",
+        "Pageant Blue",
+        "Pure Cashmere",
+        "Potent Purple",
+        "Purple Potion",
+        "Kombu Green",
+        "Burnt Russet",
+        "Duffel Bag",
+        "Fig",
+        "Fudge",
+        "Nomad",
+        "Sepia Tint",
+        "White Alyssum",
     ]
 
     VALID_SILHOUETTES = [

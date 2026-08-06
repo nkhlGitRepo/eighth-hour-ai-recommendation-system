@@ -21,6 +21,7 @@ class IntakeFlow {
   init() {
     this.attachEventListeners();
     this.restoreSession();
+    this.loadAvailableColors();
   }
 
   generateUserId() {
@@ -32,38 +33,90 @@ class IntakeFlow {
     return userId;
   }
 
+  async loadAvailableColors() {
+    try {
+      const response = await fetch(`${API_BASE}/catalog/stats`);
+      if (!response.ok) return;
+
+      const stats = await response.json();
+      const availableColors = stats.colors || [];
+
+      if (availableColors.length > 0) {
+        const colorContainer = document.querySelector('.color-options');
+        if (colorContainer) {
+          colorContainer.innerHTML = availableColors
+            .map(color => `
+              <label class="option-label">
+                <input type="checkbox" name="color" value="${color}" />
+                <span>${color}</span>
+              </label>
+            `)
+            .join('');
+        }
+      }
+    } catch (error) {
+      console.warn('Could not load available colors:', error);
+    }
+  }
+
   restoreSession() {
     const savedSession = localStorage.getItem('intakeSession');
     if (savedSession) {
-      const session = JSON.parse(savedSession);
-      this.sessionId = session.sessionId;
-      this.measurements = session.measurements || {};
-      this.shapeProfile = session.shapeProfile;
-      this.styleProfile = session.styleProfile;
-      // Jump to appropriate step based on saved progress
-      if (session.step) {
-        this.goToStep(session.step);
+      try {
+        const session = JSON.parse(savedSession);
+        this.userId = session.userId || this.userId;
+        this.sessionId = session.sessionId;
+        this.measurements = session.measurements || {};
+        this.shapeProfile = session.shapeProfile;
+        this.styleProfile = session.styleProfile;
+        this.recommendations = session.recommendations || [];
+        if (session.step) {
+          this.goToStep(session.step);
+        }
+      } catch (error) {
+        console.warn('Failed to restore session:', error);
       }
     }
   }
 
   saveSessionState() {
     localStorage.setItem('intakeSession', JSON.stringify({
+      userId: this.userId,
       sessionId: this.sessionId,
       step: this.currentStep,
       measurements: this.measurements,
       shapeProfile: this.shapeProfile,
       styleProfile: this.styleProfile,
+      recommendations: this.recommendations,
     }));
   }
 
   attachEventListeners() {
+    // Start fresh link
+    const startFreshLink = document.getElementById('startFreshLink');
+    if (startFreshLink) {
+      startFreshLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (confirm('This will clear all saved progress and start a new style profile. Continue?')) {
+          this.clearSession();
+          location.reload();
+        }
+      });
+    }
+
     // Consent screen
     const photoConsent = document.getElementById('photoConsent');
     const measurementConsent = document.getElementById('measurementConsent');
     photoConsent?.addEventListener('change', () => this.updateConsentButton());
     measurementConsent?.addEventListener('change', () => this.updateConsentButton());
     document.getElementById('consentNext')?.addEventListener('click', () => this.handleConsent());
+    document.getElementById('consentSkip')?.addEventListener('click', () => {
+      if (this.sessionId) {
+        this.goToStep(2);
+      } else {
+        alert('Please accept consent to continue.');
+      }
+    });
 
     // Measurements screen
     ['bust', 'waist', 'hips', 'height'].forEach(field => {
@@ -85,17 +138,19 @@ class IntakeFlow {
     document.getElementById('preferencesNext')?.addEventListener('click', () => this.handlePreferences());
 
     // Complete screen
+    document.getElementById('completePrev')?.addEventListener('click', () => this.goToStep(4));
     document.getElementById('viewRecommendations')?.addEventListener('click', () => this.viewRecommendations());
     document.getElementById('continueShopping')?.addEventListener('click', () => this.continueShopping());
+  }
 
-    // Close button
-    document.querySelector('.close-intake')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (confirm('Are you sure? Your progress will be saved.')) {
-        this.saveSessionState();
-        window.location.href = '../index.html';
-      }
-    });
+  clearSession() {
+    localStorage.removeItem('intakeSession');
+    localStorage.removeItem('currentSessionId');
+    this.sessionId = null;
+    this.measurements = {};
+    this.shapeProfile = null;
+    this.styleProfile = null;
+    this.recommendations = [];
   }
 
   updateConsentButton() {
@@ -117,16 +172,15 @@ class IntakeFlow {
       const photoConsent = document.getElementById('photoConsent').checked;
       const measurementConsent = document.getElementById('measurementConsent').checked;
 
-      // Create intake session
       const sessionResponse = await fetch(`${API_BASE}/intake/session?user_id=${this.userId}`, {
         method: 'POST',
       });
 
-      if (!sessionResponse.ok) throw new Error('Failed to create session');
+      if (!sessionResponse.ok) throw new Error(`Failed to create session: ${sessionResponse.status}`);
       const session = await sessionResponse.json();
       this.sessionId = session.session_id;
+      this.userId = session.user_id;
 
-      // Record consent
       const consentResponse = await fetch(`${API_BASE}/intake/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,9 +191,11 @@ class IntakeFlow {
         }),
       });
 
-      if (!consentResponse.ok) throw new Error('Failed to record consent');
+      if (!consentResponse.ok) {
+        const errorText = await consentResponse.text();
+        throw new Error(`Failed to record consent: ${consentResponse.status}`);
+      }
 
-      // Record consent in global tracker
       await fetch(`${API_BASE}/consent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -154,7 +210,7 @@ class IntakeFlow {
       this.goToStep(2);
     } catch (error) {
       console.error('Consent error:', error);
-      alert('Error recording consent. Please try again.');
+      alert('Error recording consent: ' + error.message);
     }
   }
 
@@ -165,10 +221,12 @@ class IntakeFlow {
       const hips = parseFloat(document.getElementById('hips').value);
       const height = parseFloat(document.getElementById('height').value);
 
-      // Store measurements
+      if (isNaN(bust) || isNaN(waist) || isNaN(hips) || isNaN(height)) {
+        throw new Error('Invalid measurement values - please enter numbers');
+      }
+
       this.measurements = { bust, waist, hips, height };
 
-      // Confirm measurements with backend
       const response = await fetch(`${API_BASE}/intake/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,7 +236,11 @@ class IntakeFlow {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to confirm measurements');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error (${response.status})`);
+      }
+
       const data = await response.json();
       this.shapeProfile = data.shape_profile;
 
@@ -186,17 +248,22 @@ class IntakeFlow {
       this.goToStep(3);
     } catch (error) {
       console.error('Measurements error:', error);
-      alert('Error processing measurements. Please check values and try again.');
+      alert('Error processing measurements: ' + error.message);
     }
   }
 
   async handlePreferences() {
     try {
-      const colors = Array.from(document.querySelectorAll('input[name="color"]:checked')).map(el => el.value);
+      let colors = Array.from(document.querySelectorAll('input[name="color"]:checked')).map(el => el.value);
       const silhouettes = Array.from(document.querySelectorAll('input[name="silhouette"]:checked')).map(el => el.value);
       const occasions = Array.from(document.querySelectorAll('input[name="occasion"]:checked')).map(el => el.value);
 
-      // Submit preferences
+      this.styleProfile = {
+        preferred_colors: colors,
+        preferred_silhouettes: silhouettes,
+        occasions: occasions,
+      };
+
       const response = await fetch(`${API_BASE}/intake/preferences`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -209,16 +276,13 @@ class IntakeFlow {
       });
 
       if (!response.ok) throw new Error('Failed to save preferences');
-      const data = await response.json();
-      this.styleProfile = data.style_profile;
 
-      // Load recommendations
       this.saveSessionState();
       await this.loadRecommendations();
       this.goToStep(5);
     } catch (error) {
       console.error('Preferences error:', error);
-      alert('Error saving preferences. Please try again.');
+      alert('Error saving preferences: ' + error.message);
     }
   }
 
@@ -226,7 +290,8 @@ class IntakeFlow {
     try {
       const response = await fetch(`${API_BASE}/recommendations/${this.sessionId}?k=4`);
       if (!response.ok) throw new Error('Failed to load recommendations');
-      this.recommendations = await response.json();
+      const data = await response.json();
+      this.recommendations = data.recommendations || [];
     } catch (error) {
       console.error('Recommendations error:', error);
       this.recommendations = [];
@@ -234,27 +299,52 @@ class IntakeFlow {
   }
 
   goToStep(step) {
-    // Update progress
     this.currentStep = step;
     this.updateProgress();
 
-    // Hide all screens, show current
     document.querySelectorAll('.intake-screen').forEach(screen => {
       screen.classList.remove('active');
     });
     document.getElementById(`screen-${this.getScreenName(step)}`).classList.add('active');
 
-    // Auto-load profile data on step 3
-    if (step === 3 && this.shapeProfile) {
-      this.displayProfile();
-    }
-
-    // Populate measurements on step 2 if available
     if (step === 2 && this.measurements.bust) {
       document.getElementById('bust').value = this.measurements.bust;
       document.getElementById('waist').value = this.measurements.waist;
       document.getElementById('hips').value = this.measurements.hips;
       document.getElementById('height').value = this.measurements.height;
+      this.updateMeasurementButton();
+    }
+
+    if (step === 3) {
+      if (this.shapeProfile) {
+        this.displayProfile();
+      } else {
+        const container = document.getElementById('profileContent');
+        if (container) {
+          container.innerHTML = '<div class="loading">No profile data yet. Please go back and enter measurements.</div>';
+        }
+      }
+    }
+
+    if (step === 4) {
+      if (this.styleProfile) {
+        this.styleProfile.preferred_colors?.forEach(color => {
+          const checkbox = document.querySelector(`input[name="color"][value="${color}"]`);
+          if (checkbox) checkbox.checked = true;
+        });
+        this.styleProfile.preferred_silhouettes?.forEach(silhouette => {
+          const checkbox = document.querySelector(`input[name="silhouette"][value="${silhouette}"]`);
+          if (checkbox) checkbox.checked = true;
+        });
+        this.styleProfile.occasions?.forEach(occasion => {
+          const checkbox = document.querySelector(`input[name="occasion"][value="${occasion}"]`);
+          if (checkbox) checkbox.checked = true;
+        });
+      }
+    }
+
+    if (step === 5) {
+      this.displayRecommendationsPreview();
     }
 
     this.saveSessionState();
@@ -285,6 +375,12 @@ class IntakeFlow {
     const profile = this.shapeProfile;
     const ratios = profile.ratios || {};
 
+    const sizesByCategory = profile.size_recommendation_by_category || {};
+    const sizesArray = Object.entries(sizesByCategory).map(([category, size]) => ({
+      category: category.replace(/([A-Z])/g, ' $1').trim(),
+      size
+    }));
+
     container.innerHTML = `
       <div class="profile-item">
         <div class="profile-label">Shape Class</div>
@@ -301,15 +397,15 @@ class IntakeFlow {
         <div class="profile-ratios">
           <div class="ratio-item">
             <div class="ratio-label">Bust/Waist</div>
-            <div class="ratio-value">${(ratios.bust_waist_ratio || 0).toFixed(2)}</div>
+            <div class="ratio-value">${(ratios.bust_waist || 0).toFixed(2)}</div>
           </div>
           <div class="ratio-item">
             <div class="ratio-label">Waist/Hip</div>
-            <div class="ratio-value">${(ratios.waist_hip_ratio || 0).toFixed(2)}</div>
+            <div class="ratio-value">${(ratios.waist_hip || 0).toFixed(2)}</div>
           </div>
           <div class="ratio-item">
             <div class="ratio-label">Shoulder/Hip</div>
-            <div class="ratio-value">${(ratios.shoulder_hip_ratio || 0).toFixed(2)}</div>
+            <div class="ratio-value">${(ratios.shoulder_hip || 0).toFixed(2)}</div>
           </div>
         </div>
       </div>
@@ -317,7 +413,7 @@ class IntakeFlow {
       <div class="profile-item">
         <div class="profile-label">Recommended Sizes</div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 1rem; margin-top: 1rem;">
-          ${(profile.size_recommendations || []).map(rec => `
+          ${sizesArray.map(rec => `
             <div style="padding: 0.75rem; background: white; border: 1px solid #ddd; border-radius: 6px; text-align: center;">
               <div style="color: #999; font-size: 0.85rem;">${rec.category || 'General'}</div>
               <div style="font-weight: 600; font-size: 1.1rem; color: #333;">${rec.size || 'N/A'}</div>
@@ -328,6 +424,32 @@ class IntakeFlow {
     `;
 
     document.getElementById('profileNext').disabled = false;
+  }
+
+  displayRecommendationsPreview() {
+    const container = document.getElementById('recommendationPreview');
+    if (!container) return;
+
+    if (!this.recommendations || this.recommendations.length === 0) {
+      container.innerHTML = '<p style="text-align: center; color: #999;">Loading recommendations...</p>';
+      return;
+    }
+
+    const preview = this.recommendations.slice(0, 4);
+    container.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+        ${preview.map(product => `
+          <div style="text-align: center;">
+            <div style="width: 100%; aspect-ratio: 3/4; background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: #999;">
+              ${product.name}
+            </div>
+            <h4 style="margin: 0.5rem 0 0.25rem 0; font-size: 0.9rem;">${product.name}</h4>
+            <p style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.85rem;">${product.category}</p>
+            <p style="margin: 0; font-weight: 600; color: #333;">$${product.price.toFixed(2)}</p>
+          </div>
+        `).join('')}
+      </div>
+    `;
   }
 
   getShapeDescription(shapeClass) {
@@ -343,7 +465,6 @@ class IntakeFlow {
   }
 
   viewRecommendations() {
-    // Store session in localStorage and navigate to recommendations page
     localStorage.setItem('currentSessionId', this.sessionId);
     window.location.href = `./recommendations.html?session=${this.sessionId}`;
   }
@@ -354,7 +475,6 @@ class IntakeFlow {
   }
 }
 
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
   new IntakeFlow();
 });

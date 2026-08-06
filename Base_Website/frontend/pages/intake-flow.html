@@ -4,14 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Get Your Style Profile — Eighth Hour</title>
-  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../../css/style.css" />
   <link rel="stylesheet" href="intake-flow.css" />
 </head>
 <body>
   <header class="site-header">
     <div class="header-inner">
-      <a class="logo" href="../index.html">EIGHTH HOUR</a>
-      <a href="../index.html" class="close-intake">← Back to Shop</a>
+      <a href="../index.html" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.5rem 1rem; text-decoration: none; display: inline-block;">← Back to Shop</a>
     </div>
   </header>
 
@@ -70,6 +69,9 @@
           <button class="btn btn-primary" id="consentNext" disabled>Continue</button>
         </div>
         <p class="intake-note">You can withdraw consent at any time from your profile settings.</p>
+        <p style="margin-top: 2rem; text-align: center;">
+          <button class="btn btn-link" id="consentSkip" style="background: none; border: none; color: #666; text-decoration: underline; cursor: pointer; padding: 0.5rem;">Or skip to measurement entry →</button>
+        </p>
       </div>
 
       <!-- Screen 2: Measurements -->
@@ -80,23 +82,23 @@
         <div class="measurements-grid">
           <div class="measurement-input">
             <label for="bust">Bust (cm)</label>
-            <input type="number" id="bust" placeholder="e.g., 88" min="60" max="140" />
-            <span class="measurement-help">Measure around fullest part</span>
+            <input type="number" id="bust" placeholder="e.g., 88" min="70" max="150" />
+            <span class="measurement-help">Measure around fullest part (70-150 cm)</span>
           </div>
           <div class="measurement-input">
             <label for="waist">Waist (cm)</label>
-            <input type="number" id="waist" placeholder="e.g., 70" min="50" max="130" />
-            <span class="measurement-help">Measure natural waist</span>
+            <input type="number" id="waist" placeholder="e.g., 70" min="55" max="130" />
+            <span class="measurement-help">Measure natural waist (55-130 cm)</span>
           </div>
           <div class="measurement-input">
             <label for="hips">Hips (cm)</label>
-            <input type="number" id="hips" placeholder="e.g., 102" min="60" max="150" />
-            <span class="measurement-help">Measure fullest part</span>
+            <input type="number" id="hips" placeholder="e.g., 102" min="80" max="160" />
+            <span class="measurement-help">Measure fullest part (80-160 cm)</span>
           </div>
           <div class="measurement-input">
             <label for="height">Height (cm)</label>
             <input type="number" id="height" placeholder="e.g., 165" min="140" max="210" />
-            <span class="measurement-help">Your total height</span>
+            <span class="measurement-help">Your total height (140-210 cm)</span>
           </div>
         </div>
 
@@ -131,28 +133,36 @@
           <h4>Preferred Colors</h4>
           <div class="color-options">
             <label class="option-label">
-              <input type="checkbox" name="color" value="Black" />
-              <span>Black</span>
+              <input type="checkbox" name="color" value="Ebony" />
+              <span>Ebony (Black)</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="color" value="Navy" />
-              <span>Navy</span>
+              <input type="checkbox" name="color" value="Moonless Night" />
+              <span>Moonless Night (Dark)</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="color" value="White" />
-              <span>White</span>
+              <input type="checkbox" name="color" value="Chocolate Truffle" />
+              <span>Chocolate Truffle (Brown)</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="color" value="Cream" />
-              <span>Cream</span>
+              <input type="checkbox" name="color" value="Sky Captain" />
+              <span>Sky Captain (Blue)</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="color" value="Brown" />
-              <span>Brown</span>
+              <input type="checkbox" name="color" value="Forest Night" />
+              <span>Forest Night (Green)</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="color" value="Earth Tones" />
-              <span>Earth Tones</span>
+              <input type="checkbox" name="color" value="Pageant Blue" />
+              <span>Pageant Blue</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="color" value="Pure Cashmere" />
+              <span>Pure Cashmere (White)</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="color" value="Potent Purple" />
+              <span>Potent Purple</span>
             </label>
           </div>
         </div>
@@ -161,20 +171,24 @@
           <h4>Preferred Silhouettes</h4>
           <div class="silhouette-options">
             <label class="option-label">
-              <input type="checkbox" name="silhouette" value="Fitted" />
+              <input type="checkbox" name="silhouette" value="fitted" />
               <span>Fitted</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="silhouette" value="Flowing" />
+              <input type="checkbox" name="silhouette" value="flowing" />
               <span>Flowing</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="silhouette" value="Structured" />
-              <span>Structured</span>
+              <input type="checkbox" name="silhouette" value="straight" />
+              <span>Straight</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="silhouette" value="Layered" />
-              <span>Layered</span>
+              <input type="checkbox" name="silhouette" value="a_line" />
+              <span>A-Line</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="silhouette" value="oversized" />
+              <span>Oversized</span>
             </label>
           </div>
         </div>
@@ -183,20 +197,24 @@
           <h4>Occasions</h4>
           <div class="occasion-options">
             <label class="option-label">
-              <input type="checkbox" name="occasion" value="Work" />
+              <input type="checkbox" name="occasion" value="work" />
               <span>Work</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="occasion" value="Casual" />
+              <input type="checkbox" name="occasion" value="casual" />
               <span>Casual</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="occasion" value="Dinner" />
-              <span>Dinner</span>
+              <input type="checkbox" name="occasion" value="evening" />
+              <span>Evening</span>
             </label>
             <label class="option-label">
-              <input type="checkbox" name="occasion" value="Weekend" />
+              <input type="checkbox" name="occasion" value="weekend" />
               <span>Weekend</span>
+            </label>
+            <label class="option-label">
+              <input type="checkbox" name="occasion" value="gym" />
+              <span>Gym/Active</span>
             </label>
           </div>
         </div>
@@ -222,7 +240,15 @@
             <button class="btn btn-primary" id="viewRecommendations">View All Recommendations</button>
             <button class="btn btn-secondary" id="continueShopping">Continue Shopping</button>
           </div>
+          <p style="margin-top: 2rem; text-align: center;">
+            <button class="btn btn-link" id="completePrev" style="background: none; border: none; color: #666; text-decoration: underline; cursor: pointer; padding: 0.5rem;">← Back to preferences</button>
+          </p>
         </div>
+      </div>
+
+      <!-- Start Fresh Link -->
+      <div style="text-align: center; padding-top: 2rem; border-top: 1px solid #eee; margin-top: 2rem;">
+        <a href="#" id="startFreshLink" style="font-size: 0.9rem; color: #666; text-decoration: none; cursor: pointer;">Start Fresh</a>
       </div>
     </div>
   </main>

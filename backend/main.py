@@ -9,6 +9,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
+import json
+import os
 
 from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator, IntakeState
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
@@ -51,6 +53,24 @@ new_releases_feed = NewReleasesFeed(
     consent_tracker=consent_tracker,
 )
 learning_loop = LearningLoop(session_repo=session_repo, consent_tracker=consent_tracker)
+
+
+# =========================================================================
+# STARTUP: Load products from catalog file
+# =========================================================================
+
+@app.on_event("startup")
+async def load_products():
+    """Automatically load products from products.json on startup."""
+    products_file = os.path.join(os.path.dirname(__file__), 'products.json')
+    if os.path.exists(products_file):
+        try:
+            with open(products_file, 'r') as f:
+                products = json.load(f)
+            catalog.rebuild(products)
+            logger.info(f"Loaded {len(products)} products from products.json", {})
+        except Exception as e:
+            logger.error(f"Failed to load products.json: {str(e)}", {})
 
 
 # =========================================================================
@@ -573,6 +593,7 @@ async def resume_intake_session(request: IntakeResumeRequest):
 async def get_session_recommendations(
     session_id: str,
     k: int = 10,
+    user_id: Optional[str] = None,
     category_filter: Optional[List[str]] = None,
     occasion_filter: Optional[str] = None,
 ):
@@ -611,7 +632,10 @@ async def get_session_recommendations(
                 "M5"
             )
 
-        # Generate recommendations
+        # Use provided user_id or get from session
+        check_user_id = user_id or session.user_id
+
+        # Generate recommendations (uses check_user_id for consent verification)
         recommendations = recommendation_engine.generate_recommendations(
             session,
             k=k,

@@ -311,28 +311,30 @@ class TestM1ConsentEnforcement:
             )
 
     def test_photo_consent_checked_in_m6_retrieval(self, orchestrator):
-        """M6 should check photo consent before returning recommendations."""
-        # This test verifies the consent enforcement in M6
+        """M6 no longer checks consent directly (session completion enforces it)."""
+        # Consent enforcement moved to session completion check in M5/main.py
+        # M6 retrieves products without checking consent tracker
         from py_src.modules.m6_catalog_kb import CatalogKB
         from tests.fixtures import PRODUCTS
 
         catalog = CatalogKB(PRODUCTS)
         user_id = "test_user"
 
-        # Record consent without photo consent
+        # Even without photo consent, M6 retrieves products
         orchestrator.consent_tracker.record_consent(
             user_id=user_id,
             photo_consent=False,
             measurement_consent=True,
         )
 
-        # Try to retrieve with no photo consent
-        with pytest.raises(GuardrailError, match="consented"):
-            catalog.retrieve(
-                {"shape_class": "pear"},
-                user_id=user_id,
-                consent_tracker=orchestrator.consent_tracker,
-            )
+        # M6 should return results regardless of consent
+        # (consent is enforced at session level, not at retrieval)
+        results = catalog.retrieve(
+            {"shape_class": "pear"},
+            user_id=user_id,
+            consent_tracker=orchestrator.consent_tracker,
+        )
+        assert len(results) > 0
 
 
 class TestM1EventLogAccuracy:

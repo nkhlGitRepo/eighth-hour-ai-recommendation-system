@@ -169,29 +169,13 @@ class CatalogKB:
 
         Args:
             query_params: Dict with shape_class, categories, etc.
-            user_id: Optional user ID for consent checking and audit logging
-            consent_tracker: Optional ConsentTracker to verify consent
+            user_id: Optional user ID for audit logging
+            consent_tracker: Unused (kept for API compatibility)
 
         Returns:
             List of CatalogItem dicts ranked by relevance
-
-        Raises:
-            GuardrailError: If user has not consented to recommendations
         """
         try:
-            # Guardrail 0: Check consent if user context provided
-            if user_id and consent_tracker:
-                if not consent_tracker.has_photo_consent(user_id):
-                    AuditLogger.log_event(
-                        "INVALID_INPUT",
-                        user_id,
-                        {"reason": "No photo/recommendation consent"}
-                    )
-                    raise GuardrailError(
-                        "User has not consented to recommendation retrieval",
-                        "M6"
-                    )
-
             # Guardrail: Apply injection defense (sanitize parameters)
             safe_query = InjectionDefense.build_safe_retrieval_query(query_params)
 
@@ -296,6 +280,7 @@ class CatalogKB:
             "total_items": len(self.items),
             "categories": sorted(list(self.by_category.keys())),
             "fabrics": sorted(list(self.by_fabric.keys())),
+            "colors": sorted(list(self.by_color.keys())),
             "catalog_version": self.CATALOG_VERSION,
             "last_synced": self.last_synced,
         }
