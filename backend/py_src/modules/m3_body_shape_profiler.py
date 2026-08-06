@@ -182,16 +182,16 @@ class BodyShapeProfiler:
             "XXL": (96, 150),
         }
 
-        # Hip boundaries adjusted: shift down to better reflect hip sizes
-        # (hips can be naturally larger than bust, so boundaries are higher in absolute terms but lower relative to other measurements)
+        # Hip boundaries: adjusted to better align with actual hip measurements
+        # Most bodies have hips 8-12cm larger than bust, so offset the chart accordingly
         size_by_hip = {
-            "XXS": (80, 88),
-            "XS": (88, 96),
-            "S": (96, 104),
-            "M": (104, 112),
-            "L": (112, 120),
-            "XL": (120, 128),
-            "XXL": (128, 150),
+            "XXS": (88, 96),
+            "XS": (96, 104),
+            "S": (104, 112),
+            "M": (112, 120),
+            "L": (120, 128),
+            "XL": (128, 136),
+            "XXL": (136, 150),
         }
 
         def find_size(measurement, chart):
@@ -204,21 +204,23 @@ class BodyShapeProfiler:
         waist_size = find_size(waist, size_by_waist)
         hip_size = find_size(hips, size_by_hip)
 
-        # Standard approach: use bust measurement for all sizes
-        # (bust is the primary sizing metric across all garment types)
-        size = bust_size
+        # Standard sizing approach:
+        # Tops/Dresses/Outerwear: use bust
+        # Skirts/Trousers: use hip (primary) and waist (secondary)
+        top_size = bust_size
+        bottom_size = hip_size
 
-        # Exception: apple shape relies on waist prominence
+        # Apple shape: waist is prominent, use waist for tops
         if shape_class == "apple":
-            size = waist_size
+            top_size = waist_size
 
         return {
-            "tops": size,
-            "skirts": size,
-            "dresses": size,
-            "trousers": size,
-            "vests": size,
-            "coOrds": size,
+            "tops": top_size,
+            "skirts": bottom_size,
+            "dresses": top_size,
+            "trousers": bottom_size,
+            "vests": top_size,
+            "coOrds": top_size,
         }
 
     def _generate_fit_notes(self, shape_class, bust_waist, waist_hip):
