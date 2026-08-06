@@ -38,3 +38,7 @@ MEASUREMENT_RANGES = {
 
 # New releases feed configuration
 NEW_RELEASES_MATCH_THRESHOLD = 0.65  # Minimum match score to include in feed
+
+# Learning loop feedback types (M10)
+FIT_FEEDBACK_TYPES = ["too_tight", "perfect", "too_loose"]
+PRODUCT_FEEDBACK_TYPES = ["liked", "disliked", "neutral"]

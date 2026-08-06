@@ -14,21 +14,17 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import json
 import uuid
+import sqlite3
 from py_src.persistence.session_repository import SessionRepository
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
+from py_src.constants import FIT_FEEDBACK_TYPES, PRODUCT_FEEDBACK_TYPES, STANDARD_SIZES
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.utils.logger import logger
 
 
 class LearningLoop:
     """Collect and analyze feedback to refine recommendations."""
-
-    # Valid feedback types for fit assessments
-    VALID_FIT_FEEDBACK = ["too_tight", "perfect", "too_loose"]
-
-    # Valid feedback types for products
-    VALID_PRODUCT_FEEDBACK = ["liked", "disliked", "neutral"]
 
     def __init__(self, session_repo: Optional[SessionRepository] = None, consent_tracker: Optional[ConsentTracker] = None):
         """
@@ -41,6 +37,91 @@ class LearningLoop:
         self.session_repo = session_repo or SessionRepository()
         self.consent_tracker = consent_tracker or ConsentTracker()
         logger.info("M10 LearningLoop initialized")
+
+    # ========== Helper Methods (Internal) ==========
+
+    def _verify_consent(self, user_id: str) -> None:
+        """
+        Verify user has measurement consent.
+
+        Raises:
+            GuardrailError: If user lacks measurement consent
+        """
+        if not self.consent_tracker.has_measurement_consent(user_id):
+            raise GuardrailError(
+                "User has not consented to measurement processing for feedback",
+                "M10"
+            )
+
+    def _validate_fit_feedback_type(self, feedback_type: str) -> None:
+        """
+        Validate fit feedback type.
+
+        Raises:
+            ModuleError: If feedback_type is invalid
+        """
+        if feedback_type not in FIT_FEEDBACK_TYPES:
+            raise ModuleError(
+                f"Invalid fit feedback type: {feedback_type}. Must be one of: {', '.join(FIT_FEEDBACK_TYPES)}",
+                "M10"
+            )
+
+    def _validate_product_feedback_type(self, feedback_type: str) -> None:
+        """
+        Validate product feedback type.
+
+        Raises:
+            ModuleError: If feedback_type is invalid
+        """
+        if feedback_type not in PRODUCT_FEEDBACK_TYPES:
+            raise ModuleError(
+                f"Invalid product feedback type: {feedback_type}. Must be one of: {', '.join(PRODUCT_FEEDBACK_TYPES)}",
+                "M10"
+            )
+
+    def _validate_size(self, size: Optional[str]) -> None:
+        """
+        Validate size if provided.
+
+        Raises:
+            ModuleError: If size is invalid
+        """
+        if size and size not in STANDARD_SIZES:
+            raise ModuleError(f"Invalid size: {size}", "M10")
+
+    def _validate_rating(self, rating: Optional[float]) -> None:
+        """
+        Validate rating if provided.
+
+        Raises:
+            ModuleError: If rating is invalid
+        """
+        if rating is not None:
+            if not (0 <= rating <= 5):
+                raise ModuleError("Rating must be 0-5", "M10")
+
+    def _generate_feedback_id(self, prefix: str) -> str:
+        """Generate unique feedback ID using UUID."""
+        return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+    def _save_with_error_handling(self, save_fn, operation_name: str) -> None:
+        """
+        Execute save operation with specific error handling.
+
+        Raises:
+            ModuleError: On save failure
+        """
+        try:
+            save_fn()
+        except sqlite3.IntegrityError as err:
+            logger.error(f"{operation_name} - data integrity violation", err)
+            raise ModuleError(f"{operation_name} failed - duplicate or constraint violation: {str(err)}", "M10")
+        except sqlite3.OperationalError as err:
+            logger.error(f"{operation_name} - database operation error", err)
+            raise ModuleError(f"{operation_name} failed - database error: {str(err)}", "M10")
+        except Exception as err:
+            logger.error(f"{operation_name} - unexpected error", err)
+            raise ModuleError(f"{operation_name} failed - {type(err).__name__}: {str(err)}", "M10")
 
     def submit_fit_feedback(
         self,
@@ -58,47 +139,33 @@ class LearningLoop:
             user_id: User identifier
             fit_check_id: ID of the fit check being evaluated
             product_sku: Product SKU
-            feedback_type: "too_tight", "perfect", or "too_loose"
-            actual_size: Size user actually ordered (if different from recommended)
+            feedback_type: One of: too_tight, perfect, too_loose
+            actual_size: Size user actually ordered (optional, XS-XXL)
             notes: Optional user notes
 
         Returns:
             {
-              "feedback_id": "uuid-...",
-              "user_id": "...",
-              "fit_check_id": "...",
-              "feedback_type": "perfect",
-              "submitted_at": 1691111111.0,
-              "saved": true
+              "feedback_id": "feedback-xxx",
+              "user_id": user_id,
+              "fit_check_id": fit_check_id,
+              "feedback_type": feedback_type,
+              "submitted_at": timestamp,
+              "saved": True
             }
 
         Raises:
-            GuardrailError: If user lacks measurement consent
             ModuleError: If inputs invalid
+            GuardrailError: If user lacks measurement consent
         """
-        # Verify consent
-        if not self.consent_tracker.has_measurement_consent(user_id):
-            raise GuardrailError(
-                "User has not consented to measurement processing for feedback",
-                "M10"
-            )
+        # 1. Validate inputs first (fail fast, no I/O)
+        self._validate_fit_feedback_type(feedback_type)
+        self._validate_size(actual_size)
 
-        # Validate feedback type
-        if feedback_type not in self.VALID_FIT_FEEDBACK:
-            raise ModuleError(
-                f"Invalid feedback type: {feedback_type}. Must be one of: {', '.join(self.VALID_FIT_FEEDBACK)}",
-                "M10"
-            )
+        # 2. Check permissions (slower, may do I/O)
+        self._verify_consent(user_id)
 
-        # Validate actual_size if provided
-        valid_sizes = ["XS", "S", "M", "L", "XL", "XXL"]
-        if actual_size and actual_size not in valid_sizes:
-            raise ModuleError(f"Invalid size: {actual_size}", "M10")
-
-        # Generate unique feedback ID (use UUID to prevent collisions)
-        feedback_id = f"feedback-{uuid.uuid4().hex[:12]}"
-
-        # Prepare feedback record
+        # 3. Generate ID and prepare record
+        feedback_id = self._generate_feedback_id("feedback")
         feedback_record = {
             "feedback_id": feedback_id,
             "user_id": user_id,
@@ -110,39 +177,36 @@ class LearningLoop:
             "submitted_at": datetime.now().timestamp(),
         }
 
-        # Save feedback
-        try:
-            # Store in session repository's feedback table
-            self.session_repo.save_feedback(user_id, feedback_record)
+        # 4. Save and audit log
+        self._save_with_error_handling(
+            lambda: self.session_repo.save_feedback(user_id, feedback_record),
+            "Fit feedback save"
+        )
 
-            # Audit log
-            AuditLogger.log_event(
-                "FIT_FEEDBACK_SUBMITTED",
-                user_id,
-                {
-                    "feedback_id": feedback_id,
-                    "product_sku": product_sku,
-                    "feedback_type": feedback_type,
-                    "size_mismatch": actual_size is not None,
-                },
-            )
-
-            logger.info(
-                "Fit feedback submitted",
-                {"user_id": user_id, "product_sku": product_sku, "feedback_type": feedback_type}
-            )
-
-            return {
+        AuditLogger.log_event(
+            "FIT_FEEDBACK_SUBMITTED",
+            user_id,
+            {
                 "feedback_id": feedback_id,
-                "user_id": user_id,
-                "fit_check_id": fit_check_id,
+                "product_sku": product_sku,
                 "feedback_type": feedback_type,
-                "submitted_at": feedback_record["submitted_at"],
-                "saved": True,
-            }
-        except Exception as err:
-            logger.error("Failed to save fit feedback", err)
-            raise ModuleError(f"Failed to save feedback: {str(err)}", "M10")
+                "size_mismatch": actual_size is not None,
+            },
+        )
+
+        logger.info(
+            "Fit feedback submitted",
+            {"user_id": user_id, "product_sku": product_sku, "feedback_type": feedback_type}
+        )
+
+        return {
+            "feedback_id": feedback_id,
+            "user_id": user_id,
+            "fit_check_id": fit_check_id,
+            "feedback_type": feedback_type,
+            "submitted_at": feedback_record["submitted_at"],
+            "saved": True,
+        }
 
     def submit_product_feedback(
         self,
@@ -154,52 +218,38 @@ class LearningLoop:
         notes: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Record user feedback on a product (satisfaction, would recommend).
+        Record user feedback on a product (satisfaction).
 
         Args:
             user_id: User identifier
             product_sku: Product SKU
-            feedback_type: "liked", "disliked", or "neutral"
-            purchased: Whether user purchased this product
+            feedback_type: One of: liked, disliked, neutral
+            purchased: Whether user purchased this product (optional)
             rating: Optional satisfaction rating (0-5)
             notes: Optional user notes
 
         Returns:
             {
-              "feedback_id": "uuid-...",
-              "product_sku": "...",
-              "feedback_type": "liked",
-              "submitted_at": 1691111111.0,
-              "saved": true
+              "feedback_id": "product-feedback-xxx",
+              "product_sku": product_sku,
+              "feedback_type": feedback_type,
+              "submitted_at": timestamp,
+              "saved": True
             }
 
         Raises:
-            GuardrailError: If user lacks consent
             ModuleError: If inputs invalid
+            GuardrailError: If user lacks measurement consent
         """
-        # Verify consent
-        if not self.consent_tracker.has_measurement_consent(user_id):
-            raise GuardrailError(
-                "User has not consented to measurement processing for feedback",
-                "M10"
-            )
+        # 1. Validate inputs first (fail fast, no I/O)
+        self._validate_product_feedback_type(feedback_type)
+        self._validate_rating(rating)
 
-        # Validate feedback type
-        if feedback_type not in self.VALID_PRODUCT_FEEDBACK:
-            raise ModuleError(
-                f"Invalid feedback type: {feedback_type}. Must be one of: {', '.join(self.VALID_PRODUCT_FEEDBACK)}",
-                "M10"
-            )
+        # 2. Check permissions (slower, may do I/O)
+        self._verify_consent(user_id)
 
-        # Validate rating if provided
-        if rating is not None:
-            if not (0 <= rating <= 5):
-                raise ModuleError("Rating must be 0-5", "M10")
-
-        # Generate unique feedback ID (use UUID to prevent collisions)
-        feedback_id = f"product-feedback-{uuid.uuid4().hex[:12]}"
-
-        # Prepare feedback record
+        # 3. Generate ID and prepare record
+        feedback_id = self._generate_feedback_id("product-feedback")
         feedback_record = {
             "feedback_id": feedback_id,
             "user_id": user_id,
@@ -211,67 +261,69 @@ class LearningLoop:
             "submitted_at": datetime.now().timestamp(),
         }
 
-        # Save feedback
-        try:
-            self.session_repo.save_product_feedback(user_id, feedback_record)
+        # 4. Save and audit log
+        self._save_with_error_handling(
+            lambda: self.session_repo.save_product_feedback(user_id, feedback_record),
+            "Product feedback save"
+        )
 
-            # Audit log
-            AuditLogger.log_event(
-                "PRODUCT_FEEDBACK_SUBMITTED",
-                user_id,
-                {
-                    "feedback_id": feedback_id,
-                    "product_sku": product_sku,
-                    "feedback_type": feedback_type,
-                    "purchased": purchased,
-                },
-            )
-
-            logger.info(
-                "Product feedback submitted",
-                {"user_id": user_id, "product_sku": product_sku, "feedback_type": feedback_type}
-            )
-
-            return {
+        AuditLogger.log_event(
+            "PRODUCT_FEEDBACK_SUBMITTED",
+            user_id,
+            {
                 "feedback_id": feedback_id,
                 "product_sku": product_sku,
                 "feedback_type": feedback_type,
-                "submitted_at": feedback_record["submitted_at"],
-                "saved": True,
-            }
-        except Exception as err:
-            logger.error("Failed to save product feedback", err)
-            raise ModuleError(f"Failed to save feedback: {str(err)}", "M10")
+                "purchased": purchased,
+            },
+        )
+
+        logger.info(
+            "Product feedback submitted",
+            {"user_id": user_id, "product_sku": product_sku, "feedback_type": feedback_type}
+        )
+
+        return {
+            "feedback_id": feedback_id,
+            "product_sku": product_sku,
+            "feedback_type": feedback_type,
+            "submitted_at": feedback_record["submitted_at"],
+            "saved": True,
+        }
 
     def get_user_feedback_summary(self, user_id: str) -> Dict[str, Any]:
         """
         Get aggregate feedback statistics for a user.
 
-        Returns:
-        {
-          "user_id": "...",
-          "total_fit_feedback": 5,
-          "perfect_fit_percentage": 0.6,
-          "size_accuracy": {
-            "recommended_size": "M",
-            "correct_count": 3,
-            "tight_count": 1,
-            "loose_count": 1,
-            "accuracy_percentage": 0.6
-          },
-          "most_liked_categories": ["Dresses", "Tops"],
-          "product_feedback_summary": {
-            "liked_count": 3,
-            "disliked_count": 1,
-            "neutral_count": 2
-          }
-        }
-        """
-        try:
-            # Verify consent
-            if not self.consent_tracker.has_measurement_consent(user_id):
-                raise GuardrailError("User lacks measurement consent", "M10")
+        Args:
+            user_id: User identifier
 
+        Returns:
+            {
+              "user_id": user_id,
+              "fit_feedback_stats": {
+                "total": 5,
+                "perfect": 3,
+                "tight": 1,
+                "loose": 1,
+                "perfect_percentage": 0.6
+              },
+              "product_feedback_stats": {
+                "liked": 3,
+                "disliked": 1,
+                "neutral": 2
+              },
+              "total_feedback_records": 8
+            }
+
+        Raises:
+            GuardrailError: If user lacks measurement consent
+            ModuleError: If retrieval fails
+        """
+        # Verify consent first
+        self._verify_consent(user_id)
+
+        try:
             # Retrieve all feedback from repo
             fit_feedback = self.session_repo.get_user_fit_feedback(user_id) or []
             product_feedback = self.session_repo.get_user_product_feedback(user_id) or []
@@ -318,41 +370,24 @@ class LearningLoop:
         """
         Get adjustment factors for size recommendations based on feedback patterns.
 
-        This would be used to refine M7 fit recommendations by:
-        1. Analyzing feedback for all users with same shape_class/size
-        2. Computing "confidence adjustment" if feedback shows systematic bias
-        3. Example: if pear-shaped users getting size M fit perfectly 80% of the time
-                    but data showed 0.75 confidence, adjust factor to 1.07x
+        FUTURE FEATURE (Phase 5): Will analyze feedback for all users with same
+        shape_class/size and compute confidence adjustments if systematic bias exists.
+
+        Example: If pear-shaped users getting size M fit perfectly 80% of the time
+        but M7's data showed 0.75 confidence, will return adjustment factor of 1.07x.
 
         Args:
             shape_class: Body shape class (e.g., "pear", "hourglass")
             size: Size to analyze (e.g., "M")
 
         Returns:
-            {
-              "shape_class": "pear",
-              "size": "M",
-              "confidence_adjustment": 1.05,  # Increase future confidence by 5%
-              "size_shift_probability": {"tight": 0.1, "perfect": 0.8, "loose": 0.1},
-              "samples": 15,  # Number of feedback records analyzed
-              "recommendation": "Recommended size is reliable"
-            }
-        """
-        try:
-            # In production, this would:
-            # 1. Query feedback table for all records matching shape_class/size
-            # 2. Group by feedback_type (perfect/tight/loose)
-            # 3. Calculate probabilities and confidence adjustment
-            # 4. Return factors to M7 for refined scoring
+            (Not yet implemented)
 
-            # For now, return default (no adjustment)
-            return {
-                "shape_class": shape_class,
-                "size": size,
-                "confidence_adjustment": 1.0,
-                "samples": 0,
-                "recommendation": "Insufficient feedback data",
-            }
-        except Exception as err:
-            logger.error("Failed to calculate size adjustment factors", err)
-            raise ModuleError(f"Failed to calculate adjustment factors: {str(err)}", "M10")
+        Raises:
+            NotImplementedError: Feature not yet implemented (planned for Phase 5)
+        """
+        raise NotImplementedError(
+            "Size adjustment factors calculation is not yet implemented. "
+            "This feature is planned for Phase 5. Currently, M7 uses fixed confidence scores. "
+            "See: GitHub Issue #M10-SIZE-ADJUSTMENT"
+        )

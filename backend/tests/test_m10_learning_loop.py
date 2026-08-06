@@ -102,7 +102,7 @@ class TestFitFeedbackSubmission:
                 product_sku="top-459",
                 feedback_type="maybe_fit",  # Invalid
             )
-        assert "Invalid feedback type" in str(exc_info.value)
+        assert "Invalid fit feedback type" in str(exc_info.value)
 
     def test_rejects_invalid_size(self, learning_loop):
         """Invalid actual_size raises ModuleError."""
@@ -280,7 +280,7 @@ class TestProductFeedback:
                 product_sku="top-471",
                 feedback_type="love_it",  # Invalid
             )
-        assert "Invalid feedback type" in str(exc_info.value)
+        assert "Invalid product feedback type" in str(exc_info.value)
 
     def test_product_feedback_requires_consent(self, learning_loop):
         """Product feedback requires measurement consent."""
@@ -377,16 +377,16 @@ class TestFeedbackSummary:
 class TestSizeAdjustmentFactors:
     """Test recommendation refinement factors."""
 
-    def test_size_adjustment_factors_default(self, learning_loop):
-        """Without feedback data, returns default adjustment (1.0x)."""
+    def test_size_adjustment_factors_not_implemented(self, learning_loop):
+        """Size adjustment factors are not yet implemented (Phase 5)."""
         loop, _ = learning_loop
 
-        factors = loop.get_size_adjustment_factors("pear", "M")
+        # Should raise NotImplementedError with clear message about future implementation
+        with pytest.raises(NotImplementedError) as exc_info:
+            loop.get_size_adjustment_factors("pear", "M")
 
-        assert factors["shape_class"] == "pear"
-        assert factors["size"] == "M"
-        assert factors["confidence_adjustment"] == 1.0
-        assert factors["samples"] == 0
+        assert "not yet implemented" in str(exc_info.value).lower()
+        assert "Phase 5" in str(exc_info.value)
 
 
 class TestIntegration:
@@ -472,7 +472,7 @@ class TestParameterValidation:
 
         with pytest.raises(ModuleError) as exc_info:
             loop.submit_fit_feedback(user_id, "check-1", "top-1", "")
-        assert "Invalid feedback type" in str(exc_info.value)
+        assert "Invalid fit feedback type" in str(exc_info.value)
 
     def test_rejects_whitespace_feedback_type(self, learning_loop):
         """Whitespace feedback_type should be rejected."""
