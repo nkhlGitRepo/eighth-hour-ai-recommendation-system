@@ -17,8 +17,10 @@ from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.modules.m7_fit_checker import FitChecker
 from py_src.modules.m8_recommendation_history import RecommendationHistory
 from py_src.modules.m9_new_releases_feed import NewReleasesFeed
+from py_src.modules.m10_learning_loop import LearningLoop
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.consent_tracker import ConsentTracker
+from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.utils.logger import logger
 
@@ -38,6 +40,7 @@ app.add_middleware(
 profiler = BodyShapeProfiler()
 catalog = CatalogKB([])  # Will be populated from website
 consent_tracker = ConsentTracker()
+session_repo = SQLiteSessionRepository()
 intake_orchestrator = IntakeOrchestrator()
 recommendation_engine = RecommendationEngine(catalog, consent_tracker)
 fit_checker = FitChecker(consent_tracker)
@@ -47,6 +50,7 @@ new_releases_feed = NewReleasesFeed(
     fit_checker=fit_checker,
     consent_tracker=consent_tracker,
 )
+learning_loop = LearningLoop(session_repo=session_repo, consent_tracker=consent_tracker)
 
 
 # =========================================================================
@@ -913,6 +917,154 @@ async def get_user_trends(user_id: str):
         raise HTTPException(status_code=403, detail=str(err))
     except Exception as err:
         logger.error("Trend analysis failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
+# M10 — LEARNING LOOP FEEDBACK ENDPOINTS
+# =========================================================================
+
+
+class FitFeedbackRequest(BaseModel):
+    user_id: str
+    fit_check_id: str
+    product_sku: str
+    feedback_type: str  # "too_tight", "perfect", or "too_loose"
+    actual_size: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ProductFeedbackRequest(BaseModel):
+    user_id: str
+    product_sku: str
+    feedback_type: str  # "liked", "disliked", or "neutral"
+    purchased: bool = False
+    rating: Optional[float] = None
+    notes: Optional[str] = None
+
+
+@app.post("/feedback/fit")
+async def submit_fit_feedback(request: FitFeedbackRequest):
+    """
+    Submit feedback on how a recommended fit actually fit.
+
+    Request body:
+    {
+      "user_id": "user-123",
+      "fit_check_id": "check-456",
+      "product_sku": "top-123",
+      "feedback_type": "perfect",
+      "actual_size": "M",
+      "notes": "Fit perfectly as recommended"
+    }
+
+    Returns:
+    {
+      "feedback_id": "feedback-...",
+      "user_id": "user-123",
+      "product_sku": "top-123",
+      "feedback_type": "perfect",
+      "submitted_at": 1691111111.0,
+      "saved": true
+    }
+    """
+    try:
+        feedback = learning_loop.submit_fit_feedback(
+            user_id=request.user_id,
+            fit_check_id=request.fit_check_id,
+            product_sku=request.product_sku,
+            feedback_type=request.feedback_type,
+            actual_size=request.actual_size,
+            notes=request.notes,
+        )
+        return feedback
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        logger.error("Fit feedback submission failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/feedback/product")
+async def submit_product_feedback(request: ProductFeedbackRequest):
+    """
+    Submit feedback on product satisfaction.
+
+    Request body:
+    {
+      "user_id": "user-123",
+      "product_sku": "top-123",
+      "feedback_type": "liked",
+      "purchased": true,
+      "rating": 4.5,
+      "notes": "Love the color and fit"
+    }
+
+    Returns:
+    {
+      "feedback_id": "feedback-...",
+      "product_sku": "top-123",
+      "feedback_type": "liked",
+      "submitted_at": 1691111111.0,
+      "saved": true
+    }
+    """
+    try:
+        feedback = learning_loop.submit_product_feedback(
+            user_id=request.user_id,
+            product_sku=request.product_sku,
+            feedback_type=request.feedback_type,
+            purchased=request.purchased,
+            rating=request.rating,
+            notes=request.notes,
+        )
+        return feedback
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        logger.error("Product feedback submission failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/feedback/summary/{user_id}")
+async def get_feedback_summary(user_id: str):
+    """
+    Get aggregate feedback summary for a user.
+
+    Path params:
+    - user_id: User identifier
+
+    Returns:
+    {
+      "user_id": "user-123",
+      "fit_feedback_stats": {
+        "total": 10,
+        "perfect": 7,
+        "tight": 2,
+        "loose": 1,
+        "perfect_percentage": 0.7
+      },
+      "product_feedback_stats": {
+        "liked": 5,
+        "disliked": 1,
+        "neutral": 2
+      },
+      "total_feedback_records": 13
+    }
+    """
+    try:
+        summary = learning_loop.get_user_feedback_summary(user_id)
+        return summary
+    except GuardrailError as err:
+        raise HTTPException(status_code=403, detail=str(err))
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        logger.error("Feedback summary retrieval failed", err)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

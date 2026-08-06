@@ -94,6 +94,10 @@ class SQLiteSessionRepository(SessionRepository):
                 "CREATE INDEX IF NOT EXISTS idx_fit_product_sku ON fit_check_history(product_sku)"
             )
             conn.commit()
+
+        # Initialize feedback tables for M10
+        self._init_feedback_tables()
+
         logger.info("Session database initialized", {"path": self.db_path})
 
     def save(self, session: "IntakeSession") -> None:
@@ -385,3 +389,123 @@ class SQLiteSessionRepository(SessionRepository):
             )
 
         return session
+
+    def _init_feedback_tables(self):
+        """Initialize feedback tables for M10 learning loop."""
+        with sqlite3.connect(self.db_path) as conn:
+            # Fit feedback table
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS fit_feedback (
+                    feedback_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    fit_check_id TEXT,
+                    product_sku TEXT NOT NULL,
+                    feedback_type TEXT NOT NULL,
+                    actual_size TEXT,
+                    notes TEXT,
+                    submitted_at REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON fit_feedback(user_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_feedback_product_sku ON fit_feedback(product_sku)"
+            )
+
+            # Product feedback table
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS product_feedback (
+                    feedback_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    product_sku TEXT NOT NULL,
+                    feedback_type TEXT NOT NULL,
+                    purchased BOOLEAN,
+                    rating REAL,
+                    notes TEXT,
+                    submitted_at REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_product_feedback_user_id ON product_feedback(user_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_product_feedback_sku ON product_feedback(product_sku)"
+            )
+            conn.commit()
+
+    def save_feedback(self, user_id: str, feedback_record: Dict) -> None:
+        """Save fit check feedback."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO fit_feedback
+                (feedback_id, user_id, fit_check_id, product_sku, feedback_type, actual_size, notes, submitted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    feedback_record["feedback_id"],
+                    user_id,
+                    feedback_record.get("fit_check_id"),
+                    feedback_record["product_sku"],
+                    feedback_record["feedback_type"],
+                    feedback_record.get("actual_size"),
+                    feedback_record.get("notes"),
+                    feedback_record["submitted_at"],
+                ),
+            )
+            conn.commit()
+
+    def save_product_feedback(self, user_id: str, feedback_record: Dict) -> None:
+        """Save product satisfaction feedback."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO product_feedback
+                (feedback_id, user_id, product_sku, feedback_type, purchased, rating, notes, submitted_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    feedback_record["feedback_id"],
+                    user_id,
+                    feedback_record["product_sku"],
+                    feedback_record["feedback_type"],
+                    feedback_record.get("purchased", False),
+                    feedback_record.get("rating"),
+                    feedback_record.get("notes"),
+                    feedback_record["submitted_at"],
+                ),
+            )
+            conn.commit()
+
+    def get_user_fit_feedback(self, user_id: str) -> Optional[list]:
+        """Get all fit feedback for a user."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM fit_feedback WHERE user_id = ?
+                ORDER BY submitted_at DESC
+                """,
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows] if rows else None
+
+    def get_user_product_feedback(self, user_id: str) -> Optional[list]:
+        """Get all product feedback for a user."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM product_feedback WHERE user_id = ?
+                ORDER BY submitted_at DESC
+                """,
+                (user_id,),
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows] if rows else None

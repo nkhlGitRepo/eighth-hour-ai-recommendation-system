@@ -160,22 +160,30 @@ class FitCheckerWidget {
     }
 
     try {
-      // Store feedback locally (M10 will handle this in backend)
-      const feedback = {
-        fit_check_id: this.fitResult.check_id || `${this.sessionId}-${this.productSku}`,
-        product_sku: this.productSku,
-        product_name: this.productName,
-        feedback_type: selectedFit.value,
-        timestamp: Date.now(),
-      };
+      const userId = localStorage.getItem('userId');
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
 
-      // Save to localStorage for now (will be sent to backend in M10)
-      let feedbackHistory = JSON.parse(localStorage.getItem('fitFeedback') || '[]');
-      feedbackHistory.push(feedback);
-      localStorage.setItem('fitFeedback', JSON.stringify(feedbackHistory));
+      // Submit feedback to M10 backend
+      const response = await fetch(`${API_BASE}/feedback/fit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          fit_check_id: this.fitResult.check_id || `${this.sessionId}-${this.productSku}`,
+          product_sku: this.productSku,
+          feedback_type: selectedFit.value,
+          notes: `Fit feedback for ${this.productName}`,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit feedback');
+      }
 
       overlay.remove();
-      alert('Thank you for your feedback!');
+      alert('Thank you for your feedback! This helps us improve recommendations.');
     } catch (error) {
       console.error('Feedback submission error:', error);
       alert('Error submitting feedback. Please try again.');
