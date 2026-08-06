@@ -13,6 +13,7 @@ Guardrails applied:
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import json
+import uuid
 from py_src.persistence.session_repository import SessionRepository
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
@@ -94,8 +95,8 @@ class LearningLoop:
         if actual_size and actual_size not in valid_sizes:
             raise ModuleError(f"Invalid size: {actual_size}", "M10")
 
-        # Generate unique feedback ID
-        feedback_id = f"feedback-{fit_check_id}-{int(datetime.now().timestamp())}"
+        # Generate unique feedback ID (use UUID to prevent collisions)
+        feedback_id = f"feedback-{uuid.uuid4().hex[:12]}"
 
         # Prepare feedback record
         feedback_record = {
@@ -195,8 +196,8 @@ class LearningLoop:
             if not (0 <= rating <= 5):
                 raise ModuleError("Rating must be 0-5", "M10")
 
-        # Generate unique feedback ID
-        feedback_id = f"product-feedback-{product_sku}-{int(datetime.now().timestamp())}"
+        # Generate unique feedback ID (use UUID to prevent collisions)
+        feedback_id = f"product-feedback-{uuid.uuid4().hex[:12]}"
 
         # Prepare feedback record
         feedback_record = {
