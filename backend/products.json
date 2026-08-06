@@ -17,7 +17,8 @@
       "XXL"
     ],
     "description": "Crepe Silk Pintuck Straight Skirt from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "straight"
   },
   {
     "slug": "crepe-silk-pleated-dress",
@@ -39,7 +40,8 @@
       "XXL"
     ],
     "description": "Crepe Silk Pleated Dress from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "flowing"
   },
   {
     "slug": "crepe-silk-textured-long-top",
@@ -60,7 +62,8 @@
       "XXL"
     ],
     "description": "Crepe Silk Textured Long Top from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "crepe-silk-vest",
@@ -80,7 +83,8 @@
       "XXL"
     ],
     "description": "Crepe Silk Vest from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "crepe-silk-vest-and-skirt-set",
@@ -100,7 +104,8 @@
       "XXL"
     ],
     "description": "Crepe Silk Vest and Skirt Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-overlap-vest-and-pintuck-trouser-set",
@@ -123,7 +128,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Overlap Vest and Pintuck Trouser Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-asymmetrical-wrap-skirt",
@@ -146,7 +152,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Asymmetrical Wrap Skirt from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "flowing"
   },
   {
     "slug": "mulberry-silk-wide-neck-vest-and-pant-set",
@@ -168,7 +175,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Wide Neck Vest and Pant Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "flowing"
   },
   {
     "slug": "mulberry-silk-vest-and-skirt-set",
@@ -189,7 +197,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Vest and Skirt Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-vest",
@@ -211,7 +220,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Vest from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-v-neck-top-with-kantha-embroidery",
@@ -231,7 +241,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk V-Neck Top with Kantha Embroidery from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-pintuck-cap-sleeve-top",
@@ -251,7 +262,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Cap Sleeve Top from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-pintuck-wrap-skirt",
@@ -273,7 +285,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Wrap Skirt from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "flowing"
   },
   {
     "slug": "mulberry-silk-pintuck-boat-neck-vest",
@@ -296,7 +309,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Wide Neck Vest from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-pintuck-vest",
@@ -316,7 +330,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Vest from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-pintuck-trousers",
@@ -345,7 +360,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Trousers from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-pintuck-straight-skirt",
@@ -367,7 +383,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Straight Skirt from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "straight"
   },
   {
     "slug": "mulberry-silk-pintuck-overlap-vest",
@@ -389,7 +406,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Overlap Vest from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-pintuck-vest-and-skirt-set",
@@ -409,7 +427,8 @@
       "XXL"
     ],
     "description": "Mulberry Pintuck Vest and Skirt Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-overlap-vest",
@@ -432,7 +451,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Overlap Vest from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-overlap-pintuck-vest-and-trouser-set",
@@ -454,7 +474,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Overlap Pintuck Vest and Trouser Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-embroidered-wrap-skirt-set",
@@ -475,7 +496,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Wrap Skirt Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "flowing"
   },
   {
     "slug": "mulberry-silk-embroidered-v-neck-top",
@@ -496,7 +518,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered V-Neck Top from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-embroidered-raglan-cut-top",
@@ -516,7 +539,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Raglan Cut Top from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "crepe-silk-embroidered-long-top",
@@ -536,7 +560,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Long Top from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-embroidered-dress",
@@ -558,7 +583,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Dress from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-embroidered-cap-sleeve-top",
@@ -579,7 +605,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Cap Sleeve Top from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   },
   {
     "slug": "mulberry-silk-embroidered-boat-wrap-skirt-set",
@@ -601,7 +628,8 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Boat Wrap Skirt Set from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "flowing"
   },
   {
     "slug": "mulberry-silk-embroidered-boat-neck-top",
@@ -624,6 +652,7 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Boat Neck Top from our collection",
-    "length": "Regular"
+    "length": "Regular",
+    "silhouette": "fitted"
   }
 ]
