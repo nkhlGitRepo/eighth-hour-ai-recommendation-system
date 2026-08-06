@@ -22,6 +22,16 @@ class IntakeFlow {
     this.attachEventListeners();
     this.restoreSession();
     this.loadAvailableColors();
+
+    // Check for step parameter in URL (e.g., ?step=2)
+    const params = new URLSearchParams(window.location.search);
+    const stepParam = params.get('step');
+    if (stepParam) {
+      const step = parseInt(stepParam);
+      if (step >= 1 && step <= 5) {
+        this.goToStep(step);
+      }
+    }
   }
 
   generateUserId() {
