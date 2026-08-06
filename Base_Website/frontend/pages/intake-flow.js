@@ -345,7 +345,7 @@ class IntakeFlow {
   viewRecommendations() {
     // Store session in localStorage and navigate to recommendations page
     localStorage.setItem('currentSessionId', this.sessionId);
-    window.location.href = `recommendations.html?session=${this.sessionId}`;
+    window.location.href = `./recommendations.html?session=${this.sessionId}`;
   }
 
   continueShopping() {
