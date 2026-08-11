@@ -223,7 +223,7 @@ class BodyShapeProfiler:
             "dresses": top_size,
             "trousers": bottom_size,
             "vests": top_size,
-            "coOrds": top_size,
+            "coOrds": f"{top_size}/{bottom_size}",  # Shows both top/bottom sizes for coordinated sets
         }
 
     def _generate_fit_notes(self, shape_class, bust_waist, waist_hip):
