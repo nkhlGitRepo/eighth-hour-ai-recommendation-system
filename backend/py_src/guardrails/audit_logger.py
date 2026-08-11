@@ -1,6 +1,6 @@
 """Audit logging for compliance and security."""
 
-import json
+import hashlib
 import time
 from py_src.utils.logger import logger
 
@@ -38,13 +38,29 @@ class AuditLogger:
     }
 
     @staticmethod
+    def hash_user_id(user_id):
+        """
+        Stable pseudonymization for audit logs.
+
+        Python's built-in hash() is NOT suitable here: it's randomized per
+        process by default (PYTHONHASHSEED), so the same user produces a
+        DIFFERENT "hash" after every server restart, which defeats the
+        entire point of a pseudonymous-but-correlatable audit trail. Uses
+        SHA-256 (deterministic, non-reversible) instead, truncated for
+        log readability -- this is a log identifier, not a security key.
+        """
+        if not user_id:
+            return None
+        return hashlib.sha256(str(user_id).encode("utf-8")).hexdigest()[:16]
+
+    @staticmethod
     def log_event(event_type, user_id, context=None):
         """
         Log a compliance-safe event (no PII in the log itself).
 
         Args:
             event_type: Key from EVENTS dict (e.g., 'PROFILE_CREATED')
-            user_id: User ID (hashed in production)
+            user_id: User ID (hashed before logging)
             context: Dict with additional safe context (no PII)
         """
         if event_type not in AuditLogger.EVENTS:
@@ -53,7 +69,7 @@ class AuditLogger:
         event_data = {
             "timestamp": int(time.time()),
             "event_type": event_type,
-            "user_hash": hash(user_id) if user_id else None,
+            "user_hash": AuditLogger.hash_user_id(user_id),
             "context": context or {},
         }
 

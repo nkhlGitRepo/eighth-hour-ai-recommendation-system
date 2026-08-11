@@ -6,20 +6,21 @@ stored profile. Event-driven: when a new product launches, score it against
 all customer profiles and surface high-match items in their feed.
 
 Guardrails applied:
-- ConsentTracker: verify separate marketing consent for notifications
-- CatalogKB: retrieve real, in-stock products only
+- ConsentTracker: verify measurement consent before processing (same check M3/M5/M7 use)
+- CatalogKB: retrieve real, in-stock, actually-recent products only
 - FitChecker (M7): deterministic validation that items are available in recommended size
 - AuditLogger: log all feed operations
 """
 
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
-from py_src.utils.sizing import infer_size_from_bust, validate_measurements
-from py_src.constants import NEW_RELEASES_MATCH_THRESHOLD
+from py_src.utils.sizing import infer_size_from_bust, validate_measurements, extract_physical_measurements
+from py_src.constants import NEW_RELEASES_MATCH_THRESHOLD, NEW_RELEASES_WINDOW_DAYS
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
-from py_src.modules.m6_catalog_kb import CatalogKB
+from py_src.modules.m6_catalog_kb import CatalogKB, shape_affinity_score
 from py_src.modules.m7_fit_checker import FitChecker
 
 
@@ -136,7 +137,7 @@ class NewReleasesFeed:
               "match_score": 0.85,
               "matched_attributes": ["color match", "silhouette", "fits your shape"],
               "reason": "Flatters your shape and matches your color preferences",
-              "availability": {"size": "M", "colors": ["navy", "cream"]}
+              "availability": {"recommended_size": "M", "available_sizes": ["XS", "S", "M", "L"]}
             }
 
         Raises:
@@ -150,8 +151,11 @@ class NewReleasesFeed:
                 "M9"
             )
 
-        # Validate measurements if provided
+        # Callers may pass a full Measurements.to_dict() payload (unit,
+        # confidence_scores, provider, ...) rather than a clean measurements
+        # dict -- strip it down before validating/using it.
         if measurements:
+            measurements = extract_physical_measurements(measurements)
             try:
                 validate_measurements(measurements)
             except ModuleError as err:
@@ -167,16 +171,20 @@ class NewReleasesFeed:
                 "M9"
             )
 
-        # Get recent products from catalog (would be products added in last N days)
-        # For now, we'll score all catalog items (in production, would filter to recent)
-        all_products = self.catalog.items if hasattr(self.catalog, 'items') else []
+        # CatalogKB.items is a dict keyed by sku, not a list of items.
+        all_products = list(self.catalog.items.values()) if hasattr(self.catalog, 'items') else []
 
-        if not all_products:
+        # Only products actually launched within the recency window count as
+        # "new releases" -- otherwise this is just the recommendation engine
+        # again under a different name.
+        recent_products = [p for p in all_products if self._is_recent(p)]
+
+        if not recent_products:
             return []
 
         # Score each product
         scored_products = []
-        for product in all_products:
+        for product in recent_products:
             score = self.score_product_for_profile(
                 product,
                 body_shape_profile,
@@ -258,6 +266,22 @@ class NewReleasesFeed:
 
         return feed
 
+    def _is_recent(self, product: Dict[str, Any]) -> bool:
+        """
+        A product counts as a "new release" only if it actually launched
+        within the recency window. Products with no launched_at are treated
+        as legacy catalog items, not new -- otherwise every item with
+        missing metadata would incorrectly show up as "new".
+        """
+        launched_at = product.get("launched_at")
+        if not launched_at:
+            return False
+        try:
+            launch_date = datetime.fromisoformat(launched_at)
+        except (ValueError, TypeError):
+            return False
+        return datetime.now() - launch_date <= timedelta(days=NEW_RELEASES_WINDOW_DAYS)
+
     def _score_shape_match(
         self,
         product: Dict[str, Any],
@@ -268,15 +292,10 @@ class NewReleasesFeed:
         if not user_shape:
             return 0.5
 
-        # Product fit_flatterers list indicates which shapes it flatters
-        flatters = product.get("fit_flatterers", [])
-        if user_shape in flatters:
-            return 1.0
-
-        # Check if product category has good defaults for this shape
-        category = product.get("category", "")
-        shape_category_match = self._shape_category_affinity(user_shape, category)
-        return shape_category_match
+        # Shared with M6's ranking -- see shape_affinity_score() for why a
+        # single float already produces the same "specific match beats
+        # general category affinity" ordering M9 and M6 both rely on.
+        return shape_affinity_score(user_shape, product)
 
     def _score_style_match(
         self,
@@ -294,12 +313,13 @@ class NewReleasesFeed:
             color_score = len(matching_colors) / len(user_colors) if user_colors else 0
             scores.append(color_score)
 
-        # Silhouette matching
+        # Silhouette matching. The catalog stores a single silhouette_class
+        # string per product (not a list called "silhouettes"), so this is
+        # a membership check, not a set intersection.
         user_silhouettes = style_profile.get("preferred_silhouettes", [])
-        product_silhouettes = product.get("silhouettes", [])
-        if user_silhouettes and product_silhouettes:
-            matching_silhouettes = set(user_silhouettes) & set(product_silhouettes)
-            sil_score = len(matching_silhouettes) / len(user_silhouettes)
+        product_silhouette = product.get("silhouette_class")
+        if user_silhouettes and product_silhouette:
+            sil_score = 1.0 if product_silhouette in user_silhouettes else 0.0
             scores.append(sil_score)
 
         # Occasion matching
@@ -347,7 +367,7 @@ class NewReleasesFeed:
 
         if body_shape_profile:
             shape = body_shape_profile.get("shape_class")
-            if shape in product.get("fit_flatterers", []):
+            if shape in product.get("flatters_shapes", []):
                 attrs.append(f"Flatters {shape} shapes")
 
         if style_profile:
@@ -359,11 +379,9 @@ class NewReleasesFeed:
                     attrs.append(f"Available in your colors ({', '.join(list(matches)[:2])})")
 
             silhouettes = style_profile.get("preferred_silhouettes", [])
-            product_silhouettes = product.get("silhouettes", [])
-            if silhouettes and product_silhouettes:
-                matches = set(silhouettes) & set(product_silhouettes)
-                if matches:
-                    attrs.append(f"Your silhouette style")
+            product_silhouette = product.get("silhouette_class")
+            if silhouettes and product_silhouette and product_silhouette in silhouettes:
+                attrs.append("Your silhouette style")
 
         if not attrs:
             attrs.append("Matches your profile")
@@ -387,21 +405,6 @@ class NewReleasesFeed:
 
         reason = " ".join(reasons) if reasons else "This item matches your style"
         return reason + "."
-
-    def _shape_category_affinity(self, shape_class: str, category: str) -> float:
-        """Score how well category suits shape class."""
-        # Predefined affinities between shapes and categories
-        affinities = {
-            "pear": {"skirts": 0.9, "jeans": 0.8, "tops": 0.6, "dresses": 0.7},
-            "apple": {"tops": 0.9, "jackets": 0.8, "dresses": 0.6},
-            "hourglass": {"dresses": 0.95, "jeans": 0.8, "tops": 0.85},
-            "rectangle": {"layers": 0.9, "structured": 0.85, "fitted": 0.6},
-            "inverted_triangle": {"bottoms": 0.9, "skirts": 0.85, "wide_leg": 0.8},
-            "balanced": {"all": 0.8},
-        }
-
-        shape_affinities = affinities.get(shape_class, {})
-        return shape_affinities.get(category, 0.5)
 
     def _infer_size_from_measurements(self, measurements: Dict[str, float]) -> str:
         """Infer size from measurements using shared utility."""

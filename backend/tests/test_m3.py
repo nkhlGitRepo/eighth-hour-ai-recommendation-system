@@ -161,10 +161,17 @@ class TestBodyShapeProfiler:
         """All categories should have size recommendations."""
         profile = self.profiler.profile(MEASUREMENTS["pear"])
         recs = profile["size_recommendation_by_category"]
-        required_categories = ["tops", "skirts", "dresses", "trousers", "vests", "coOrds"]
-        for category in required_categories:
+        single_size_categories = ["tops", "skirts", "dresses", "trousers", "vests"]
+        for category in single_size_categories:
             assert category in recs, f"Missing category: {category}"
-            assert recs[category] in ["XS", "S", "M", "L", "XL", "XXL"]
+            assert recs[category] in ["XXS", "XS", "S", "M", "L", "XL", "XXL"]
+
+        # coOrds combines a top and bottom size (e.g. "S/L") since coordinate
+        # sets are two pieces that can need different sizes.
+        assert "coOrds" in recs
+        top_size, bottom_size = recs["coOrds"].split("/")
+        assert top_size in ["XXS", "XS", "S", "M", "L", "XL", "XXL"]
+        assert bottom_size in ["XXS", "XS", "S", "M", "L", "XL", "XXL"]
 
     def test_size_recommendations_consistent(self):
         """Size recommendations should be consistent across calls."""
@@ -179,3 +186,49 @@ class TestBodyShapeProfiler:
         profile = self.profiler.profile(measurements_no_shoulder)
         assert profile["shape_class"] is not None
         assert "shoulder_hip" in profile["ratios"]
+
+    def test_bust_size_boundary_transitions_exact(self):
+        """
+        Exact bust->size boundary transitions for the 'tops' recommendation.
+        These boundaries are the ones actually shown to customers, so an
+        off-by-one here is customer-visible, not just internal.
+        """
+        test_cases = [
+            (75.9, "XXS"),
+            (76.0, "XS"),
+            (83.9, "XS"),
+            (84.0, "S"),
+            (91.9, "S"),
+            (92.0, "M"),
+            (99.9, "M"),
+            (100.0, "L"),
+            (107.9, "L"),
+            (108.0, "XL"),
+            (116.9, "XL"),
+            (117.0, "XXL"),
+        ]
+        for bust, expected_size in test_cases:
+            measurements = {"bust": bust, "waist": bust - 15, "hips": bust + 10, "height": 165}
+            profile = self.profiler.profile(measurements)
+            actual = profile["size_recommendation_by_category"]["tops"]
+            assert actual == expected_size, f"bust={bust}: expected {expected_size}, got {actual}"
+
+    def test_bust_size_matches_shared_size_boundaries(self):
+        """
+        Regression guard: M3's displayed size must always agree with
+        constants.SIZE_BOUNDARIES / infer_size_from_bust, which is what M5
+        uses to actually filter recommendations and M9 uses for New
+        Releases. These previously used independent, disagreeing
+        boundary charts; both must now derive from the same source.
+        """
+        from py_src.utils.sizing import infer_size_from_bust
+
+        for bust in range(70, 146, 3):
+            measurements = {"bust": bust, "waist": bust - 15, "hips": bust + 10, "height": 165}
+            profile = self.profiler.profile(measurements)
+            displayed_size = profile["size_recommendation_by_category"]["tops"]
+            filter_size = infer_size_from_bust(bust)
+            assert displayed_size == filter_size, (
+                f"bust={bust}: customer is shown '{displayed_size}' but recommendations "
+                f"would be filtered using '{filter_size}'"
+            )

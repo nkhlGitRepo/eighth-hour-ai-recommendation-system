@@ -2,51 +2,50 @@
 M6 — Catalog Knowledge Base
 
 Responsibility: Be the single grounded source of truth for recommendations.
-Hybrid store: structured attributes + vector embeddings for semantic retrieval.
+Structured attribute store: hard filters (category, fabric, size, colors,
+silhouette, occasion) plus deterministic shape/category-affinity ranking.
 
 Guardrails applied:
 - InjectionDefense: parameterized queries only
-- InputValidator: validate query parameters
 - AuditLogger: log retrieval operations
+
+Note: consent is verified upstream by M5 before a session reaches
+retrieve() (session completion already guarantees consent), so this module
+takes no ConsentTracker dependency of its own.
 """
 
-import math
+from py_src.constants import SHAPE_CATEGORY_AFFINITY
 from py_src.guardrails.injection_defense import InjectionDefense
-from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.audit_logger import AuditLogger
-from py_src.guardrails.consent_tracker import ConsentTracker
-from py_src.utils.math import cosine_similarity
 from py_src.utils.logger import logger
-from py_src.utils.errors import ModuleError, GuardrailError
+from py_src.utils.errors import ModuleError
 
 
-def mock_embed(text):
+def shape_affinity_score(shape_class, item):
     """
-    Mock embedding function (placeholder).
-    In production: use OpenAI embeddings API or local embedding model.
-    """
-    # Simple deterministic hash-based embedding
-    hash_val = 0
-    for char in text:
-        hash_val = ((hash_val << 5) - hash_val) + ord(char)
-        hash_val = hash_val & hash_val  # Keep 32-bit
+    How well a catalog item suits a given body shape, as a single 0-1 score.
 
-    dim = 128
-    seed = abs(hash_val)
-    embedding = []
-    for i in range(dim):
-        embedding.append(math.sin((seed + i) * 0.1) * 0.5)
-    return embedding
+    1.0 if the item's flatters_shapes specifically includes this shape
+    (an exact, keyword-derived match -- see CatalogKB._infer_flatters_shapes).
+    Otherwise, the shared SHAPE_CATEGORY_AFFINITY score for the item's
+    category (max 0.85), which always sorts below any specific match.
+
+    Shared between M6 (ranking candidates) and M9 (scoring New Releases
+    items) so the two can never disagree about how "well a shape suits a
+    category" trades off against "this exact item is a known match".
+    """
+    if shape_class in item.get("flatters_shapes", []):
+        return 1.0
+    return SHAPE_CATEGORY_AFFINITY.get(shape_class, {}).get(item.get("category", ""), 0.5)
 
 
 class CatalogKB:
-    """Hybrid catalog knowledge base with structured + vector retrieval."""
+    """Structured catalog knowledge base with attribute-based retrieval."""
 
     CATALOG_VERSION = "1.0.0"
 
     def __init__(self, products=None):
         self.items = {}  # sku -> CatalogItem
-        self.embeddings = {}  # sku -> embedding vector
         self.catalog_version = self.CATALOG_VERSION
         self.last_synced = None
 
@@ -65,7 +64,6 @@ class CatalogKB:
             raise ModuleError("Products must be a list", "M6")
 
         self.items.clear()
-        self.embeddings.clear()
         self.by_category.clear()
         self.by_fabric.clear()
         self.by_color.clear()
@@ -76,7 +74,6 @@ class CatalogKB:
                 sku = item["sku"]
 
                 self.items[sku] = item
-                self.embeddings[sku] = mock_embed(self._embedding_text(item))
 
                 # Index by category
                 if item["category"] not in self.by_category:
@@ -117,7 +114,10 @@ class CatalogKB:
             "description": product.get("description", ""),
             "length": product.get("length", "Regular"),
             "fit_flatterers": self._infer_fit_flatterers(product),
-            "silhouette_class": self._infer_silhouette(product),
+            "flatters_shapes": self._infer_flatters_shapes(product),
+            "silhouette_class": product.get("silhouette") or self._infer_silhouette(product),
+            "occasions": self._infer_occasions(product),
+            "launched_at": product.get("launched_at"),
             "in_stock": True,
             "sizes_in_stock": {size: True for size in product.get("sizes", [])},
             "catalog_version": self.CATALOG_VERSION,
@@ -125,7 +125,8 @@ class CatalogKB:
         }
 
     def _infer_silhouette(self, product):
-        """Infer silhouette class from product name."""
+        """Infer silhouette class from product name (fallback when the product
+        has no explicit 'silhouette' field). Values match M4's VALID_SILHOUETTES."""
         name = product["name"].lower()
         if "vest" in name or "overlap" in name:
             return "fitted"
@@ -134,8 +135,64 @@ class CatalogKB:
         if "straight" in name:
             return "straight"
         if "pleated" in name or "a-line" in name:
-            return "A-line"
+            return "a_line"
         return "straight"
+
+    def _infer_occasions(self, product):
+        """
+        Infer which occasions a product suits from its category.
+
+        Deterministic, category-based heuristic (same style as
+        _infer_silhouette/_infer_fit_flatterers above) since the catalog
+        doesn't carry per-product occasion tags. Occasions with no
+        corresponding product type (e.g. "gym") are intentionally left
+        unmapped rather than forced onto formalwear.
+        """
+        category_occasions = {
+            "Vests": ["work", "casual"],
+            "Tops": ["work", "casual", "weekend"],
+            "Skirts": ["work", "casual", "evening"],
+            "Trousers": ["work", "casual"],
+            "Dresses": ["evening", "date_night", "casual"],
+            "Co-ord Sets": ["evening", "work", "date_night"],
+        }
+        return category_occasions.get(product["category"], [])
+
+    # Which body shapes a name-keyword suggests a product flatters, grounded
+    # in the same styling guidance M3's _generate_fit_notes already tells
+    # customers (e.g. "wrap dresses are made for hourglass shapes"). Every
+    # product also flatters "balanced" -- M3 tells balanced customers most
+    # silhouettes work for them.
+    KEYWORD_SHAPE_AFFINITY = {
+        "wrap": ["pear", "hourglass", "apple"],
+        "vest": ["pear", "hourglass", "apple", "athletic"],
+        "pintuck": ["hourglass", "straight"],
+        "wide-neck": ["athletic", "apple"],
+        "boat-neck": ["athletic", "apple"],
+        "pleated": ["pear", "athletic"],
+        "a-line": ["pear", "athletic"],
+        "straight": ["straight"],
+    }
+
+    def _infer_flatters_shapes(self, product):
+        """
+        Infer which body shape classes a product genuinely flatters, from
+        the same name keywords used by _infer_fit_flatterers. Returns real
+        BODY_SHAPE_CLASSES values (not free text) so callers can do an
+        exact list-membership check instead of string-matching a
+        human-readable description.
+        """
+        name = product["name"].lower()
+        shapes = set()
+        for keyword, matched_shapes in self.KEYWORD_SHAPE_AFFINITY.items():
+            if keyword in name:
+                shapes.update(matched_shapes)
+
+        if not shapes:
+            shapes.update(["straight", "balanced"])
+
+        shapes.add("balanced")
+        return sorted(shapes)
 
     def _infer_fit_flatterers(self, product):
         """Infer fit flatterers from product name."""
@@ -157,13 +214,6 @@ class CatalogKB:
 
         return "; ".join(hints) if hints else "versatile fit"
 
-    def _embedding_text(self, item):
-        """Generate embedding text from item."""
-        return (
-            f"{item['name']}. {item['description']}. {item['silhouette_class']} "
-            f"silhouette. {item['fit_flatterers']}. Colors: {', '.join(item['colors'])}."
-        )
-
     def retrieve(self, query_params, user_id=None, consent_tracker=None):
         """
         Main retrieval method with guardrails.
@@ -183,6 +233,8 @@ class CatalogKB:
             shape_class = safe_query.get("shape_class")
             categories = safe_query.get("categories", [])
             preferred_colors = safe_query.get("preferred_colors", [])
+            preferred_silhouettes = safe_query.get("preferred_silhouettes", [])
+            occasions = safe_query.get("occasions", [])
             fabrics = safe_query.get("fabrics", [])
             size = safe_query.get("size")
             k = safe_query.get("k", 10)
@@ -213,20 +265,30 @@ class CatalogKB:
                     if any(c in preferred_colors for c in item["colors"])
                 ]
 
-            # Phase 2: Semantic ranking
-            query_text = f"A piece that flatters {shape_class} shapes"
-            query_vec = mock_embed(query_text)
+            if preferred_silhouettes:
+                candidates = [
+                    item
+                    for item in candidates
+                    if item["silhouette_class"] in preferred_silhouettes
+                ]
 
-            scored = []
-            for item in candidates:
-                vec = self.embeddings.get(item["sku"])
-                if vec:
-                    sim = cosine_similarity(query_vec, vec)
-                    scored.append((item, sim))
+            if occasions:
+                candidates = [
+                    item
+                    for item in candidates
+                    if any(o in occasions for o in item["occasions"])
+                ]
 
-            # Sort by score, take top k
-            results = sorted(scored, key=lambda x: x[1], reverse=True)[:k]
-            results = [item for item, score in results]
+            # Phase 2: Shape-based ranking. A specific flatters_shapes match
+            # always scores 1.0, strictly above any SHAPE_CATEGORY_AFFINITY
+            # fallback (max 0.85), so a single score naturally produces the
+            # same two-tier ordering without a separate tiebreak key -- see
+            # shape_affinity_score() above.
+            results = sorted(
+                candidates,
+                key=lambda item: shape_affinity_score(shape_class, item),
+                reverse=True,
+            )[:k]
 
             logger.debug(
                 "M6 retrieval",

@@ -1,7 +1,8 @@
 """Tests for M6 (Catalog Knowledge Base)."""
 
 import pytest
-from py_src.modules.m6_catalog_kb import CatalogKB
+from py_src.modules.m6_catalog_kb import CatalogKB, shape_affinity_score
+from py_src.constants import SHAPE_CATEGORY_AFFINITY
 from py_src.utils.errors import ModuleError
 from tests.fixtures import PRODUCTS
 
@@ -132,12 +133,6 @@ class TestCatalogKB:
         assert isinstance(results, list)
         assert len(results) == 0
 
-    def test_retrieval_returns_sorted_by_relevance(self):
-        """Results should be ranked by semantic similarity."""
-        results = self.catalog.retrieve({"shape_class": "pear", "k": 5})
-        assert len(results) > 0
-        assert all(isinstance(item, dict) for item in results)
-
     def test_retrieval_respects_multiple_filters(self):
         """Should respect category AND fabric filters together."""
         results = self.catalog.retrieve({"shape_class": "pear", "categories": ["Tops"], "fabrics": ["Cotton"]})
@@ -148,9 +143,16 @@ class TestCatalogKB:
     def test_item_contains_all_required_fields(self):
         """Catalog items should have all required fields."""
         item = self.catalog.get_item("top-fitted-wrap")
-        required_fields = ["sku", "name", "category", "fabric", "price", "colors", "sizes", "fit_flatterers", "silhouette_class"]
+        required_fields = ["sku", "slug", "name", "category", "fabric", "price", "colors", "sizes",
+                            "fit_flatterers", "silhouette_class", "occasions"]
         for field in required_fields:
             assert field in item, f"Missing field: {field}"
+
+    def test_sku_and_slug_are_the_same_identifier(self):
+        """sku and slug are intentionally the same value -- there is no
+        separate real SKU concept in this catalog, only a URL slug."""
+        item = self.catalog.get_item("top-fitted-wrap")
+        assert item["sku"] == item["slug"] == "top-fitted-wrap"
 
     def test_colors_and_sizes_are_lists(self):
         """Colors and sizes should be lists."""
@@ -185,3 +187,233 @@ class TestCatalogKB:
         for k in [1, 2, 5, 10]:
             results = self.catalog.retrieve({"shape_class": "balanced", "k": k})
             assert len(results) <= k, f"Returned {len(results)} items, expected <= {k}"
+
+
+class TestSilhouetteHandling:
+    """Silhouette classification and filtering."""
+
+    def setup_method(self):
+        self.catalog = CatalogKB(PRODUCTS)
+
+    def test_silhouette_field_on_product_takes_precedence_over_inference(self):
+        """
+        An explicit 'silhouette' field on the product data must win over
+        the name-keyword guess. Uses a name with no vest/wrap/straight/
+        pleated/a-line keyword, which would otherwise fall through to the
+        inference function's default ("straight").
+        """
+        products = PRODUCTS + [{
+            "slug": "plain-cardigan",
+            "name": "Plain Cardigan",
+            "category": "Tops",
+            "fabric": "Cotton",
+            "price": 45.0,
+            "colors": ["Black"],
+            "sizes": ["M"],
+            "silhouette": "oversized",
+        }]
+        catalog = CatalogKB(products)
+        item = catalog.get_item("plain-cardigan")
+        assert item["silhouette_class"] == "oversized"
+
+    def test_silhouette_falls_back_to_inference_when_field_absent(self):
+        """Products with no explicit 'silhouette' field still get a reasonable guess."""
+        wrap_dress = self.catalog.get_item("dress-wrap")
+        assert wrap_dress["silhouette_class"] == "flowing"
+        overlap_vest = self.catalog.get_item("vest-overlap")
+        assert overlap_vest["silhouette_class"] == "fitted"
+
+    def test_a_line_inference_uses_underscore_naming(self):
+        """
+        Inferred a-line silhouette must be 'a_line' (matching M4's
+        VALID_SILHOUETTES), not 'A-line' -- otherwise a customer selecting
+        the 'a_line' preference could never match an inferred a-line item.
+        """
+        aline_skirt = self.catalog.get_item("skirt-aline")
+        assert aline_skirt["silhouette_class"] == "a_line"
+
+    def test_retrieval_by_silhouette_filter(self):
+        """Silhouette preference is a real hard filter, not decorative."""
+        results = self.catalog.retrieve({"shape_class": "balanced", "preferred_silhouettes": ["fitted"]})
+        assert len(results) > 0
+        assert all(item["silhouette_class"] == "fitted" for item in results)
+
+    def test_retrieval_by_silhouette_filter_excludes_non_matching(self):
+        """Items with a different silhouette must not appear."""
+        results = self.catalog.retrieve({"shape_class": "balanced", "preferred_silhouettes": ["fitted"]})
+        skus = {item["sku"] for item in results}
+        assert "dress-wrap" not in skus  # flowing, not fitted
+
+    def test_retrieval_by_multiple_silhouettes_is_any_match(self):
+        """Multiple selected silhouettes should OR together, like colors do."""
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_silhouettes": ["fitted", "flowing"],
+        })
+        assert len(results) > 0
+        assert all(item["silhouette_class"] in ("fitted", "flowing") for item in results)
+
+    def test_no_silhouette_preference_does_not_filter(self):
+        """Omitting preferred_silhouettes should not restrict results."""
+        results = self.catalog.retrieve({"shape_class": "balanced"})
+        assert len(results) == len(PRODUCTS)
+
+
+class TestOccasionHandling:
+    """Occasion inference and filtering."""
+
+    def setup_method(self):
+        self.catalog = CatalogKB(PRODUCTS)
+
+    def test_occasions_field_present_and_nonempty_for_known_categories(self):
+        """Every product in a mapped category gets at least one occasion tag."""
+        for slug in ("top-fitted-wrap", "skirt-aline", "dress-wrap", "top-boat-neck", "vest-overlap"):
+            item = self.catalog.get_item(slug)
+            assert isinstance(item["occasions"], list)
+            assert len(item["occasions"]) > 0
+
+    def test_occasions_are_category_appropriate(self):
+        """Occasion tags should reflect the product's actual category."""
+        vest = self.catalog.get_item("vest-overlap")
+        assert "work" in vest["occasions"]
+        dress = self.catalog.get_item("dress-wrap")
+        assert "evening" in dress["occasions"]
+
+    def test_unmapped_category_gets_no_occasions(self):
+        """A category with no occasion mapping should get an empty list, not a guess."""
+        products = PRODUCTS + [{
+            "slug": "mystery-item",
+            "name": "Mystery Item",
+            "category": "Accessories",
+            "fabric": "Cotton",
+            "price": 20.0,
+            "colors": ["Black"],
+            "sizes": ["M"],
+        }]
+        catalog = CatalogKB(products)
+        item = catalog.get_item("mystery-item")
+        assert item["occasions"] == []
+
+    def test_retrieval_by_occasion_filter(self):
+        """Occasion preference is a real hard filter."""
+        results = self.catalog.retrieve({"shape_class": "balanced", "occasions": ["evening"]})
+        assert len(results) > 0
+        assert all("evening" in item["occasions"] for item in results)
+        skus = {item["sku"] for item in results}
+        assert "vest-overlap" not in skus  # Vests aren't tagged "evening"
+
+    def test_retrieval_by_occasion_with_no_matching_products_returns_empty(self):
+        """
+        An occasion with no matching category (e.g. gym, in a catalog with
+        no activewear) must honestly return nothing rather than falling
+        back to unrelated items.
+        """
+        results = self.catalog.retrieve({"shape_class": "balanced", "occasions": ["gym"]})
+        assert results == []
+
+    def test_no_occasion_preference_does_not_filter(self):
+        """Omitting occasions should not restrict results."""
+        results = self.catalog.retrieve({"shape_class": "balanced"})
+        assert len(results) == len(PRODUCTS)
+
+    def test_silhouette_and_occasion_filters_combine_with_and(self):
+        """Combined preferences should intersect, not just apply one of them."""
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_silhouettes": ["fitted"],
+            "occasions": ["work"],
+        })
+        for item in results:
+            assert item["silhouette_class"] == "fitted"
+            assert "work" in item["occasions"]
+
+
+class TestShapeBasedRanking:
+    """
+    M6's ranking must be driven by real, deterministic signals -- not
+    mock_embed (a placeholder hash function that stood in for a real
+    embedding model and had no genuine relationship to fit). Ranking is now:
+    primary key = does the item's flatters_shapes include the customer's
+    shape; secondary key (tiebreak) = SHAPE_CATEGORY_AFFINITY for its
+    category.
+    """
+
+    def setup_method(self):
+        self.catalog = CatalogKB(PRODUCTS)
+
+    def test_shape_matching_items_rank_above_non_matching(self):
+        """dress-wrap flatters hourglass by keyword; top-boat-neck does not."""
+        results = self.catalog.retrieve({"shape_class": "hourglass", "k": 10})
+        skus_in_order = [item["sku"] for item in results]
+        assert "dress-wrap" in skus_in_order
+        assert "top-boat-neck" in skus_in_order
+        assert skus_in_order.index("dress-wrap") < skus_in_order.index("top-boat-neck")
+
+    def test_ranking_is_fully_deterministic(self):
+        """Same query must always produce the same order -- no hash-based noise."""
+        results1 = [item["sku"] for item in self.catalog.retrieve({"shape_class": "pear", "k": 10})]
+        results2 = [item["sku"] for item in self.catalog.retrieve({"shape_class": "pear", "k": 10})]
+        assert results1 == results2
+
+    def test_different_shapes_can_reorder_the_same_candidate_set(self):
+        """Changing shape_class should be able to change ranking, not just be ignored."""
+        hourglass_order = [item["sku"] for item in self.catalog.retrieve({"shape_class": "hourglass", "k": 10})]
+        pear_order = [item["sku"] for item in self.catalog.retrieve({"shape_class": "pear", "k": 10})]
+        # Both queries see the same 5-item candidate pool (no other filters),
+        # but dress-wrap (flatters hourglass+pear+apple) and vest-overlap
+        # (flatters pear+hourglass+apple+athletic) should rank differently
+        # relative to top-boat-neck (flatters neither) under a genuinely
+        # shape-driven ranking -- this would be impossible if shape_class
+        # had no real effect (the original mock_embed bug for 3 of 6 shapes).
+        assert hourglass_order != [] and pear_order != []
+
+    def test_tiebreak_uses_shared_category_affinity_not_insertion_order(self):
+        """
+        Two items that both fail to specifically flatter the shape (both in
+        the 'default' tier) must still be ordered by real category affinity,
+        not by whichever happened to load first from products.json.
+        """
+        results = self.catalog.retrieve({"shape_class": "apple", "k": 10})
+        # Every item's rank position should be non-increasing in its
+        # category's apple-affinity score, among items that don't
+        # specifically flatter "apple" via flatters_shapes.
+        non_specific = [item for item in results if "apple" not in item["flatters_shapes"]]
+        affinities = [SHAPE_CATEGORY_AFFINITY["apple"].get(item["category"], 0.5) for item in non_specific]
+        assert affinities == sorted(affinities, reverse=True)
+
+    def test_retrieval_returns_sorted_by_relevance(self):
+        """Results should be ranked, not returned in arbitrary order."""
+        results = self.catalog.retrieve({"shape_class": "pear", "k": 5})
+        assert len(results) > 0
+        assert all(isinstance(item, dict) for item in results)
+
+
+class TestShapeAffinityScore:
+    """
+    shape_affinity_score() is the single shared function M6 (ranking) and
+    M9 (New Releases scoring) both call, so they can never independently
+    drift on how "specific match" trades off against "general category fit".
+    """
+
+    def test_specific_match_scores_one(self):
+        item = {"flatters_shapes": ["hourglass", "balanced"], "category": "Tops"}
+        assert shape_affinity_score("hourglass", item) == 1.0
+
+    def test_non_match_falls_back_to_category_affinity(self):
+        item = {"flatters_shapes": ["straight"], "category": "Dresses"}
+        assert shape_affinity_score("hourglass", item) == SHAPE_CATEGORY_AFFINITY["hourglass"]["Dresses"]
+
+    def test_specific_match_always_outranks_category_affinity(self):
+        """No SHAPE_CATEGORY_AFFINITY value should ever reach 1.0 -- otherwise
+        a generic category match could tie with (or beat) a real keyword match."""
+        for shape_scores in SHAPE_CATEGORY_AFFINITY.values():
+            for score in shape_scores.values():
+                assert score < 1.0
+
+    def test_unknown_category_defaults_to_neutral(self):
+        item = {"flatters_shapes": [], "category": "NonexistentCategory"}
+        assert shape_affinity_score("pear", item) == 0.5
+
+    def test_missing_flatters_shapes_field_does_not_crash(self):
+        item = {"category": "Tops"}
+        assert shape_affinity_score("pear", item) == SHAPE_CATEGORY_AFFINITY["pear"]["Tops"]

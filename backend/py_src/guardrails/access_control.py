@@ -1,6 +1,7 @@
 """Access control and session validation."""
 
 import time
+from py_src.utils.errors import GuardrailError
 
 
 class AccessControl:
@@ -56,24 +57,39 @@ class AccessControl:
         return {"valid": True}
 
     @staticmethod
-    def check_permission(user_id, resource_id, permission_type):
+    def check_permission(user_id, resource_owner_id, permission_type):
         """
-        Check if user has a specific permission.
+        Check if a user has permission to act on a resource.
+
+        This system has no roles or shared/admin access -- the only access
+        rule that actually exists anywhere else in the codebase is data
+        ownership (a user's sessions, history, and profile belong only to
+        them). So that's the whole rule here: ownership grants full
+        permission (read/write alike); anyone else is denied. There's no
+        ACL database to build for a system with exactly one access rule.
 
         Args:
-            user_id: User ID
-            resource_id: Resource ID
-            permission_type: 'read', 'write', etc.
+            user_id: The user requesting access
+            resource_owner_id: The user who owns the resource being accessed
+            permission_type: 'read', 'write', etc. (informational --
+                ownership grants both under this model)
+
+        Returns:
+            True if permitted
 
         Raises:
-            GuardrailError: If permission is denied or not implemented
-
-        Note:
-            Currently always raises—ACL database not yet implemented.
-            In production, query actual ACL database.
+            GuardrailError: If either ID is missing, or user does not own the resource
         """
-        from py_src.utils.errors import GuardrailError
-        raise GuardrailError(
-            f"Permission check not yet implemented for {permission_type}",
-            "AccessControl"
-        )
+        if not user_id or not resource_owner_id:
+            raise GuardrailError(
+                "Permission check requires both user_id and resource_owner_id",
+                "AccessControl"
+            )
+
+        if not AccessControl.user_owns_resource(user_id, resource_owner_id):
+            raise GuardrailError(
+                f"User does not have {permission_type} permission for this resource",
+                "AccessControl"
+            )
+
+        return True

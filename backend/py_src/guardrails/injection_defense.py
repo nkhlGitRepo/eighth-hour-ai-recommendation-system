@@ -15,7 +15,8 @@ class InjectionDefense:
         All values are validated and bound as parameters.
 
         Args:
-            params: Dict with shape_class, categories, preferred_colors, fabrics, size, k
+            params: Dict with shape_class, categories, preferred_colors,
+                preferred_silhouettes, occasions, fabrics, size, k
 
         Returns:
             Safe parameterized query dict
@@ -23,6 +24,8 @@ class InjectionDefense:
         shape_class = params.get("shape_class")
         categories = params.get("categories", [])
         preferred_colors = params.get("preferred_colors", [])
+        preferred_silhouettes = params.get("preferred_silhouettes", [])
+        occasions = params.get("occasions", [])
         fabrics = params.get("fabrics", [])
         size = params.get("size")
         k = params.get("k", 10)
@@ -42,6 +45,18 @@ class InjectionDefense:
             else []
         )
 
+        safe_silhouettes = (
+            [s for s in preferred_silhouettes if isinstance(s, str)][:10]
+            if isinstance(preferred_silhouettes, list)
+            else []
+        )
+
+        safe_occasions = (
+            [o for o in occasions if isinstance(o, str)][:10]
+            if isinstance(occasions, list)
+            else []
+        )
+
         safe_fabrics = (
             [f for f in fabrics if isinstance(f, str)][:10]
             if isinstance(fabrics, list)
@@ -56,6 +71,8 @@ class InjectionDefense:
             "shape_class": safe_shape,
             "categories": safe_categories,
             "preferred_colors": safe_colors,
+            "preferred_silhouettes": safe_silhouettes,
+            "occasions": safe_occasions,
             "fabrics": safe_fabrics,
             "size": safe_size,
             "k": safe_k,

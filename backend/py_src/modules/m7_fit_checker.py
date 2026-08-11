@@ -6,7 +6,7 @@ Compares user measurements against product sizing, generates fit confidence scor
 per available size, and provides personalized fit guidance.
 
 Guardrails applied:
-- InputValidator: validate measurements and product data
+- Shared sizing validation (validate_measurements): validate measurements and product data
 - AuditLogger: log all fit checks for audit trail
 - ConsentTracker: verify measurement consent before fit checking
 """
@@ -14,9 +14,8 @@ Guardrails applied:
 from typing import Optional, Dict, List, Any
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
-from py_src.utils.sizing import validate_measurements
+from py_src.utils.sizing import validate_measurements, extract_physical_measurements
 from py_src.constants import STANDARD_SIZE_CHART, STANDARD_SIZES
-from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
 
@@ -71,6 +70,11 @@ class FitChecker:
                 "User has not consented to measurement processing for fit checking",
                 "M7"
             )
+
+        # Callers may pass a full Measurements.to_dict() payload (unit,
+        # confidence_scores, provider, ...) rather than a clean measurements
+        # dict -- strip it down before validating/using it.
+        measurements = extract_physical_measurements(measurements)
 
         # Validate inputs
         self._validate_measurements(measurements)

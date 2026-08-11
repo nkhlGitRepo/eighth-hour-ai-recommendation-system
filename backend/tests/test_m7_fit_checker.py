@@ -111,11 +111,11 @@ class TestM7FitValidation:
             assert result["recommended_size"] in test_product["sizes"]
 
     def test_accepts_measurement_at_exact_min_boundaries(self, fit_checker, test_product):
-        """Measurements at exact minimum boundaries (60, 140 cm) should be accepted."""
+        """Measurements at exact minimum boundaries should be accepted."""
         measurements = {
-            "bust": 60.0,    # Exact minimum
-            "waist": 60.0,
-            "hips": 60.0,
+            "bust": 70.0,    # Exact minimum
+            "waist": 55.0,
+            "hips": 80.0,
             "height": 140.0,
         }
         result = fit_checker.check_fit("test_user", measurements, test_product)
@@ -123,11 +123,11 @@ class TestM7FitValidation:
         assert result["recommended_size"] in test_product["sizes"]
 
     def test_accepts_measurement_at_exact_max_boundaries(self, fit_checker, test_product):
-        """Measurements at exact maximum boundaries (140 cm) should be accepted."""
+        """Measurements at exact maximum boundaries should be accepted."""
         measurements = {
-            "bust": 140.0,   # Exact maximum
-            "waist": 140.0,
-            "hips": 140.0,
+            "bust": 150.0,   # Exact maximum
+            "waist": 130.0,
+            "hips": 160.0,
             "height": 210.0,
         }
         result = fit_checker.check_fit("test_user", measurements, test_product)
@@ -135,9 +135,9 @@ class TestM7FitValidation:
         assert result["recommended_size"] in test_product["sizes"]
 
     def test_rejects_bust_below_range(self, fit_checker, test_product):
-        """Bust below 60cm should raise error."""
+        """Bust below 70cm should raise error."""
         measurements = {
-            "bust": 59.0,  # Too small
+            "bust": 69.0,  # Too small
             "waist": 72.0,
             "hips": 97.0,
             "height": 165.0,
@@ -146,9 +146,9 @@ class TestM7FitValidation:
             fit_checker.check_fit("test_user", measurements, test_product)
 
     def test_rejects_bust_above_range(self, fit_checker, test_product):
-        """Bust above 140cm should raise error."""
+        """Bust above 150cm should raise error."""
         measurements = {
-            "bust": 141.0,  # Too large
+            "bust": 151.0,  # Too large
             "waist": 72.0,
             "hips": 97.0,
             "height": 165.0,

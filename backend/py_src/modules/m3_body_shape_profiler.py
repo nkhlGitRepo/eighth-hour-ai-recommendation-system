@@ -14,6 +14,7 @@ from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
+from py_src.constants import SIZE_BOUNDARIES
 
 
 class BodyShapeProfiler:
@@ -67,7 +68,12 @@ class BodyShapeProfiler:
             bust = measurements["bust"]
             waist = measurements["waist"]
             hips = measurements["hips"]
-            shoulder = measurements.get("shoulder", hips)
+            # measurements.get("shoulder", hips) would NOT fall back to hips
+            # when the key is present but None (e.g. from Measurements.to_dict()
+            # when the customer never provided a shoulder measurement) --
+            # only when the key is absent entirely. Use `or` so both cases fall
+            # back the same way.
+            shoulder = measurements.get("shoulder") or hips
             height = measurements["height"]
 
             # Compute ratios
@@ -161,17 +167,10 @@ class BodyShapeProfiler:
 
     def _recommend_sizes(self, shape_class, bust, waist, hips):
         """Generate size recommendations per category."""
-        # Bust boundaries per standard sizing guidelines
-        # XS: 76-80cm, S: 84-88cm, M: 92-96cm, L: 100-104cm, XL: 110-116cm
-        size_by_bust = {
-            "XXS": (70, 76),
-            "XS": (76, 84),
-            "S": (84, 92),
-            "M": (92, 100),
-            "L": (100, 108),
-            "XL": (108, 117),
-            "XXL": (117, 150),
-        }
+        # Bust boundaries: shared with M5/M9 via constants.SIZE_BOUNDARIES so the
+        # size shown to the customer here always matches what's used to filter
+        # their recommendations.
+        size_by_bust = SIZE_BOUNDARIES
 
         size_by_waist = {
             "XXS": (60, 66),

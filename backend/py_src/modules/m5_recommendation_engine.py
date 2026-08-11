@@ -154,8 +154,10 @@ class RecommendationEngine:
         Maps intake data to M6 query parameters:
         - shape_class: from shape_profile
         - categories: from shape_profile's size recommendations (or override)
-        - preferred_colors: from style_profile
-        - occasion-based filtering: from style_profile.occasions
+        - preferred_colors, preferred_silhouettes: from style_profile
+        - occasions: from style_profile.occasions (or explicit override)
+        - size: from shape_profile (same value already shown to the customer
+          on the Shape Profile screen -- must stay in sync with M3)
 
         Args:
             session: IntakeSession with complete profile data
@@ -168,20 +170,24 @@ class RecommendationEngine:
         """
         shape_profile = session.shape_profile
         style_profile = session.style_profile
-        measurements = session.body_measurements.to_dict()
 
-        # Colors from style profile: M4 validates lowercase (e.g., "black", "navy")
-        # but catalog expects title case (e.g., "Black", "Navy") for M6 matching
+        # Colors are stored by M4 exactly as the catalog spells them
+        # (e.g. "Pageant Blue", "Ebony") -- title-case them defensively in
+        # case of stray casing, without mangling multi-word names the way
+        # str.capitalize() does ("Pageant Blue".capitalize() == "Pageant blue").
         raw_colors = style_profile.preferred_colors or []
-        preferred_colors = [color.capitalize() for color in raw_colors]
+        preferred_colors = [color.title() for color in raw_colors]
 
-        # Size: derive from measurements (could be more sophisticated)
-        size = self._infer_size_from_measurements(measurements)
+        # Size: use the SAME size M3 already computed and showed the customer
+        # on the Shape Profile screen, so what's displayed and what's filtered
+        # never disagree.
+        size = shape_profile.get("size_recommendation_by_category", {}).get("tops")
 
         # Build base query
         query = {
             "shape_class": shape_profile.get("shape_class"),
             "preferred_colors": preferred_colors,
+            "preferred_silhouettes": style_profile.preferred_silhouettes or [],
             "k": k,
         }
 
@@ -193,45 +199,12 @@ class RecommendationEngine:
         if size:
             query["size"] = size
 
-        # Optional: filter by occasion if specified
-        # (This could be extended in M6 to support occasion-based filtering)
+        # Occasions: explicit single-occasion override takes precedence,
+        # otherwise pass through everything the customer selected.
         if occasion_filter:
-            # Store for M6 to use if supported
-            query["occasion"] = occasion_filter
+            query["occasions"] = [occasion_filter]
         elif style_profile.occasions:
-            # Use first occasion as default if not specified
-            query["occasion"] = style_profile.occasions[0]
+            query["occasions"] = style_profile.occasions
 
         logger.debug("Retrieval query built", {"query_keys": list(query.keys())})
         return query
-
-    def _infer_size_from_measurements(self, measurements: dict) -> str:
-        """
-        Infer standard size (XS, S, M, L, XL) from measurements.
-
-        Uses Eighth Hour's sizing scale.
-        Simplified: could use more sophisticated size matrix.
-
-        Args:
-            measurements: Dict with bust, waist, hips, height
-
-        Returns:
-            Size string (XS, S, M, L, XL, XXL) or None
-        """
-        bust = measurements.get("bust", 0)
-        waist = measurements.get("waist", 0)
-
-        # Rough mapping based on standard sizing
-        # (This is simplified; a real system would use a detailed size matrix)
-        if bust < 80:
-            return "XS"
-        elif bust < 84:
-            return "S"
-        elif bust < 90:
-            return "M"
-        elif bust < 96:
-            return "L"
-        elif bust < 102:
-            return "XL"
-        else:
-            return "XXL"

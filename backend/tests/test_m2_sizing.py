@@ -31,10 +31,16 @@ class TestMeasurements:
         assert m.waist == 70.0
         assert m.height == 165.0
 
-    def test_measurements_default_shoulder(self):
-        """Shoulder defaults to hips if not provided."""
+    def test_measurements_shoulder_left_none_if_not_provided(self):
+        """
+        Shoulder must NOT silently default to hips -- hips (~80-160cm) and
+        shoulder width (~30-60cm) are different physical measurements, and
+        defaulting one to the other produces an anatomically invalid value
+        that then fails downstream range validation (M7/M9 both do this).
+        Leave it None, matching how inseam already behaves.
+        """
         m = Measurements(bust=88.0, waist=70.0, hips=102.0, height=165.0)
-        assert m.shoulder == 102.0  # Defaults to hips
+        assert m.shoulder is None
 
     def test_measurements_confidence_scores(self):
         """Measurements include per-field confidence scores."""
@@ -303,7 +309,7 @@ class TestMeasurementEdgeCases:
             shoulder=None,
         )
         assert m.inseam is None
-        assert m.shoulder == 102.0  # Defaults to hips
+        assert m.shoulder is None
 
 
 class TestMeasurementValidation:

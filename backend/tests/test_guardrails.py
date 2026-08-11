@@ -1,11 +1,15 @@
 """Tests for guardrails (security & validation)."""
 
+import hashlib
+import json
 import pytest
 import time
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.injection_defense import InjectionDefense
 from py_src.guardrails.access_control import AccessControl
+from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
+from py_src.utils.errors import GuardrailError
 
 
 class TestInputValidator:
@@ -170,6 +174,55 @@ class TestInjectionDefense:
         params = {"k": -5}
         safe = InjectionDefense.build_safe_retrieval_query(params)
         assert safe["k"] >= 1
+
+    def test_build_safe_retrieval_query_passes_through_silhouettes(self):
+        """
+        Regression test: preferred_silhouettes used to be silently dropped
+        here (not even read from params), which meant the customer's
+        silhouette choice on the intake flow could never reach M6 no matter
+        what M5 sent.
+        """
+        params = {"preferred_silhouettes": ["fitted", "flowing"]}
+        safe = InjectionDefense.build_safe_retrieval_query(params)
+        assert safe["preferred_silhouettes"] == ["fitted", "flowing"]
+
+    def test_build_safe_retrieval_query_passes_through_occasions(self):
+        """
+        Regression test: occasions used to be silently dropped here too,
+        so the customer's occasion selection had zero effect on
+        recommendations regardless of what M5 sent.
+        """
+        params = {"occasions": ["work", "evening"]}
+        safe = InjectionDefense.build_safe_retrieval_query(params)
+        assert safe["occasions"] == ["work", "evening"]
+
+    def test_build_safe_retrieval_query_filters_non_string_silhouettes(self):
+        """Non-string entries should be dropped, not crash the query."""
+        params = {"preferred_silhouettes": ["fitted", 123, None, "flowing"]}
+        safe = InjectionDefense.build_safe_retrieval_query(params)
+        assert safe["preferred_silhouettes"] == ["fitted", "flowing"]
+
+    def test_build_safe_retrieval_query_filters_non_string_occasions(self):
+        """Non-string entries should be dropped, not crash the query."""
+        params = {"occasions": ["work", 42, None]}
+        safe = InjectionDefense.build_safe_retrieval_query(params)
+        assert safe["occasions"] == ["work"]
+
+    def test_build_safe_retrieval_query_defaults_missing_silhouettes_occasions(self):
+        """Absent silhouette/occasion params should default to empty lists, not crash."""
+        safe = InjectionDefense.build_safe_retrieval_query({"shape_class": "pear"})
+        assert safe["preferred_silhouettes"] == []
+        assert safe["occasions"] == []
+
+    def test_build_safe_retrieval_query_caps_silhouettes_and_occasions_at_ten(self):
+        """Lists should be capped at 10 entries, matching colors/categories/fabrics."""
+        params = {
+            "preferred_silhouettes": [f"sil{i}" for i in range(20)],
+            "occasions": [f"occ{i}" for i in range(20)],
+        }
+        safe = InjectionDefense.build_safe_retrieval_query(params)
+        assert len(safe["preferred_silhouettes"]) == 10
+        assert len(safe["occasions"]) == 10
 
     def test_sanitize_for_llm_removes_keywords(self):
         """Prompt injection keywords should be removed."""
@@ -382,3 +435,69 @@ class TestConsentTracker:
         after = int(time.time())
         consent = tracker.get_latest_consent("user-1")
         assert before <= consent["timestamp"] <= after + 1
+
+
+class TestAuditLoggerHashing:
+    """
+    AuditLogger must produce a stable, non-reversible pseudonym for user_id
+    -- NOT Python's built-in hash(), which is randomized per-process by
+    default (PYTHONHASHSEED) and would silently produce a different value
+    for the same user after every server restart, defeating the entire
+    point of a correlatable audit trail.
+    """
+
+    def test_hash_is_deterministic_sha256(self):
+        """Output must match a real SHA-256 digest, proving it isn't hash()."""
+        expected = hashlib.sha256("user-123".encode("utf-8")).hexdigest()[:16]
+        assert AuditLogger.hash_user_id("user-123") == expected
+
+    def test_hash_is_stable_across_calls(self):
+        """Same user_id must always produce the same hash."""
+        h1 = AuditLogger.hash_user_id("user-abc")
+        h2 = AuditLogger.hash_user_id("user-abc")
+        assert h1 == h2
+
+    def test_different_users_get_different_hashes(self):
+        assert AuditLogger.hash_user_id("user-a") != AuditLogger.hash_user_id("user-b")
+
+    def test_none_user_id_returns_none(self):
+        assert AuditLogger.hash_user_id(None) is None
+        assert AuditLogger.hash_user_id("") is None
+
+    def test_log_event_uses_hashed_user_id(self):
+        """log_event's event_data must never contain the raw user_id."""
+        import unittest.mock as mock
+        raw_id = "raw-user-id-should-not-appear"
+        with mock.patch("py_src.guardrails.audit_logger.logger.info") as mock_log:
+            AuditLogger.log_event("CONSENT_RECORDED", raw_id, {})
+            _, event_data = mock_log.call_args[0]
+            assert event_data["user_hash"] == AuditLogger.hash_user_id(raw_id)
+            assert raw_id not in json.dumps(event_data)
+
+
+class TestAccessControlPermissions:
+    """AccessControl.check_permission enforces the resource-ownership model."""
+
+    def test_owner_can_read_own_resource(self):
+        result = AccessControl.check_permission("user-1", "user-1", "read")
+        assert result is True
+
+    def test_owner_can_write_own_resource(self):
+        result = AccessControl.check_permission("user-1", "user-1", "write")
+        assert result is True
+
+    def test_non_owner_denied_read(self):
+        with pytest.raises(GuardrailError):
+            AccessControl.check_permission("user-1", "user-2", "read")
+
+    def test_non_owner_denied_write(self):
+        with pytest.raises(GuardrailError):
+            AccessControl.check_permission("user-1", "user-2", "write")
+
+    def test_missing_user_id_denied(self):
+        with pytest.raises(GuardrailError):
+            AccessControl.check_permission(None, "user-1", "read")
+
+    def test_missing_resource_owner_denied(self):
+        with pytest.raises(GuardrailError):
+            AccessControl.check_permission("user-1", None, "read")

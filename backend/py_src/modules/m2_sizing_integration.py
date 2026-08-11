@@ -37,7 +37,7 @@ class Measurements:
         self.waist = waist
         self.hips = hips
         self.height = height
-        self.shoulder = shoulder or hips
+        self.shoulder = shoulder
         self.inseam = inseam
         self.unit = unit
         self.confidence_scores = confidence_scores or {

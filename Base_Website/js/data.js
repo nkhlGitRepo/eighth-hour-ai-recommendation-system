@@ -21,6 +21,7 @@ const PRODUCTS = [
   // ---- Natural Crepe collection (best sellers) ----
   {
     slug: "crepe-silk-pintuck-straight-skirt",
+    launchedAt: "2024-11-02",
     name: "Crepe Silk Pintuck Straight Skirt",
     category: "Skirts",
     fabric: "Natural Crepe",
@@ -32,6 +33,7 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-pleated-dress",
+    launchedAt: "2024-11-18",
     name: "Crepe Silk Pleated Dress",
     category: "Dresses",
     fabric: "Natural Crepe",
@@ -43,6 +45,7 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-textured-long-top",
+    launchedAt: "2024-12-05",
     name: "Crepe Silk Textured Long Top",
     category: "Tops",
     fabric: "Natural Crepe",
@@ -54,6 +57,7 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-vest",
+    launchedAt: "2024-12-20",
     name: "Crepe Silk Vest",
     category: "Vests",
     fabric: "Natural Crepe",
@@ -65,6 +69,7 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-vest-and-skirt-set",
+    launchedAt: "2025-01-10",
     name: "Crepe Silk Vest and Skirt Set",
     category: "Co-ord Sets",
     fabric: "Natural Crepe",
@@ -78,6 +83,7 @@ const PRODUCTS = [
   // ---- Handwoven Silk collection ----
   {
     slug: "mulberry-silk-overlap-vest-and-pintuck-trouser-set",
+    launchedAt: "2025-01-28",
     name: "Mulberry Silk Overlap Vest and Pintuck Trouser Set",
     category: "Co-ord Sets",
     fabric: "Handwoven Silk",
@@ -89,6 +95,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-asymmetrical-wrap-skirt",
+    launchedAt: "2025-02-14",
     name: "Mulberry Silk Asymmetrical Wrap Skirt",
     category: "Skirts",
     fabric: "Handwoven Silk",
@@ -100,6 +107,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-wide-neck-vest-and-pant-set",
+    launchedAt: "2025-03-01",
     name: "Mulberry Silk Wide Neck Vest and Pant Set",
     category: "Co-ord Sets",
     fabric: "Handwoven Silk",
@@ -111,6 +119,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-vest-and-skirt-set",
+    launchedAt: "2025-03-19",
     name: "Mulberry Silk Vest and Skirt Set",
     category: "Co-ord Sets",
     fabric: "Handwoven Silk",
@@ -122,6 +131,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-vest",
+    launchedAt: "2025-04-07",
     name: "Mulberry Silk Vest",
     category: "Vests",
     fabric: "Handwoven Silk",
@@ -133,6 +143,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-v-neck-top-with-kantha-embroidery",
+    launchedAt: "2025-04-22",
     name: "Mulberry Silk V-Neck Top with Kantha Embroidery",
     category: "Tops",
     fabric: "Handwoven Silk",
@@ -144,6 +155,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-cap-sleeve-top",
+    launchedAt: "2025-05-09",
     name: "Mulberry Silk Pintuck Cap Sleeve Top",
     category: "Tops",
     fabric: "Handwoven Silk",
@@ -155,6 +167,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-wrap-skirt",
+    launchedAt: "2025-05-27",
     name: "Mulberry Silk Pintuck Wrap Skirt",
     category: "Skirts",
     fabric: "Handwoven Silk",
@@ -166,6 +179,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-wide-neck-vest",
+    launchedAt: "2025-06-12",
     name: "Mulberry Silk Pintuck Wide Neck Vest",
     category: "Vests",
     fabric: "Handwoven Silk",
@@ -177,6 +191,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-vest",
+    launchedAt: "2025-06-30",
     name: "Mulberry Silk Pintuck Vest",
     category: "Vests",
     fabric: "Handwoven Silk",
@@ -188,6 +203,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-trousers",
+    launchedAt: "2025-07-15",
     name: "Mulberry Silk Pintuck Trousers",
     category: "Trousers",
     fabric: "Handwoven Silk",
@@ -202,6 +218,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-straight-skirt",
+    launchedAt: "2025-08-03",
     name: "Mulberry Silk Pintuck Straight Skirt",
     category: "Skirts",
     fabric: "Handwoven Silk",
@@ -213,6 +230,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-overlap-vest",
+    launchedAt: "2025-09-01",
     name: "Mulberry Silk Pintuck Overlap Vest",
     category: "Vests",
     fabric: "Handwoven Silk",
@@ -224,6 +242,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-pintuck-vest-and-skirt-set",
+    launchedAt: "2025-10-05",
     name: "Mulberry Pintuck Vest and Skirt Set",
     category: "Co-ord Sets",
     fabric: "Handwoven Silk",
@@ -235,6 +254,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-overlap-vest",
+    launchedAt: "2025-11-12",
     name: "Mulberry Silk Overlap Vest",
     category: "Vests",
     fabric: "Handwoven Silk",
@@ -246,6 +266,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-overlap-pintuck-vest-and-trouser-set",
+    launchedAt: "2025-12-08",
     name: "Mulberry Silk Overlap Pintuck Vest and Trouser Set",
     category: "Co-ord Sets",
     fabric: "Handwoven Silk",
@@ -257,6 +278,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-wrap-skirt-set",
+    launchedAt: "2026-01-15",
     name: "Mulberry Silk Embroidered Wrap Skirt Set",
     category: "Co-ord Sets",
     fabric: "Handwoven Silk",
@@ -268,6 +290,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-v-neck-top",
+    launchedAt: "2026-02-20",
     name: "Mulberry Silk Embroidered V-Neck Top",
     category: "Tops",
     fabric: "Handwoven Silk",
@@ -279,6 +302,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-raglan-cut-top",
+    launchedAt: "2026-07-14",
     name: "Mulberry Silk Embroidered Raglan Cut Top",
     category: "Tops",
     fabric: "Handwoven Silk",
@@ -290,6 +314,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-long-top",
+    launchedAt: "2026-07-22",
     name: "Mulberry Silk Embroidered Long Top",
     category: "Tops",
     fabric: "Handwoven Silk",
@@ -301,6 +326,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-dress",
+    launchedAt: "2026-07-29",
     name: "Mulberry Silk Embroidered Dress",
     category: "Dresses",
     fabric: "Handwoven Silk",
@@ -312,6 +338,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-cap-sleeve-top",
+    launchedAt: "2026-08-02",
     name: "Mulberry Silk Embroidered Cap Sleeve Top",
     category: "Tops",
     fabric: "Handwoven Silk",
@@ -323,6 +350,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-boat-wrap-skirt-set",
+    launchedAt: "2026-08-05",
     name: "Mulberry Silk Embroidered Boat Wrap Skirt Set",
     category: "Co-ord Sets",
     fabric: "Handwoven Silk",
@@ -334,6 +362,7 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-boat-neck-top",
+    launchedAt: "2026-08-09",
     name: "Mulberry Silk Embroidered Boat Neck Top",
     category: "Tops",
     fabric: "Handwoven Silk",

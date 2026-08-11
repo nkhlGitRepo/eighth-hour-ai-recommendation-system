@@ -175,9 +175,38 @@ class TestM5QueryBuilding:
         engine = recommendation_engine
         query = engine._build_retrieval_query(completed_session)
         assert "preferred_colors" in query
-        # Colors are capitalized to match catalog format
+        # Colors are title-cased to match catalog format
         assert "Black" in query["preferred_colors"]
         assert "Navy" in query["preferred_colors"]
+
+    def test_multiword_colors_are_not_mangled(self, recommendation_engine, completed_session):
+        """
+        Regression test: str.capitalize() lowercases every letter after the
+        first IN THE WHOLE STRING, so "Pageant Blue".capitalize() produces
+        "Pageant blue" -- which then fails to match the catalog's "Pageant
+        Blue" and silently drops every matching product. Must use .title().
+        """
+        completed_session.style_profile.preferred_colors = ["Pageant Blue", "Sky Captain"]
+        query = recommendation_engine._build_retrieval_query(completed_session)
+        assert "Pageant Blue" in query["preferred_colors"]
+        assert "Sky Captain" in query["preferred_colors"]
+
+    def test_query_includes_silhouettes(self, recommendation_engine, completed_session):
+        """Query passes through preferred silhouettes so M6 can filter on them."""
+        completed_session.style_profile.preferred_silhouettes = ["fitted", "flowing"]
+        query = recommendation_engine._build_retrieval_query(completed_session)
+        assert query["preferred_silhouettes"] == ["fitted", "flowing"]
+
+    def test_query_includes_occasions(self, recommendation_engine, completed_session):
+        """Query passes through all selected occasions, not just the first one."""
+        completed_session.style_profile.occasions = ["work", "evening"]
+        query = recommendation_engine._build_retrieval_query(completed_session)
+        assert query["occasions"] == ["work", "evening"]
+
+    def test_occasion_filter_override(self, recommendation_engine, completed_session):
+        """Explicit occasion_filter argument overrides the stored occasions."""
+        query = recommendation_engine._build_retrieval_query(completed_session, occasion_filter="gym")
+        assert query["occasions"] == ["gym"]
 
     def test_query_includes_categories_when_provided(self, recommendation_engine, completed_session):
         """Query includes categories when explicitly provided."""
@@ -317,99 +346,39 @@ class TestM5RecommendationGeneration:
         assert len(products_with_matching_color) > 0, "Should recommend products with user's preferred colors"
 
     def test_recommendations_have_correct_size(self, recommendation_engine, completed_session, consent_tracker):
-        """Recommendations should include user's inferred size."""
+        """Recommendations should include the exact size shown on the customer's Shape Profile screen."""
         consent_tracker.record_consent(
             user_id=completed_session.user_id,
             photo_consent=True,
             measurement_consent=True,
         )
-        # Session has bust=88.0 → size M
+        expected_size = completed_session.shape_profile["size_recommendation_by_category"]["tops"]
         recs = recommendation_engine.generate_recommendations(completed_session)
 
+        assert len(recs) > 0
         for rec in recs:
             sizes = rec.get("sizes", [])
-            assert "M" in sizes, f"Product {rec['sku']} should have size M available"
+            assert expected_size in sizes, (
+                f"Product {rec['sku']} should have size {expected_size} available "
+                f"(the size shown to this customer)"
+            )
 
 
 class TestM5SizeInference:
-    """Test size inference from measurements."""
+    """
+    Size used for retrieval must come from M3's shape_profile -- the same
+    size already shown to the customer on the Shape Profile screen -- not
+    from a second, independently-computed value. M5 has no size-inference
+    logic of its own; a duplicate implementation is exactly what caused the
+    displayed size and the filtered size to silently disagree.
+    """
 
-    def test_infers_xs_for_small_bust(self, recommendation_engine):
-        """Infers XS for bust < 80."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 75, "waist": 60, "hips": 85, "height": 160}
-        )
-        assert size == "XS"
+    def test_query_size_matches_shape_profile_size(self, recommendation_engine, completed_session):
+        """The size in the retrieval query is exactly the customer-facing size."""
+        query = recommendation_engine._build_retrieval_query(completed_session)
+        displayed_size = completed_session.shape_profile["size_recommendation_by_category"]["tops"]
+        assert query["size"] == displayed_size
 
-    def test_infers_xs_boundary_below_80(self, recommendation_engine):
-        """Boundary: bust=79 should be XS."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 79, "waist": 60, "hips": 85, "height": 160}
-        )
-        assert size == "XS"
-
-    def test_infers_s_at_boundary_80(self, recommendation_engine):
-        """Boundary: bust=80 should be S."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 80, "waist": 63, "hips": 88, "height": 165}
-        )
-        assert size == "S"
-
-    def test_infers_s_for_small_medium_bust(self, recommendation_engine):
-        """Infers S for bust 80-84."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 82, "waist": 65, "hips": 90, "height": 165}
-        )
-        assert size == "S"
-
-    def test_infers_m_at_boundary_84(self, recommendation_engine):
-        """Boundary: bust=84 should be M."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 84, "waist": 68, "hips": 92, "height": 165}
-        )
-        assert size == "M"
-
-    def test_infers_m_for_medium_bust(self, recommendation_engine):
-        """Infers M for bust 84-90."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 88, "waist": 70, "hips": 95, "height": 165}
-        )
-        assert size == "M"
-
-    def test_infers_l_at_boundary_90(self, recommendation_engine):
-        """Boundary: bust=90 should be L."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 90, "waist": 75, "hips": 98, "height": 168}
-        )
-        assert size == "L"
-
-    def test_infers_xl_at_boundary_96(self, recommendation_engine):
-        """Boundary: bust=96 should be XL."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 96, "waist": 80, "hips": 102, "height": 168}
-        )
-        assert size == "XL"
-
-    def test_infers_xxl_at_boundary_102(self, recommendation_engine):
-        """Boundary: bust=102 should be XXL."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 102, "waist": 86, "hips": 108, "height": 170}
-        )
-        assert size == "XXL"
-
-    def test_infers_xxl_for_large_bust(self, recommendation_engine):
-        """Infers XXL for bust >= 102."""
-        size = recommendation_engine._infer_size_from_measurements(
-            {"bust": 105, "waist": 90, "hips": 110, "height": 170}
-        )
-        assert size == "XXL"
-
-    def test_size_not_affected_by_height(self, recommendation_engine):
-        """Size depends only on bust, not height."""
-        size1 = recommendation_engine._infer_size_from_measurements(
-            {"bust": 88, "waist": 70, "hips": 95, "height": 150}
-        )
-        size2 = recommendation_engine._infer_size_from_measurements(
-            {"bust": 88, "waist": 70, "hips": 95, "height": 180}
-        )
-        assert size1 == size2 == "M"
+    def test_no_independent_size_inference_method_exists(self, recommendation_engine):
+        """M5 must not carry its own size-boundary logic that could drift from M3's."""
+        assert not hasattr(recommendation_engine, "_infer_size_from_measurements")

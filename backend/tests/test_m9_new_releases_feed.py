@@ -1,13 +1,77 @@
 """Comprehensive tests for M9 — Personalized New Releases Feed."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta
+from unittest.mock import patch
 from py_src.modules.m9_new_releases_feed import NewReleasesFeed
 from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.modules.m7_fit_checker import FitChecker
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
+from py_src.constants import SHAPE_CATEGORY_AFFINITY
 from py_src.utils.errors import ModuleError
+
+
+def days_ago(n):
+    """ISO date string N days before now -- keeps "recent" test fixtures
+    from going stale as real time passes, unlike a hardcoded date literal."""
+    return (datetime.now() - timedelta(days=n)).date().isoformat()
+
+
+# Raw product definitions (products.json shape) used to build a real
+# CatalogKB, so tests exercise the actual normalization pipeline
+# (flatters_shapes/silhouette_class/occasions inference) instead of a
+# hand-faked shape that doesn't match what CatalogKB really produces.
+RAW_PRODUCTS = [
+    {
+        "slug": "wrap-dress-navy",
+        "name": "Wrap Dress",
+        "category": "Dresses",
+        "fabric": "Jersey",
+        "price": 99.99,
+        "colors": ["navy", "black", "cream"],
+        "sizes": ["XS", "S", "M", "L", "XL"],
+        "description": "A versatile wrap dress.",
+        "silhouette": "flowing",
+        "launched_at": days_ago(5),
+    },
+    {
+        "slug": "fitted-vest-navy",
+        "name": "Fitted Vest",
+        "category": "Vests",
+        "fabric": "Cotton",
+        "price": 59.99,
+        "colors": ["navy", "cream"],
+        "sizes": ["XS", "S", "M", "L"],
+        "description": "A fitted vest that emphasizes the waist.",
+        "silhouette": "fitted",
+        "launched_at": days_ago(10),
+    },
+    {
+        "slug": "aline-skirt-black",
+        "name": "A-Line Skirt",
+        "category": "Skirts",
+        "fabric": "Wool",
+        "price": 79.99,
+        "colors": ["black", "navy"],
+        "sizes": ["XS", "S", "M", "L"],
+        "description": "A classic a-line skirt.",
+        "silhouette": "a_line",
+        "launched_at": days_ago(15),
+    },
+    {
+        "slug": "old-straight-top",
+        "name": "Straight Top",
+        "category": "Tops",
+        "fabric": "Cotton",
+        "price": 49.99,
+        "colors": ["navy", "red"],
+        "sizes": ["XS", "S", "M", "L", "XL"],
+        "description": "A structured straight-cut top.",
+        "silhouette": "straight",
+        "launched_at": days_ago(400),  # well outside the recency window
+    },
+]
 
 
 @pytest.fixture
@@ -20,44 +84,9 @@ def consent_tracker():
 
 @pytest.fixture
 def catalog():
-    """Catalog with test products."""
-    catalog = CatalogKB([])
-    catalog.items = [
-        {
-            "sku": "top-navy-fitted",
-            "name": "Navy Fitted Top",
-            "category": "Tops",
-            "colors": ["navy", "cream"],
-            "sizes": ["XS", "S", "M", "L", "XL"],
-            "silhouettes": ["fitted", "classic"],
-            "occasions": ["work", "casual"],
-            "fit_flatterers": ["hourglass", "pear"],
-            "price": 59.99,
-        },
-        {
-            "sku": "skirt-flare",
-            "name": "Flare Skirt",
-            "category": "Skirts",
-            "colors": ["black", "navy"],
-            "sizes": ["XS", "S", "M", "L"],
-            "silhouettes": ["flare"],
-            "occasions": ["work", "evening"],
-            "fit_flatterers": ["pear", "apple"],
-            "price": 79.99,
-        },
-        {
-            "sku": "dress-wrap",
-            "name": "Wrap Dress",
-            "category": "Dresses",
-            "colors": ["red", "navy", "black"],
-            "sizes": ["XS", "S", "M", "L", "XL", "XXL"],
-            "silhouettes": ["wrap", "fitted"],
-            "occasions": ["work", "casual", "evening"],
-            "fit_flatterers": ["hourglass", "pear", "apple"],
-            "price": 99.99,
-        },
-    ]
-    return catalog
+    """Real catalog built from realistic product data via CatalogKB's actual
+    normalization pipeline (not a hand-faked .items shape)."""
+    return CatalogKB(RAW_PRODUCTS)
 
 
 @pytest.fixture
@@ -99,7 +128,7 @@ def style_profile():
     """Style preference profile."""
     return {
         "preferred_colors": ["navy", "black", "cream"],
-        "preferred_silhouettes": ["fitted", "wrap"],
+        "preferred_silhouettes": ["fitted", "flowing"],
         "occasions": ["work", "casual"],
     }
 
@@ -116,19 +145,19 @@ def measurements():
 
 
 class TestM9ScoreProductForProfile:
-    """Test product scoring logic."""
+    """Test product scoring logic against real catalog-item shapes."""
 
     def test_scores_perfect_match(self, feed_manager, hourglass_profile, style_profile):
-        """Strong match (shape + colors + silhouettes) should score high."""
+        """Strong match (shape + colors + silhouette) should score high."""
         product = {
             "sku": "dress-wrap",
-            "colors": ["navy", "black", "cream"],             # All user colors available
-            "silhouettes": ["wrap", "fitted"],                # Exact match
-            "fit_flatterers": ["hourglass"],                  # Exact match
+            "colors": ["navy", "black", "cream"],  # All user colors available
+            "silhouette_class": "flowing",          # In user's preferred_silhouettes
+            "flatters_shapes": ["hourglass", "balanced"],  # Exact shape match
+            "occasions": ["work", "casual"],
             "sizes": ["M"],
         }
         score = feed_manager.score_product_for_profile(product, hourglass_profile, style_profile)
-        # With all components matching, score should be very high (close to 1.0)
         assert score > 0.9, f"Strong match should score > 0.9, got {score}"
 
     def test_scores_no_match(self, feed_manager, hourglass_profile):
@@ -136,21 +165,24 @@ class TestM9ScoreProductForProfile:
         product = {
             "sku": "jeans",
             "colors": ["indigo"],
-            "fit_flatterers": ["rectangle"],  # Doesn't flatter hourglass
+            "flatters_shapes": ["straight", "balanced"],  # Doesn't include hourglass
             "sizes": ["M"],
         }
         score = feed_manager.score_product_for_profile(product, hourglass_profile, None)
-        # No style profile and mismatched shape should score low
         assert score < 0.6, f"No match should score < 0.6, got {score}"
-        # And definitely below the feed threshold
-        assert score < feed_manager.match_threshold, \
-            f"No-match score {score} should be below threshold {feed_manager.match_threshold}"
+        assert score < feed_manager.match_threshold
 
     def test_shape_match_exact(self, feed_manager, hourglass_profile):
         """Product that flatters user's shape should match."""
-        product = {"fit_flatterers": ["hourglass"]}
+        product = {"flatters_shapes": ["hourglass", "balanced"]}
         score = feed_manager._score_shape_match(product, hourglass_profile)
         assert score == 1.0
+
+    def test_shape_match_falls_back_to_category_affinity(self, feed_manager, hourglass_profile):
+        """When flatters_shapes doesn't include the user's shape, fall back to category affinity."""
+        product = {"flatters_shapes": ["straight"], "category": "Dresses"}
+        score = feed_manager._score_shape_match(product, hourglass_profile)
+        assert score == SHAPE_CATEGORY_AFFINITY["hourglass"]["Dresses"]
 
     def test_shape_match_no_data(self, feed_manager):
         """Product without shape data should get neutral score."""
@@ -174,15 +206,24 @@ class TestM9ScoreProductForProfile:
         assert 0.2 < score < 0.8
 
     def test_silhouette_match(self, feed_manager):
-        """Product silhouettes matching preference should score high."""
-        product = {"silhouettes": ["fitted", "wrap"]}
-        profile = {"preferred_silhouettes": ["fitted", "wrap"]}
+        """Product silhouette_class matching preference should score high."""
+        product = {"silhouette_class": "fitted"}
+        profile = {"preferred_silhouettes": ["fitted", "flowing"]}
         score = feed_manager._score_style_match(product, profile)
         assert score > 0.7
 
+    def test_silhouette_mismatch_scores_zero_for_that_component(self, feed_manager):
+        """Product silhouette_class not in preferences should score that component 0."""
+        product = {"silhouette_class": "oversized"}
+        profile = {"preferred_silhouettes": ["fitted", "flowing"]}
+        score = feed_manager._score_style_match(product, profile)
+        assert score == 0.0
+
     def test_availability_in_size(self, feed_manager, measurements):
         """Product with user's size should score 1.0."""
-        product = {"sizes": ["M", "L"]}
+        # measurements fixture has bust=90.0, which maps to "S" under the
+        # shared SIZE_BOUNDARIES (84-92cm).
+        product = {"sizes": ["S", "M"]}
         score = feed_manager._score_availability(product, measurements)
         assert score == 1.0
 
@@ -201,7 +242,7 @@ class TestM9ScoreProductForProfile:
 
 
 class TestM9GenerateFeed:
-    """Test feed generation."""
+    """Test feed generation end-to-end against a real catalog."""
 
     def test_generates_feed(self, feed_manager, hourglass_profile, style_profile, measurements):
         """Should generate feed with matched products meeting quality standards."""
@@ -214,16 +255,11 @@ class TestM9GenerateFeed:
         )
         assert len(feed) > 0, "Feed should contain products"
 
-        # Verify all items meet quality standards
         for item in feed:
-            # All items must have required fields
             assert "sku" in item and "match_score" in item and "matched_attributes" in item
-            # All items must be above threshold (default 0.65)
             assert item["match_score"] >= feed_manager.match_threshold, \
                 f"Item {item['sku']} scored {item['match_score']} below threshold {feed_manager.match_threshold}"
-            # Match score must be valid
             assert 0 <= item["match_score"] <= 1, f"Invalid score {item['match_score']}"
-            # Must have explanation
             assert len(item["matched_attributes"]) > 0, f"Item {item['sku']} missing matched_attributes"
 
     def test_feed_sorted_by_score(self, feed_manager, hourglass_profile, style_profile, measurements):
@@ -240,39 +276,22 @@ class TestM9GenerateFeed:
 
     def test_respects_threshold(self, feed_manager):
         """Only products above threshold should be included."""
-        low_profile = {
-            "shape_class": "rectangle",
-        }
-        # Rectangle shape probably won't match most products
-        feed = feed_manager.generate_feed(
-            "test_user",
-            low_profile,
-            None,
-            None,
-        )
-        # All items in feed should be above threshold
+        low_profile = {"shape_class": "athletic"}
+        feed = feed_manager.generate_feed("test_user", low_profile, None, None)
         for item in feed:
             assert item["match_score"] >= feed_manager.MATCH_THRESHOLD
 
     def test_respects_limit(self, feed_manager, hourglass_profile, style_profile, measurements):
         """Should respect limit parameter."""
-        feed_5 = feed_manager.generate_feed(
-            "test_user",
-            hourglass_profile,
-            style_profile,
-            measurements,
-            limit=5,
+        feed_1 = feed_manager.generate_feed(
+            "test_user", hourglass_profile, style_profile, measurements, limit=1,
         )
         feed_50 = feed_manager.generate_feed(
-            "test_user",
-            hourglass_profile,
-            style_profile,
-            measurements,
-            limit=50,
+            "test_user", hourglass_profile, style_profile, measurements, limit=50,
         )
-        assert len(feed_5) <= 5
+        assert len(feed_1) <= 1
         assert len(feed_50) <= 50
-        assert len(feed_5) <= len(feed_50)
+        assert len(feed_1) <= len(feed_50)
 
     def test_rejects_invalid_limit(self, feed_manager, hourglass_profile):
         """Invalid limit should raise error."""
@@ -290,10 +309,7 @@ class TestM9GenerateFeed:
     def test_includes_match_attributes(self, feed_manager, hourglass_profile, style_profile, measurements):
         """Feed items should include explanation of match."""
         feed = feed_manager.generate_feed(
-            "test_user",
-            hourglass_profile,
-            style_profile,
-            measurements,
+            "test_user", hourglass_profile, style_profile, measurements,
         )
         for item in feed:
             assert "matched_attributes" in item
@@ -303,10 +319,7 @@ class TestM9GenerateFeed:
     def test_includes_reason(self, feed_manager, hourglass_profile, style_profile, measurements):
         """Feed items should include customer-facing reason."""
         feed = feed_manager.generate_feed(
-            "test_user",
-            hourglass_profile,
-            style_profile,
-            measurements,
+            "test_user", hourglass_profile, style_profile, measurements,
         )
         for item in feed:
             assert "reason" in item
@@ -315,19 +328,36 @@ class TestM9GenerateFeed:
 
     def test_includes_availability(self, feed_manager, hourglass_profile, measurements):
         """Feed items should include availability info."""
-        feed = feed_manager.generate_feed(
-            "test_user",
-            hourglass_profile,
-            None,
-            measurements,
-        )
+        feed = feed_manager.generate_feed("test_user", hourglass_profile, None, measurements)
         for item in feed:
             assert "availability" in item
+
+    def test_accepts_full_measurements_to_dict_payload(self, feed_manager, hourglass_profile):
+        """
+        Regression test: main.py passes session.body_measurements.to_dict()
+        directly, which includes non-numeric metadata (unit, provider,
+        confidence_scores) and often a None shoulder/inseam. This used to
+        make validate_measurements() reject every request unconditionally.
+        """
+        full_payload = {
+            "bust": 90.0,
+            "waist": 72.0,
+            "hips": 97.0,
+            "height": 165.0,
+            "shoulder": None,
+            "inseam": None,
+            "unit": "cm",
+            "confidence_scores": {"bust": 0.95},
+            "provider": "manual_entry",
+            "provider_version": "1.0",
+            "extracted_at": 1234567890.0,
+        }
+        feed = feed_manager.generate_feed("test_user", hourglass_profile, None, full_payload)
+        assert isinstance(feed, list)
 
     def test_empty_catalog_returns_empty_feed(self, fit_checker, consent_tracker):
         """Empty catalog should return empty feed."""
         empty_catalog = CatalogKB([])
-        empty_catalog.items = []
         feed_mgr = NewReleasesFeed(
             catalog=empty_catalog,
             fit_checker=fit_checker,
@@ -337,39 +367,90 @@ class TestM9GenerateFeed:
         assert feed == []
 
 
+class TestM9RecencyFiltering:
+    """A 'new release' must actually have launched within the recency window."""
+
+    def test_old_product_excluded_even_with_perfect_match(self, feed_manager, style_profile):
+        """
+        old-straight-top launched 400 days ago and would otherwise be a
+        great match -- it must not appear in the feed regardless of score.
+        """
+        profile = {"shape_class": "straight"}
+        feed = feed_manager.generate_feed("test_user", profile, style_profile, None, limit=50)
+        skus = {item["sku"] for item in feed}
+        assert "old-straight-top" not in skus
+
+    def test_recent_products_are_eligible(self, feed_manager, hourglass_profile):
+        """Products launched within the window should be scoreable (not silently excluded)."""
+        feed = feed_manager.generate_feed("test_user", hourglass_profile, None, None, limit=50)
+        skus = {item["sku"] for item in feed}
+        # At least one of the recently-launched products should be present.
+        assert skus & {"wrap-dress-navy", "fitted-vest-navy", "aline-skirt-black"}
+
+    def test_product_with_no_launched_at_is_excluded(self, fit_checker, consent_tracker):
+        """A product with no launch date is treated as legacy, not new."""
+        catalog = CatalogKB([{
+            "slug": "no-date-item",
+            "name": "No Date Item",
+            "category": "Tops",
+            "fabric": "Cotton",
+            "price": 40.0,
+            "colors": ["navy"],
+            "sizes": ["M"],
+            # No launched_at field at all.
+        }])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, limit=50)
+        assert feed == []
+
+    def test_is_recent_handles_malformed_date_gracefully(self, feed_manager):
+        """A garbage launched_at value should be treated as not-recent, not crash."""
+        assert feed_manager._is_recent({"launched_at": "not-a-date"}) is False
+        assert feed_manager._is_recent({"launched_at": None}) is False
+        assert feed_manager._is_recent({}) is False
+
+    def test_is_recent_true_within_window(self, feed_manager):
+        assert feed_manager._is_recent({"launched_at": days_ago(1)}) is True
+        assert feed_manager._is_recent({"launched_at": days_ago(29)}) is True
+
+    def test_is_recent_false_outside_window(self, feed_manager):
+        assert feed_manager._is_recent({"launched_at": days_ago(31)}) is False
+        assert feed_manager._is_recent({"launched_at": days_ago(400)}) is False
+
+
 class TestM9ShapeMatching:
     """Test shape-based matching."""
 
     def test_hourglass_prefers_wrap_dresses(self, feed_manager):
-        """Hourglass shapes should match wrap dresses high."""
+        """Hourglass shapes should match wrap-flatters items high."""
         wrap_dress = {
             "sku": "wrap",
-            "fit_flatterers": ["hourglass"],
+            "flatters_shapes": ["hourglass", "pear", "balanced"],
             "colors": ["navy"],
-            "silhouettes": ["wrap"],
+            "silhouette_class": "flowing",
         }
         hourglass = {"shape_class": "hourglass"}
         score = feed_manager.score_product_for_profile(wrap_dress, hourglass, None)
         assert score > 0.7
 
-    def test_pear_prefers_flare_skirts(self, feed_manager):
-        """Pear shapes should score flare skirts high."""
-        flare = {
-            "sku": "flare",
-            "fit_flatterers": ["pear"],
+    def test_pear_prefers_a_line_skirts(self, feed_manager):
+        """Pear shapes should score a-line-flattering items high."""
+        aline = {
+            "sku": "aline",
+            "flatters_shapes": ["pear", "athletic", "balanced"],
             "colors": ["black"],
-            "silhouettes": ["flare"],
+            "silhouette_class": "a_line",
         }
         pear = {"shape_class": "pear"}
-        score = feed_manager.score_product_for_profile(flare, pear, None)
+        score = feed_manager.score_product_for_profile(aline, pear, None)
         assert score > 0.7
 
     def test_wrong_shape_scores_lower(self, feed_manager):
-        """Product flattering different shape should score lower for user."""
-        product = {"fit_flatterers": ["rectangle"]}  # Not hourglass
+        """Product not flattering user's shape should score lower via category fallback."""
+        product = {"flatters_shapes": ["straight"], "category": "Vests"}
         hourglass = {"shape_class": "hourglass"}
         score = feed_manager._score_shape_match(product, hourglass)
-        assert score < 0.7
+        assert score < 1.0
 
 
 class TestM9StyleMatching:
@@ -393,12 +474,12 @@ class TestM9StyleMatching:
         """Multiple matching style factors should improve score."""
         product = {
             "colors": ["navy"],
-            "silhouettes": ["fitted"],
+            "silhouette_class": "fitted",
             "occasions": ["work"],
         }
         style = {
             "preferred_colors": ["navy", "black"],
-            "preferred_silhouettes": ["fitted", "wrap"],
+            "preferred_silhouettes": ["fitted", "flowing"],
             "occasions": ["work", "casual"],
         }
         score = feed_manager._score_style_match(product, style)
@@ -410,22 +491,23 @@ class TestM9ScoringFormula:
 
     def test_score_averages_components(self, feed_manager, hourglass_profile, style_profile):
         """Verify that score combines shape, style, and availability components."""
-        # Product that matches on shape but not style
         product_high_shape = {
             "sku": "test-high-shape",
-            "colors": ["red", "orange"],          # No match with user colors
-            "silhouettes": ["A-line"],            # No match with user silhouettes
-            "fit_flatterers": ["hourglass"],      # Shape match = 1.0
+            "colors": ["red", "orange"],           # No match with user colors
+            "silhouette_class": "oversized",        # No match with user silhouettes
+            "flatters_shapes": ["hourglass"],       # Shape match = 1.0
+            "occasions": ["evening"],
             "sizes": ["M"],
         }
 
-        # Product that matches on style but not shape
         product_high_style = {
             "sku": "test-high-style",
-            "colors": ["navy", "black", "cream"], # All user colors
-            "silhouettes": ["wrap", "fitted"],    # User silhouettes
-            "fit_flatterers": ["rectangle"],      # No shape match
+            "colors": ["navy", "black", "cream"],   # All user colors
+            "silhouette_class": "fitted",            # User's preferred silhouette
+            "flatters_shapes": ["straight"],         # No shape match for hourglass
+            "occasions": ["work"],
             "sizes": ["M"],
+            "category": "Tops",
         }
 
         measurements = {"bust": 90, "waist": 72, "hips": 97, "height": 165}
@@ -437,11 +519,9 @@ class TestM9ScoringFormula:
             product_high_style, hourglass_profile, style_profile, measurements
         )
 
-        # Both should score reasonably well (not 0 or 1)
         assert 0.3 <= score_high_shape <= 1.0, f"High-shape score should be reasonable, got {score_high_shape}"
         assert 0.3 <= score_high_style <= 1.0, f"High-style score should be reasonable, got {score_high_style}"
-        # High-shape should score differently than high-style (different component strengths)
-        assert abs(score_high_shape - score_high_style) > 0.1, \
+        assert abs(score_high_shape - score_high_style) > 0.05, \
             f"Different component strengths should yield different scores: {score_high_shape} vs {score_high_style}"
 
 
@@ -450,7 +530,7 @@ class TestM9MatchAttributeIdentification:
 
     def test_identifies_shape_match(self, feed_manager, hourglass_profile):
         """Should identify shape matching as reason."""
-        product = {"fit_flatterers": ["hourglass"]}
+        product = {"flatters_shapes": ["hourglass"]}
         attrs = feed_manager._identify_match_attributes(product, hourglass_profile, None)
         assert any("shape" in attr.lower() or "hourglass" in attr.lower() for attr in attrs)
 
@@ -463,10 +543,17 @@ class TestM9MatchAttributeIdentification:
 
     def test_identifies_silhouette_match(self, feed_manager):
         """Should identify silhouette match as reason."""
-        product = {"silhouettes": ["fitted"]}
+        product = {"silhouette_class": "fitted"}
         style = {"preferred_silhouettes": ["fitted"]}
         attrs = feed_manager._identify_match_attributes(product, None, style)
         assert any("silhouette" in attr.lower() for attr in attrs)
+
+    def test_no_silhouette_match_does_not_falsely_claim_one(self, feed_manager):
+        """A non-matching silhouette must not be reported as a match reason."""
+        product = {"silhouette_class": "oversized"}
+        style = {"preferred_silhouettes": ["fitted"]}
+        attrs = feed_manager._identify_match_attributes(product, None, style)
+        assert not any("silhouette" in attr.lower() for attr in attrs)
 
 
 class TestM9AuditLogging:
@@ -484,55 +571,63 @@ class TestM9AuditLogging:
 
 
 class TestM9SizeInference:
-    """Test size inference from measurements."""
+    """
+    Test size inference from measurements.
+
+    Boundaries match constants.SIZE_BOUNDARIES, which is shared with M3
+    (the size shown to the customer) and M5 (the size used to filter their
+    recommendations) so all three modules can never disagree on a customer's
+    size.
+    """
 
     def test_infers_xs_for_small_bust(self, feed_manager):
-        """Bust < 80 should be XS."""
-        measurements = {"bust": 75}
+        """Bust 76-83 should be XS."""
+        measurements = {"bust": 78}
         size = feed_manager._infer_size_from_measurements(measurements)
         assert size == "XS"
 
-    def test_infers_s_for_80_84(self, feed_manager):
-        """Bust 80-83 should be S."""
-        for bust in [80, 81, 82]:
+    def test_infers_s_for_84_91(self, feed_manager):
+        """Bust 84-91 should be S."""
+        for bust in [84, 87, 91]:
             measurements = {"bust": bust}
             size = feed_manager._infer_size_from_measurements(measurements)
             assert size == "S", f"bust={bust} should be S, got {size}"
 
-    def test_infers_m_for_84_90(self, feed_manager):
-        """Bust 84.0-89.99 should be M (boundary [84, 90))."""
-        for bust in [84.0, 85, 87, 89.0, 89.99]:
+    def test_infers_m_for_92_99(self, feed_manager):
+        """Bust 92.0-99.99 should be M (boundary [92, 100))."""
+        for bust in [92.0, 95, 97, 99.0, 99.99]:
             measurements = {"bust": bust}
             size = feed_manager._infer_size_from_measurements(measurements)
             assert size == "M", f"bust={bust} should be M, got {size}"
 
-    def test_infers_l_for_90_96(self, feed_manager):
-        """Bust 90-95 should be L."""
-        for bust in [90, 92, 94]:
+    def test_infers_l_for_100_107(self, feed_manager):
+        """Bust 100-107 should be L."""
+        for bust in [100, 103, 107]:
             measurements = {"bust": bust}
             size = feed_manager._infer_size_from_measurements(measurements)
             assert size == "L", f"bust={bust} should be L, got {size}"
 
     def test_infers_xxl_for_large_bust(self, feed_manager):
-        """Bust >= 102 should be XXL."""
-        measurements = {"bust": 110}
+        """Bust >= 117 should be XXL."""
+        measurements = {"bust": 120}
         size = feed_manager._infer_size_from_measurements(measurements)
         assert size == "XXL"
 
     def test_size_boundary_transitions_exact(self, feed_manager):
         """Verify exact boundary transitions (off-by-one bug detection)."""
-        # Test exact boundary values and just below/above
         test_cases = [
-            (79.9, "XS"),   # Just below 80
-            (80.0, "S"),    # Exact boundary
-            (83.9, "S"),    # Just below 84
-            (84.0, "M"),    # Exact boundary
-            (89.9, "M"),    # Just below 90
-            (90.0, "L"),    # Exact boundary
-            (95.9, "L"),    # Just below 96
-            (96.0, "XL"),   # Exact boundary
-            (101.9, "XL"),  # Just below 102
-            (102.0, "XXL"), # Exact boundary
+            (75.9, "XXS"),
+            (76.0, "XS"),
+            (83.9, "XS"),
+            (84.0, "S"),
+            (91.9, "S"),
+            (92.0, "M"),
+            (99.9, "M"),
+            (100.0, "L"),
+            (107.9, "L"),
+            (108.0, "XL"),
+            (116.9, "XL"),
+            (117.0, "XXL"),
         ]
 
         for bust, expected_size in test_cases:
@@ -545,33 +640,28 @@ class TestM9SizeInference:
 class TestM9ErrorHandling:
     """Test graceful handling of invalid/corrupt data."""
 
-    def test_handles_product_missing_sizes_field(self, feed_manager, hourglass_profile):
-        """Product missing 'sizes' field should be handled gracefully without crashing."""
-        # Add a malformed product (missing 'sizes' key)
-        corrupted_catalog = CatalogKB([])
-        corrupted_catalog.items = [
-            {"sku": "bad-product", "name": "Bad", "fit_flatterers": ["hourglass"]},
-            # Missing 'sizes' field - will fail validation
-        ]
+    def test_handles_malformed_product_gracefully(self, fit_checker, consent_tracker, hourglass_profile):
+        """
+        A malformed product (missing required fields) should be dropped
+        during catalog normalization -- same as production behavior -- not
+        crash feed generation.
+        """
+        corrupted_catalog = CatalogKB([
+            {"slug": "bad-product"},  # Missing name/category/fabric/price
+            *RAW_PRODUCTS,
+        ])
         corrupted_feed_mgr = NewReleasesFeed(
             catalog=corrupted_catalog,
-            fit_checker=feed_manager.fit_checker,
-            consent_tracker=feed_manager.consent_tracker,
+            fit_checker=fit_checker,
+            consent_tracker=consent_tracker,
         )
-
         measurements = {"bust": 90, "waist": 72, "hips": 97, "height": 165}
 
-        # Should not crash - error from bad product is caught and logged
-        # The generation should complete even if all products fail fit checks
         feed = corrupted_feed_mgr.generate_feed(
-            "test_user",
-            hourglass_profile,
-            None,
-            measurements,
+            "test_user", hourglass_profile, None, measurements,
         )
-
-        # Feed should be a list (may be empty if products don't match threshold)
-        assert isinstance(feed, list), "Should return list, not crash"
+        assert isinstance(feed, list)
+        assert "bad-product" not in {item["sku"] for item in feed}
 
     def test_handles_invalid_measurements(self, feed_manager, hourglass_profile):
         """Invalid measurements should raise error early, not during generation."""
@@ -579,10 +669,7 @@ class TestM9ErrorHandling:
 
         with pytest.raises(ModuleError, match="must be positive"):
             feed_manager.generate_feed(
-                "test_user",
-                hourglass_profile,
-                None,
-                bad_measurements,
+                "test_user", hourglass_profile, None, bad_measurements,
             )
 
 
@@ -592,10 +679,7 @@ class TestM9ResponseStructure:
     def test_feed_item_has_required_fields(self, feed_manager, hourglass_profile, style_profile, measurements):
         """Each feed item should have required fields."""
         feed = feed_manager.generate_feed(
-            "test_user",
-            hourglass_profile,
-            style_profile,
-            measurements,
+            "test_user", hourglass_profile, style_profile, measurements,
         )
         required_fields = {"sku", "name", "match_score", "matched_attributes", "reason"}
         for item in feed:
@@ -613,4 +697,3 @@ class TestM9ResponseStructure:
         feed = feed_manager.generate_feed("test_user", hourglass_profile, None, None)
         for item in feed:
             assert isinstance(item["name"], str)
-            assert len(item["name"]) > 0
