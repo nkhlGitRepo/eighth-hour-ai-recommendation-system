@@ -15,7 +15,7 @@ from datetime import datetime
 import json
 import uuid
 import sqlite3
-from py_src.persistence.session_repository import SessionRepository
+from py_src.persistence.session_repository import SessionRepository, SQLiteSessionRepository
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.constants import FIT_FEEDBACK_TYPES, PRODUCT_FEEDBACK_TYPES, STANDARD_SIZES
@@ -34,7 +34,12 @@ class LearningLoop:
             session_repo: Session repository for persistence
             consent_tracker: Consent tracker for verification
         """
-        self.session_repo = session_repo or SessionRepository()
+        # SessionRepository is an abstract base (its methods raise
+        # NotImplementedError) -- it has no feedback tables at all, so
+        # defaulting to it would make every feedback call fail. Default to
+        # the real SQLite-backed implementation instead, matching M1's
+        # own default.
+        self.session_repo = session_repo or SQLiteSessionRepository()
         self.consent_tracker = consent_tracker or ConsentTracker()
         logger.info("M10 LearningLoop initialized")
 

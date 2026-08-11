@@ -39,7 +39,7 @@ echo ""
 
 # Install dependencies
 echo -e "${BLUE}Installing dependencies...${NC}"
-pip install -q pytest fastapi uvicorn pydantic 2>/dev/null || {
+pip install -q pytest fastapi uvicorn pydantic httpx 2>/dev/null || {
     echo "Warning: Some dependencies failed to install (this is OK for testing)"
 }
 echo -e "${GREEN}✓ Dependencies installed${NC}"

@@ -328,11 +328,14 @@ class TestConsentTracker:
         assert "timestamp" in consent
 
     def test_record_consent_stores_multiple_records(self):
-        """Should store multiple consent records per user."""
+        """Recording consent again should not lose the ability to see history --
+        the latest record should reflect the most recent decision, not the first."""
         tracker = ConsentTracker()
         tracker.record_consent("user-1", True, False)
         tracker.record_consent("user-1", False, True)
-        assert len(tracker.consent_history["user-1"]) == 2
+        latest = tracker.get_latest_consent("user-1")
+        assert latest["photo_consent"] is False
+        assert latest["measurement_consent"] is True
 
     def test_get_latest_consent_returns_most_recent(self):
         """Should return most recent consent."""
@@ -435,6 +438,39 @@ class TestConsentTracker:
         after = int(time.time())
         consent = tracker.get_latest_consent("user-1")
         assert before <= consent["timestamp"] <= after + 1
+
+    def test_consent_survives_a_new_tracker_instance_on_the_same_db(self, tmp_path):
+        """
+        Regression test: consent must survive a server restart. A server
+        restart means a brand-new ConsentTracker() gets constructed (all
+        in-memory state gone) while sessions -- persisted to SQLite --
+        remain valid. Previously consent lived only in a plain in-memory
+        dict, so a still-valid session would suddenly appear
+        "not consented" after any restart, forcing customers to re-consent
+        for no reason. Simulate a restart by pointing two independent
+        instances at the same on-disk file.
+        """
+        db_path = str(tmp_path / "shared_consent.db")
+        tracker_before_restart = ConsentTracker(db_path=db_path)
+        tracker_before_restart.record_consent("user-1", photo_consent=True, measurement_consent=True)
+
+        tracker_after_restart = ConsentTracker(db_path=db_path)
+        assert tracker_after_restart.has_measurement_consent("user-1") is True
+        assert tracker_after_restart.has_photo_consent("user-1") is True
+
+    def test_bare_instances_do_not_share_state(self):
+        """
+        Two ConsentTracker() instances with no explicit db_path must be
+        isolated from each other (and from any other test) -- this is the
+        same guarantee the old in-memory dict gave for free, and dozens of
+        call sites across the app and test suite rely on a fresh
+        ConsentTracker() starting with a clean slate.
+        """
+        tracker_a = ConsentTracker()
+        tracker_a.record_consent("shared-user-id", photo_consent=True, measurement_consent=True)
+
+        tracker_b = ConsentTracker()
+        assert tracker_b.has_measurement_consent("shared-user-id") is False
 
 
 class TestAuditLoggerHashing:

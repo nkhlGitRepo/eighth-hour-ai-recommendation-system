@@ -5,7 +5,7 @@ Runs on localhost:8000 by default.
 Website calls this API to get styling recommendations.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
@@ -22,6 +22,7 @@ from py_src.modules.m9_new_releases_feed import NewReleasesFeed
 from py_src.modules.m10_learning_loop import LearningLoop
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.consent_tracker import ConsentTracker
+from py_src.guardrails.access_control import AccessControl
 from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.utils.logger import logger
@@ -41,9 +42,12 @@ app.add_middleware(
 # Initialize modules
 profiler = BodyShapeProfiler()
 catalog = CatalogKB([])  # Will be populated from website
-consent_tracker = ConsentTracker()
 session_repo = SQLiteSessionRepository()
-intake_orchestrator = IntakeOrchestrator()
+# Explicit, stable path (matching session_repo's) so consent survives
+# server restarts instead of silently reverting to "not consented" for
+# customers whose sessions are still valid on disk.
+consent_tracker = ConsentTracker(db_path=session_repo.db_path)
+intake_orchestrator = IntakeOrchestrator(session_repo=session_repo, consent_tracker=consent_tracker)
 recommendation_engine = RecommendationEngine(catalog, consent_tracker)
 fit_checker = FitChecker(consent_tracker)
 recommendation_history = RecommendationHistory(consent_tracker=consent_tracker)
@@ -594,7 +598,7 @@ async def get_session_recommendations(
     session_id: str,
     k: int = 10,
     user_id: Optional[str] = None,
-    category_filter: Optional[List[str]] = None,
+    category_filter: Optional[List[str]] = Query(None),
     occasion_filter: Optional[str] = None,
 ):
     """
@@ -632,10 +636,16 @@ async def get_session_recommendations(
                 "M5"
             )
 
-        # Use provided user_id or get from session
-        check_user_id = user_id or session.user_id
+        # If the caller asserts a user_id, it must match this session's real
+        # owner -- otherwise the parameter would silently accept any value
+        # (previously computed into an unused "check_user_id" and never
+        # actually checked against anything).
+        if user_id and not AccessControl.user_owns_resource(user_id, session.user_id):
+            raise GuardrailError(
+                "User does not have access to this session's recommendations",
+                "AccessControl"
+            )
 
-        # Generate recommendations (uses check_user_id for consent verification)
         recommendations = recommendation_engine.generate_recommendations(
             session,
             k=k,
@@ -679,8 +689,14 @@ async def check_product_fit(session_id: str, product_sku: str):
         "Size S fits perfectly.",
         "Size M is slightly loose in waist."
       ],
-      "confidence": 0.92
+      "confidence": 0.92,
+      "check_id": "check_abc123..."
     }
+
+    check_id identifies this specific fit-check event in history. Pass it
+    back as fit_check_id in POST /feedback/fit so the feedback can be
+    correlated to this exact check (null if the check couldn't be saved
+    to history, e.g. due to a consent issue).
     """
     try:
         # Retrieve the completed session
@@ -716,9 +732,15 @@ async def check_product_fit(session_id: str, product_sku: str):
             session_id=session_id,
         )
 
-        # Save to history (M8) - non-critical, don't fail the fit check if save fails
+        # Save to history (M8) - non-critical, don't fail the fit check if save fails.
+        # check_id is the real key that later feedback (POST /feedback/fit) must
+        # reference to correlate a specific fit-check event with what the
+        # customer actually reported -- without it, feedback can only ever be
+        # aggregated per-user, never joined back to the specific check that
+        # prompted it.
+        check_id = None
         try:
-            recommendation_history.save_fit_check(
+            check_id = recommendation_history.save_fit_check(
                 user_id=session.user_id,
                 session_id=session_id,
                 product_sku=product_sku,
@@ -735,7 +757,7 @@ async def check_product_fit(session_id: str, product_sku: str):
                 {"error": str(err), "product_sku": product_sku, "type": type(err).__name__}
             )
 
-        return fit_assessment
+        return {**fit_assessment, "check_id": check_id}
     except ModuleError as err:
         raise HTTPException(status_code=400, detail=str(err))
     except GuardrailError as err:
@@ -889,6 +911,9 @@ async def get_session_checks(user_id: str, session_id: str):
         raise HTTPException(status_code=403, detail=str(err))
     except ModuleError as err:
         raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        logger.error("Session checks retrieval failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/history/product/{product_sku}")
@@ -912,6 +937,9 @@ async def get_product_trend(user_id: str, product_sku: str, limit: int = 10):
         raise HTTPException(status_code=403, detail=str(err))
     except ModuleError as err:
         raise HTTPException(status_code=400, detail=str(err))
+    except Exception as err:
+        logger.error("Product trend retrieval failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/trends/{user_id}")

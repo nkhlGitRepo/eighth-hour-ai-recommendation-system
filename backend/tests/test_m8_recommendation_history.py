@@ -5,6 +5,7 @@ import tempfile
 import os
 from unittest.mock import MagicMock, patch
 from py_src.modules.m8_recommendation_history import RecommendationHistory
+from py_src.modules.m1_intake_orchestrator import IntakeSession
 from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
@@ -305,6 +306,72 @@ class TestM8SessionChecks:
         """Session with no checks should return empty list."""
         checks = history_tracker.get_session_checks("test_user", "nonexistent-session")
         assert checks == []
+
+
+class TestM8SessionOwnership:
+    """
+    Regression tests for a real, live cross-user data leak: get_fit_check_by_session()
+    filters only by session_id (no user_id constraint at all), so without an
+    explicit ownership check, any consented user could read any other user's
+    private fit-check results just by knowing (or guessing) a session_id.
+    """
+
+    def test_non_owner_cannot_read_another_users_session(self, session_repository):
+        owner_tracker = ConsentTracker(db_path=session_repository.db_path)
+        owner_tracker.record_consent("owner-user", photo_consent=True, measurement_consent=True)
+        owner_tracker.record_consent("attacker-user", photo_consent=True, measurement_consent=True)
+
+        history = RecommendationHistory(
+            session_repository=session_repository,
+            consent_tracker=owner_tracker,
+        )
+
+        # A real intake session actually owned by "owner-user".
+        session = IntakeSession(user_id="owner-user")
+        session_repository.save(session)
+
+        history.save_fit_check("owner-user", session.session_id, "top-private", {
+            "fit_scores": {"M": 1.0},
+            "recommended_size": "M",
+            "confidence": 1.0,
+        })
+
+        # A consented, but otherwise unrelated, second user must not be able
+        # to read the first user's session history.
+        with pytest.raises(GuardrailError, match="does not have access"):
+            history.get_session_checks("attacker-user", session.session_id)
+
+    def test_owner_can_still_read_their_own_session(self, session_repository):
+        tracker = ConsentTracker(db_path=session_repository.db_path)
+        tracker.record_consent("owner-user", photo_consent=True, measurement_consent=True)
+
+        history = RecommendationHistory(
+            session_repository=session_repository,
+            consent_tracker=tracker,
+        )
+
+        session = IntakeSession(user_id="owner-user")
+        session_repository.save(session)
+        history.save_fit_check("owner-user", session.session_id, "top-1", {
+            "fit_scores": {"M": 1.0},
+            "recommended_size": "M",
+            "confidence": 1.0,
+        })
+
+        checks = history.get_session_checks("owner-user", session.session_id)
+        assert len(checks) == 1
+
+    def test_session_with_no_matching_intake_record_is_not_blocked(self, history_tracker, sample_fit_result):
+        """
+        Fit checks saved against a session_id with no corresponding row in
+        the intake_sessions table (e.g. legacy data, or a session_id from a
+        different system) should not be blocked -- there's no real owner to
+        compare against, so the ownership check must no-op rather than deny
+        everyone.
+        """
+        history_tracker.save_fit_check("test_user", "orphan-session", "top-1", sample_fit_result)
+        checks = history_tracker.get_session_checks("test_user", "orphan-session")
+        assert len(checks) == 1
 
 
 class TestM8ProductTrend:

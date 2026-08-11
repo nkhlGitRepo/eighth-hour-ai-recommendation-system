@@ -708,3 +708,27 @@ class TestLogicalConsistency:
         ratings = [f["rating"] for f in feedback]
         assert 4.0 in ratings
         assert 2.0 in ratings
+
+
+class TestDefaultConstruction:
+    """
+    LearningLoop() with no arguments must actually be usable.
+
+    Regression test: the default for session_repo was the abstract
+    SessionRepository base class (whose methods just raise
+    NotImplementedError and which doesn't even define save_feedback/
+    get_user_fit_feedback/etc. at all) instead of SQLiteSessionRepository.
+    Never hit in production (main.py always passes an explicit repo) or by
+    any other test here (all pass one explicitly too), so this was a live
+    landmine for the first caller that didn't.
+    """
+
+    def test_default_session_repo_is_actually_functional(self, tmp_path, monkeypatch):
+        # Avoid touching the real dev intake_sessions.db from a bare default.
+        monkeypatch.chdir(tmp_path)
+        loop = LearningLoop()
+        user_id = "default-ctor-user"
+        loop.consent_tracker.record_consent(user_id, photo_consent=True, measurement_consent=True)
+
+        result = loop.submit_fit_feedback(user_id, "check-1", "top-1", "perfect")
+        assert result["saved"] is True

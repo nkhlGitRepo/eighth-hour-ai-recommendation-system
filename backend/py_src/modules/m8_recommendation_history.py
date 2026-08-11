@@ -16,6 +16,7 @@ from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
+from py_src.guardrails.access_control import AccessControl
 from py_src.persistence.session_repository import SessionRepository, SQLiteSessionRepository
 
 
@@ -176,6 +177,17 @@ class RecommendationHistory:
         if not self.consent_tracker.has_measurement_consent(user_id):
             raise GuardrailError(
                 "User has not consented to measurement data access",
+                "M8"
+            )
+
+        # Verify ownership. get_fit_check_by_session() filters only by
+        # session_id (fit_check_history has no per-row access rule of its
+        # own), so without this any consented user could read any other
+        # user's private fit-check results just by knowing a session_id.
+        session = self.session_repository.get(session_id)
+        if session and not AccessControl.user_owns_resource(user_id, session.user_id):
+            raise GuardrailError(
+                "User does not have access to this session's history",
                 "M8"
             )
 

@@ -104,13 +104,19 @@ class IntakeSession:
 class IntakeOrchestrator:
     """Orchestrates the multi-screen intake flow."""
 
-    def __init__(self, session_repo: SessionRepository = None):
+    def __init__(self, session_repo: SessionRepository = None, consent_tracker: ConsentTracker = None):
         # Session persistence layer (defaults to SQLite)
         self.session_repo = session_repo or SQLiteSessionRepository()
         self.sizing = SizingIntegration()
         self.profiler = BodyShapeProfiler()
         self.preferences = PreferenceCapture()
-        self.consent_tracker = ConsentTracker()
+        # Share the session repo's db file by default, so a session and its
+        # consent record live in (and survive restarts from) the same
+        # database -- an explicitly-provided tracker (production wiring in
+        # main.py) always wins.
+        self.consent_tracker = consent_tracker or ConsentTracker(
+            db_path=getattr(self.session_repo, "db_path", None)
+        )
         logger.info("M1 IntakeOrchestrator initialized")
 
     def create_session(self, user_id: str) -> IntakeSession:

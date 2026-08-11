@@ -1,14 +1,60 @@
 """Consent tracking for GDPR and BIPA compliance."""
 
+import os
+import sqlite3
+import tempfile
 import time
 
 
 class ConsentTracker:
-    """Tracks user consent for data processing."""
+    """
+    Tracks user consent for data processing.
 
-    def __init__(self):
-        # user_id -> list of consent records
-        self.consent_history = {}
+    Persisted to SQLite so consent survives server restarts. Previously
+    this was a plain in-memory dict: intake sessions persist to disk and
+    correctly restore their own consent_record field, but the actual gate
+    every module checks (has_measurement_consent) read from this in-memory
+    history instead -- so a server restart would silently "revoke" consent
+    for every still-valid session, forcing customers to re-consent for no
+    reason.
+
+    db_path defaults to a fresh, private file per instance (not a shared
+    production path) so the many call sites across the app and test suite
+    that construct ConsentTracker() with no arguments -- expecting a clean
+    slate, the same guarantee the old in-memory dict gave them for free --
+    keep working without cross-instance pollution. Callers that need
+    consent to actually survive a restart (production: main.py, and
+    IntakeOrchestrator deriving its path from its session_repo) must pass
+    an explicit, stable db_path.
+    """
+
+    def __init__(self, db_path: str = None):
+        self.db_path = db_path or self._new_isolated_db_path()
+        self._init_db()
+
+    @staticmethod
+    def _new_isolated_db_path() -> str:
+        fd, path = tempfile.mkstemp(suffix=".db", prefix="consent_")
+        os.close(fd)
+        return path
+
+    def _init_db(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS consent_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    photo_consent INTEGER NOT NULL,
+                    measurement_consent INTEGER NOT NULL,
+                    timestamp REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_consent_user_id ON consent_records(user_id)"
+            )
+            conn.commit()
 
     def record_consent(self, user_id, photo_consent, measurement_consent):
         """
@@ -22,17 +68,22 @@ class ConsentTracker:
         Returns:
             Consent record dict
         """
-        consent = {
-            "timestamp": int(time.time()),
+        timestamp = int(time.time())
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO consent_records (user_id, photo_consent, measurement_consent, timestamp)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, int(bool(photo_consent)), int(bool(measurement_consent)), timestamp),
+            )
+            conn.commit()
+
+        return {
+            "timestamp": timestamp,
             "photo_consent": photo_consent,
             "measurement_consent": measurement_consent,
         }
-
-        if user_id not in self.consent_history:
-            self.consent_history[user_id] = []
-
-        self.consent_history[user_id].append(consent)
-        return consent
 
     def get_latest_consent(self, user_id):
         """
@@ -44,9 +95,27 @@ class ConsentTracker:
         Returns:
             Consent dict or None
         """
-        if user_id not in self.consent_history or not self.consent_history[user_id]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT photo_consent, measurement_consent, timestamp
+                FROM consent_records
+                WHERE user_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (user_id,),
+            ).fetchone()
+
+        if not row:
             return None
-        return self.consent_history[user_id][-1]
+
+        return {
+            "timestamp": row["timestamp"],
+            "photo_consent": bool(row["photo_consent"]),
+            "measurement_consent": bool(row["measurement_consent"]),
+        }
 
     def has_photo_consent(self, user_id):
         """Check if user has consented to photo processing."""

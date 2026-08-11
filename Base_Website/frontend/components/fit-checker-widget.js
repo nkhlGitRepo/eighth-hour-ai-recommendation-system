@@ -35,7 +35,9 @@ class FitCheckerWidget {
   }
 
   async checkFit() {
-    const response = await fetch(`${API_BASE}/fit-check/${this.sessionId}/${this.productSku}`);
+    const response = await fetch(`${API_BASE}/fit-check/${this.sessionId}/${this.productSku}`, {
+      method: 'POST',
+    });
     if (!response.ok) throw new Error('Fit check failed');
     this.fitResult = await response.json();
   }

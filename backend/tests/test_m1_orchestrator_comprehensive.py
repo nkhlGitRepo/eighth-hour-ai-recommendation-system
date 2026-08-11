@@ -336,6 +336,54 @@ class TestM1ConsentEnforcement:
         )
         assert len(results) > 0
 
+    def test_consent_survives_orchestrator_restart_for_update_style_flow(self):
+        """
+        Regression test for the exact "Update Style" bug report: a customer
+        completes intake (consent + measurements + preferences), the server
+        restarts (a fresh IntakeOrchestrator gets constructed -- simulated
+        here via a second instance pointed at the same on-disk db), and the
+        customer then clicks "Update Style" and re-submits measurements on
+        their existing, still-valid session. This must succeed without
+        forcing them back through the consent screen.
+        """
+        db_path = tempfile.NamedTemporaryFile(delete=False, suffix=".db").name
+        try:
+            repo_before = SQLiteSessionRepository(db_path=db_path)
+            orch_before_restart = IntakeOrchestrator(session_repo=repo_before)
+
+            session = orch_before_restart.create_session(user_id="update-style-user")
+            orch_before_restart.record_consent(
+                session.session_id, photo_consent=True, measurement_consent=True,
+            )
+            orch_before_restart.confirm_measurements(
+                session.session_id,
+                manual_overrides={"bust": 91, "waist": 76, "hips": 95, "height": 165},
+            )
+            orch_before_restart.capture_preferences(
+                session.session_id,
+                preferred_colors=["Ebony"],
+                preferred_silhouettes=["fitted"],
+                occasions=["work"],
+            )
+
+            # Simulate a server restart: brand-new orchestrator instance,
+            # all in-memory state gone, pointed at the SAME db file.
+            repo_after = SQLiteSessionRepository(db_path=db_path)
+            orch_after_restart = IntakeOrchestrator(session_repo=repo_after)
+
+            # "Update Style": re-submit measurements on the existing session.
+            # Must NOT raise a consent GuardrailError.
+            result = orch_after_restart.confirm_measurements(
+                session.session_id,
+                manual_overrides={"bust": 88, "waist": 70, "hips": 100, "height": 165},
+            )
+            assert result.shape_profile is not None
+        finally:
+            try:
+                os.unlink(db_path)
+            except OSError:
+                pass
+
 
 class TestM1EventLogAccuracy:
     """Test that event log accurately captures state transitions."""
