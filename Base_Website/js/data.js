@@ -165,7 +165,7 @@ const PRODUCTS = [
     description: "A wrap skirt with pintuck detailing at the waistband, designed to sit smoothly under a fitted top.",
   },
   {
-    slug: "mulberry-silk-pintuck-boat-neck-vest",
+    slug: "mulberry-silk-pintuck-wide-neck-vest",
     name: "Mulberry Silk Pintuck Wide Neck Vest",
     category: "Vests",
     fabric: "Handwoven Silk",
@@ -289,7 +289,7 @@ const PRODUCTS = [
     description: "A raglan-cut top with embroidered detailing, offering ease of movement through the shoulder.",
   },
   {
-    slug: "crepe-silk-embroidered-long-top",
+    slug: "mulberry-silk-embroidered-long-top",
     name: "Mulberry Silk Embroidered Long Top",
     category: "Tops",
     fabric: "Handwoven Silk",

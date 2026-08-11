@@ -107,6 +107,7 @@ class CatalogKB:
         """Normalize a product to CatalogItem format."""
         return {
             "sku": product["slug"],
+            "slug": product["slug"],
             "name": product["name"],
             "category": product["category"],
             "fabric": product["fabric"],
