@@ -31,7 +31,8 @@ class RecommendationsPage {
   async init() {
     this.attachEventListeners();
     await this.loadSessionData();
-    await this.loadRecommendations();
+    const loaded = await this.loadRecommendations();
+    if (!loaded) return; // loadRecommendations already rendered its own error state
     this.displayProfile();
     this.displayRecommendations();
   }
@@ -60,9 +61,11 @@ class RecommendationsPage {
       const response = await fetch(url);
 
       if (!response.ok) {
-        const errorData = await response.text();
-        console.error('API Error:', response.status, errorData);
-        throw new Error(errorData);
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('API Error:', response.status, errorBody);
+        const err = new Error(errorBody.detail || `Request failed (${response.status})`);
+        err.sessionMissing = response.status === 400 && /session .* not found/i.test(errorBody.detail || '');
+        throw err;
       }
 
       const data = await response.json();
@@ -72,15 +75,40 @@ class RecommendationsPage {
       console.log('Loaded recommendations:', this.recommendations.length);
 
       this.filteredRecommendations = [...this.recommendations];
+      return true;
     } catch (error) {
       console.error('Recommendations error:', error);
+
+      if (error.sessionMissing) {
+        // Stale state pointing at a session the backend no longer has
+        // (e.g. dev database reset, or an old bookmark/tab). Clear
+        // localStorage AND strip ?session=... from the URL -- getSessionId()
+        // reads the URL param first, so leaving it in place meant reloading
+        // this exact page kept re-requesting the same dead session_id no
+        // matter what got cleared from localStorage.
+        localStorage.removeItem('currentSessionId');
+        localStorage.removeItem('intakeSession');
+        if (new URLSearchParams(window.location.search).has('session')) {
+          history.replaceState(null, '', window.location.pathname);
+        }
+        document.getElementById('recommendationsList').innerHTML = `
+          <div style="grid-column: 1/-1; text-align: center; padding: 3rem 1rem;">
+            <p style="color: #d32f2f; margin-bottom: 1rem;">⚠️ Your style profile session has expired</p>
+            <p style="color: #666; margin-bottom: 1.5rem;">Please retake the style quiz to get fresh recommendations.</p>
+            <a href="intake-flow.html" class="btn btn-primary" style="display: inline-block;">Complete Intake Flow</a>
+          </div>
+        `;
+        return false;
+      }
+
       document.getElementById('recommendationsList').innerHTML = `
         <div style="grid-column: 1/-1; text-align: center; padding: 3rem 1rem;">
           <p style="color: #d32f2f; margin-bottom: 1rem;">⚠️ Could not load recommendations</p>
-          <p style="color: #666; margin-bottom: 1.5rem;">Error: ${error.message}</p>
+          <p style="color: #666; margin-bottom: 1.5rem;">Please try again in a moment.</p>
           <a href="intake-flow.html" class="btn btn-primary" style="display: inline-block;">Complete Intake Flow</a>
         </div>
       `;
+      return false;
     }
   }
 
@@ -95,7 +123,8 @@ class RecommendationsPage {
     const measurements = this.sessionData.measurements || {};
 
     const sizesByCategory = profile.size_recommendation_by_category || {};
-    const primarySize = sizesByCategory.tops || sizesByCategory.dresses || Object.values(sizesByCategory)[0] || 'M';
+    const topsSize = sizesByCategory.tops || sizesByCategory.dresses || Object.values(sizesByCategory)[0] || 'M';
+    const bottomsSize = sizesByCategory.skirts || sizesByCategory.trousers || topsSize;
 
     container.innerHTML = `
       <div class="profile-item">
@@ -103,8 +132,12 @@ class RecommendationsPage {
         <div class="profile-value" style="text-transform: capitalize;">${profile.shape_class || 'Unknown'}</div>
       </div>
       <div class="profile-item">
-        <div class="profile-label">Size</div>
-        <div class="profile-value">${primarySize}</div>
+        <div class="profile-label">Tops Size</div>
+        <div class="profile-value">${topsSize}</div>
+      </div>
+      <div class="profile-item">
+        <div class="profile-label">Bottoms Size</div>
+        <div class="profile-value">${bottomsSize}</div>
       </div>
       <div class="profile-item">
         <div class="profile-label">Bust</div>

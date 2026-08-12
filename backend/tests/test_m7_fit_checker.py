@@ -220,9 +220,9 @@ class TestM7AlgorithmAccuracy:
     def test_perfect_fit_scores_exactly_1(self, fit_checker, test_product):
         """Measurements exactly matching size M should score 1.0."""
         measurements = {
-            "bust": 90.0,  # Exactly matches size M
-            "waist": 72.0,
-            "hips": 97.0,
+            "bust": 96.0,  # Exactly matches size M
+            "waist": 81.0,
+            "hips": 98.0,
             "height": 165.0,
         }
         result = fit_checker.check_fit("test_user", measurements, test_product)
@@ -326,9 +326,9 @@ class TestM7FitNotes:
     def test_perfect_fit_generates_perfect_note(self, fit_checker, test_product):
         """Perfect fit should generate specific 'fits perfectly' note."""
         measurements = {
-            "bust": 90.0,
-            "waist": 72.0,
-            "hips": 97.0,
+            "bust": 96.0,  # Exact match to M
+            "waist": 81.0,
+            "hips": 98.0,
             "height": 165.0,
         }
         result = fit_checker.check_fit("test_user", measurements, test_product)
@@ -356,9 +356,9 @@ class TestM7FitNotes:
     def test_snug_waist_generates_specific_note(self, fit_checker, test_product):
         """Snug waist should generate specific note about waist, not other measurements."""
         measurements = {
-            "bust": 90.0,    # Exact match to M
-            "waist": 76.0,   # Larger than size M (72), will be snug
-            "hips": 97.0,    # Exact match to M
+            "bust": 96.0,    # Exact match to M
+            "waist": 85.0,   # Larger than size M (81), will be snug
+            "hips": 98.0,    # Exact match to M
             "height": 165.0,
         }
         result = fit_checker.check_fit("test_user", measurements, test_product)
@@ -497,6 +497,35 @@ class TestM7CustomSizeChart:
         # M in chart, should be 1.0 (perfect match)
         assert result["fit_scores"]["M"] == 1.0
 
+    def test_known_size_is_ignored_for_custom_charts(self, fit_checker):
+        """
+        known_size (M3's boundary classification) is only guaranteed
+        consistent under boundary-aware scoring, which only applies to the
+        STANDARD chart -- a custom chart has no relationship to those
+        boundaries. Blindly trusting known_size for a custom chart would
+        reintroduce the exact "recommended size scores lower than another"
+        bug this whole model exists to prevent, just via a different path.
+        known_size must be ignored (falling back to this chart's own
+        argmax) whenever a custom chart is in play.
+        """
+        custom_chart = {
+            "S": {"bust": 85, "waist": 70, "hips": 90},
+            "M": {"bust": 95, "waist": 78, "hips": 96},
+            "L": {"bust": 130, "waist": 110, "hips": 130},
+        }
+        product = {
+            "sku": "custom-chart-vest", "category": "Vests",
+            "sizes": ["S", "M", "L"], "size_chart": custom_chart,
+        }
+        # bust=110 -> M3's own boundary classification would say a much
+        # larger size, but this custom chart's own numbers say M fits best.
+        measurements = {"bust": 110.0, "waist": 90.0, "hips": 95.0, "height": 165.0}
+
+        result = fit_checker.check_fit("test_user", measurements, product, known_size="L")
+
+        assert result["recommended_size"] == "M"
+        assert result["fit_scores"][result["recommended_size"]] == max(result["fit_scores"].values())
+
 
 class TestM7AuditLogging:
     """Test audit trail generation."""
@@ -566,6 +595,497 @@ class TestM7Integration:
             "Confidence must equal recommended size's fit_score"
 
 
+class TestM7AgreesWithM3Sizing:
+    """
+    Regression coverage: the size M3 shows the customer on their Shape
+    Profile (size_recommendation_by_category) must always agree with the
+    size M7's fit checker recommends for the same body -- otherwise a
+    customer sees e.g. "L" on their profile but "XL" pre-selected when they
+    click into a product. This previously broke because STANDARD_SIZE_CHART
+    (M7) used arbitrary reference points that didn't align with
+    SIZE_BOUNDARIES/WAIST_SIZE_BOUNDARIES/HIP_SIZE_BOUNDARIES (M3) -- see
+    constants.py, where STANDARD_SIZE_CHART is now derived from those same
+    boundaries so they can't drift apart again.
+    """
+
+    def test_size_chart_center_measurements_agree_across_all_sizes(self, fit_checker):
+        from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
+        from py_src.constants import STANDARD_SIZE_CHART, STANDARD_SIZES
+
+        profiler = BodyShapeProfiler()
+        product = {"sku": "agreement-check", "sizes": STANDARD_SIZES}
+
+        for size in STANDARD_SIZES:
+            chart_entry = STANDARD_SIZE_CHART[size]
+            measurements = {**chart_entry, "height": 165.0}
+
+            profile = profiler.profile(measurements)
+            m3_top_size = profile["size_recommendation_by_category"]["tops"]
+            m3_bottom_size = profile["size_recommendation_by_category"]["skirts"]
+
+            fit_result = fit_checker.check_fit("test_user", measurements, product)
+            m7_size = fit_result["recommended_size"]
+
+            assert m3_top_size == size, (
+                f"M3 should classify its own {size} chart center as {size} for tops, got {m3_top_size}"
+            )
+            assert m3_bottom_size == size, (
+                f"M3 should classify its own {size} chart center as {size} for skirts, got {m3_bottom_size}"
+            )
+            assert m7_size == size, (
+                f"M7 should recommend {size} for measurements at the {size} chart center, got {m7_size}"
+            )
+
+    def test_known_size_overrides_blended_argmax_when_they_disagree(self, fit_checker, test_product):
+        """
+        A body whose bust and hips point at different sizes (e.g. a pear
+        shape) is exactly the case where blending bust+waist+hips equally
+        (fit_scores) can legitimately pick a different size than M3's
+        single-measurement, category-specific answer (hips alone, for a
+        Skirts/Trousers category) -- this is the real bug the user hit:
+        Shape Profile said "S" for skirts, but the fit-checker's blended
+        average argmax'd to "M". known_size must win.
+        """
+        measurements = {"bust": 96.0, "waist": 84.0, "hips": 92.0, "height": 165.0}
+
+        unblended = fit_checker.check_fit("test_user", measurements, test_product)
+        assert unblended["recommended_size"] == "M", (
+            "Sanity check: blended argmax should pick M for this body "
+            f"(got {unblended['recommended_size']}) -- otherwise this test isn't "
+            "exercising the disagreement it's meant to cover"
+        )
+
+        result = fit_checker.check_fit(
+            "test_user", measurements, test_product, known_size="S"
+        )
+        assert result["recommended_size"] == "S"
+        assert result["confidence"] == result["fit_scores"]["S"]
+
+    def test_known_size_ignored_when_not_a_stocked_size(self, fit_checker, test_product):
+        """A category size M3 computed is meaningless if this specific
+        product doesn't even carry that size -- fall back to the blended
+        argmax rather than recommending an unavailable size."""
+        measurements = {"bust": 96.0, "waist": 84.0, "hips": 92.0, "height": 165.0}
+
+        result = fit_checker.check_fit(
+            "test_user", measurements, test_product, known_size="XXL"
+        )
+        assert result["recommended_size"] != "XXL"
+        assert result["recommended_size"] == max(
+            result["fit_scores"].items(), key=lambda x: x[1]
+        )[0]
+
+    def test_known_size_alternative_note_never_repeats_recommended_size(self, fit_checker, test_product):
+        """
+        When known_size overrides the blended argmax, recommended_size may
+        no longer be fit_scores' own top entry -- the "alternative size"
+        note must still pick the best OTHER size, not redundantly re-list
+        recommended_size as an "alternative" to itself.
+        """
+        measurements = {"bust": 96.0, "waist": 84.0, "hips": 92.0, "height": 165.0}
+
+        result = fit_checker.check_fit(
+            "test_user", measurements, test_product, known_size="S"
+        )
+        assert result["recommended_size"] == "S"
+        for note in result["fit_notes"]:
+            assert "Size S is also a good option" not in note, (
+                f"Alternative note should never re-list the recommended size itself: {note}"
+            )
+
+    def test_alternative_note_never_outranks_the_recommendation(self, fit_checker, test_product):
+        """
+        Regression coverage: a body whose bust is far larger than its hips
+        (bust=111, waist=90, hips=85) gets recommended XS via a hips-based
+        known_size (e.g. for a Skirts/Trousers category), but the blended
+        bust+waist+hips fit_scores favor L/XL much more strongly. The
+        alternative-size note must never surface one of those higher-scoring
+        sizes -- "recommended: XS (77%)" alongside "alternative: L (91%)" is
+        self-contradictory and erodes trust in the primary recommendation.
+        """
+        measurements = {"bust": 111.0, "waist": 90.0, "hips": 85.0, "height": 180.0}
+
+        result = fit_checker.check_fit(
+            "test_user", measurements, test_product, known_size="XS"
+        )
+        assert result["recommended_size"] == "XS"
+        rec_score = result["fit_scores"]["XS"]
+        assert rec_score < result["fit_scores"]["L"], (
+            "Sanity check: L should genuinely outscore XS on the blended "
+            "metric, otherwise this test isn't exercising the disagreement "
+            "it's meant to cover"
+        )
+
+        notes_text = " ".join(result["fit_notes"])
+        for size, score in result["fit_scores"].items():
+            if size == "XS" or score <= rec_score:
+                continue
+            assert f"Size {size} is also a good option" not in notes_text, (
+                f"Size {size} ({score}) should not be suggested as an alternative to "
+                f"XS ({rec_score}) since it scores higher"
+            )
+
+    def test_known_size_none_preserves_default_behavior(self, fit_checker, test_measurements, test_product):
+        """Omitting known_size (the default) must behave exactly as before."""
+        with_default = fit_checker.check_fit("test_user", test_measurements, test_product)
+        explicit_none = fit_checker.check_fit(
+            "test_user", test_measurements, test_product, known_size=None
+        )
+        assert with_default["recommended_size"] == explicit_none["recommended_size"]
+
+
+class TestM7ScoringFormulaMakesRationalSense:
+    """
+    Regression coverage for the scoring formula itself, not just the
+    alternative-size note built on top of it.
+
+    The old formula divided each dimension's cm delta by the CANDIDATE
+    size's own reference value (e.g. |actual - 96| / 96 for M, but
+    |actual - 122| / 122 for XXL). That's mathematically inconsistent: the
+    same real-world cm miss scores as a smaller relative error against a
+    bigger size purely because the denominator is bigger -- a mechanical
+    bias toward larger sizes that had nothing to do with actual fit. That's
+    what let a distant size (e.g. M) out-score a closer one (e.g. XL) when
+    XXL was recommended.
+
+    The fix (_dimension_confidence) divides by a FIXED per-dimension
+    constant (the typical cm change between adjacent sizes, SIZE_STEP_CM)
+    instead, so the same cm miss always costs the same confidence no
+    matter which size it's measured against. These tests verify the
+    result actually behaves the way a customer would expect: confidence
+    decays consistently and predictably, not just "doesn't crash."
+    """
+
+    def test_same_cm_miss_past_the_edge_costs_the_same_confidence_at_any_size(self, fit_checker):
+        """
+        The exact original bug: dividing by the candidate's own reference
+        meant the same real-world cm miss scored worse against a small
+        size (denominator ~88) than against a large one (denominator
+        ~122). Boundary-aware scoring's invariant isn't "same distance
+        from the center" (sizes have different bucket widths on purpose,
+        e.g. XXL is intentionally wide-open) -- it's "the same distance
+        PAST a size's edge costs the same", since anything still inside
+        the boundary scores a flat 1.0 regardless of the size's width.
+        """
+        from py_src.constants import SIZE_BOUNDARIES
+
+        small_size, big_size = "S", "XL"
+        small_hi = SIZE_BOUNDARIES[small_size][1]
+        big_hi = SIZE_BOUNDARIES[big_size][1]
+
+        product_small = {"sku": "p1", "sizes": [small_size]}
+        product_big = {"sku": "p2", "sizes": [big_size]}
+
+        miss_past_edge_cm = 4.0
+        measurements_small = {
+            "bust": small_hi + miss_past_edge_cm,
+            "waist": 75.0,
+            "hips": 92.0,
+            "height": 165.0,
+        }
+        measurements_big = {
+            "bust": big_hi + miss_past_edge_cm,
+            "waist": 93.0,
+            "hips": 110.5,
+            "height": 165.0,
+        }
+
+        result_small = fit_checker.check_fit("test_user", measurements_small, product_small)
+        result_big = fit_checker.check_fit("test_user", measurements_big, product_big)
+
+        assert result_small["fit_scores"][small_size] == result_big["fit_scores"][big_size], (
+            "An identical 4cm miss past the boundary edge should cost identical confidence "
+            f"whether measured against {small_size} ({result_small['fit_scores'][small_size]}) "
+            f"or {big_size} ({result_big['fit_scores'][big_size]})"
+        )
+
+    def test_any_measurement_inside_a_sizes_boundary_scores_a_perfect_1(self, fit_checker):
+        """
+        The dead-zone bug this fix closes: XXL's real range is wide and
+        open-ended (hips 114-150cm). Scoring by distance from a single
+        capped 'center' point meant someone at the far end of that range
+        (e.g. hips=145cm, still legitimately XXL) could decay all the way
+        to 0% confidence. Anywhere inside the actual boundary must score
+        a flat 1.0, no matter how far from the middle of the range.
+        """
+        from py_src.constants import STANDARD_SIZES
+
+        product = {"sku": "boundary-check", "category": "Skirts", "sizes": STANDARD_SIZES}
+        # hips=145 is deep in XXL's (114, 150) range, far from any "center".
+        measurements = {"bust": 90.0, "waist": 75.0, "hips": 145.0, "height": 165.0}
+
+        result = fit_checker.check_fit("test_user", measurements, product)
+        assert result["fit_scores"]["XXL"] == 1.0
+        assert result["recommended_size"] == "XXL"
+
+    def test_confidence_ramps_down_near_a_boundary_instead_of_reading_flat_100_everywhere(self, fit_checker):
+        """
+        A customer whose measurement sits right at the edge of their size
+        should see that reflected in the percentage -- not the exact same
+        100% as someone dead-center in the range. Confidence ramps from
+        FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE at the edge up to 1.0 once
+        you're comfortably inside the size (more than the cushion distance
+        from both edges).
+        """
+        from py_src.constants import (
+            STANDARD_SIZES, SIZE_BOUNDARIES,
+            FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE, FIT_SCORE_BOUNDARY_EDGE_CUSHION_CM,
+        )
+
+        product = {"sku": "ramp-check", "category": "Vests", "sizes": STANDARD_SIZES}
+        lo, hi = SIZE_BOUNDARIES["XL"]
+        cushion = FIT_SCORE_BOUNDARY_EDGE_CUSHION_CM["bust"]
+
+        def confidence_at(bust):
+            measurements = {"bust": bust, "waist": 80.0, "hips": 95.0, "height": 165.0}
+            return fit_checker.check_fit("test_user", measurements, product, known_size="XL")["confidence"]
+
+        at_lower_edge = confidence_at(lo + 0.001)
+        at_center = confidence_at((lo + hi) / 2)
+        at_upper_edge = confidence_at(hi - 0.001)
+        just_past_cushion = confidence_at(lo + cushion + 0.5)
+
+        assert at_lower_edge == FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE
+        assert at_upper_edge == FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE
+        assert at_center == 1.0
+        assert just_past_cushion == 1.0, "Comfortably past the cushion zone should already read 100%"
+        assert at_lower_edge < confidence_at(lo + cushion / 2) < just_past_cushion, (
+            "Confidence should ramp monotonically from the edge floor up to 100%"
+        )
+
+    def test_wide_bucket_still_reads_100_percent_deep_inside_its_own_range(self, fit_checker):
+        """
+        Companion to the dead-zone regression test above, at a value much
+        closer to XXL's edge than 145cm was: even fairly close to the
+        boundary (but past the cushion), a wide bucket like XXL should
+        still read 100%, not ramp down across its whole (very wide) range.
+        """
+        from py_src.constants import STANDARD_SIZES, HIP_SIZE_BOUNDARIES, FIT_SCORE_BOUNDARY_EDGE_CUSHION_CM
+
+        product = {"sku": "wide-bucket-check", "category": "Skirts", "sizes": STANDARD_SIZES}
+        lo, _hi = HIP_SIZE_BOUNDARIES["XXL"]
+        cushion = FIT_SCORE_BOUNDARY_EDGE_CUSHION_CM["hips"]
+        just_inside = lo + cushion + 1.0  # just past the cushion from the lower edge
+
+        measurements = {"bust": 90.0, "waist": 75.0, "hips": just_inside, "height": 165.0}
+        result = fit_checker.check_fit("test_user", measurements, product, known_size="XXL")
+        assert result["fit_scores"]["XXL"] == 1.0
+
+    def test_fit_details_says_more_than_just_fits_perfectly_near_a_boundary(self, fit_checker):
+        """
+        Under boundary-aware scoring, the recommended size's own score can
+        never drop below FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE (0.85) -- so
+        "acceptable with minor adjustments" and "may require alterations"
+        can never appear for it in these categories anymore (that's
+        correct: the recommended size, by construction, always fits
+        reasonably on the one measurement that determines this garment's
+        size). But "fits perfectly" shouldn't be the ONLY other thing a
+        customer ever sees either -- close to a boundary should
+        meaningfully read as "a good fit" rather than an identical
+        "perfectly" for someone dead-center and someone one cm from the
+        edge of their size.
+        """
+        from py_src.constants import STANDARD_SIZES, SIZE_BOUNDARIES
+
+        product = {"sku": "fit-details-check", "category": "Vests", "sizes": STANDARD_SIZES}
+        lo, hi = SIZE_BOUNDARIES["XL"]
+
+        right_at_edge = fit_checker.check_fit(
+            "test_user", {"bust": lo + 0.5, "waist": 87.0, "hips": 104.0, "height": 165.0},
+            product, known_size="XL",
+        )
+        dead_center = fit_checker.check_fit(
+            "test_user", {"bust": (lo + hi) / 2, "waist": 87.0, "hips": 104.0, "height": 165.0},
+            product, known_size="XL",
+        )
+
+        assert right_at_edge["fit_notes"][0] == "Size XL is a good fit."
+        assert dead_center["fit_notes"][0] == "Size XL fits perfectly."
+        assert right_at_edge["fit_notes"][0] != dead_center["fit_notes"][0]
+
+    def test_dimension_confidence_decays_linearly_by_size_steps_off(self, fit_checker):
+        """0/1/2/3 sizes off should map to 1.0/~0.67/~0.33/0.0 confidence --
+        a concrete, human-checkable interpretation of the score."""
+        step = 10.0
+        assert fit_checker._dimension_confidence(100.0, 100.0, step) == 1.0
+        assert round(fit_checker._dimension_confidence(110.0, 100.0, step), 2) == 0.67
+        assert round(fit_checker._dimension_confidence(120.0, 100.0, step), 2) == 0.33
+        assert fit_checker._dimension_confidence(130.0, 100.0, step) == 0.0
+        assert fit_checker._dimension_confidence(150.0, 100.0, step) == 0.0, (
+            "Confidence must floor at 0, never go negative, for a size way off"
+        )
+
+    def test_confidence_strictly_decreases_moving_away_from_true_size_in_either_direction(self, fit_checker):
+        """
+        For a body sitting exactly at one size's chart center (a
+        'textbook' proportioned body), confidence must decrease
+        monotonically as candidate sizes get further away in EITHER
+        direction -- not just for the immediate neighbor, but across the
+        full size range. This is the property that makes "next best size"
+        suggestions intuitive without needing to hardcode adjacency.
+        """
+        from py_src.constants import STANDARD_SIZE_CHART, STANDARD_SIZES
+
+        product = {"sku": "monotonic-check", "sizes": STANDARD_SIZES}
+
+        for true_size in STANDARD_SIZES:
+            true_index = STANDARD_SIZES.index(true_size)
+            measurements = {**STANDARD_SIZE_CHART[true_size], "height": 165.0}
+            result = fit_checker.check_fit("test_user", measurements, product)
+
+            # Sort sizes by distance (in size-steps) from the true size and
+            # verify scores are non-increasing as that distance grows.
+            by_distance = sorted(STANDARD_SIZES, key=lambda s: abs(STANDARD_SIZES.index(s) - true_index))
+            scores_by_distance = [result["fit_scores"][s] for s in by_distance]
+
+            assert scores_by_distance == sorted(scores_by_distance, reverse=True), (
+                f"For a body at {true_size}'s exact center, scores ordered by size-distance "
+                f"({list(zip(by_distance, scores_by_distance))}) should be non-increasing"
+            )
+
+    def test_pear_shaped_body_gets_no_self_contradictory_alternative(self, fit_checker):
+        """
+        The exact real-world case that motivated this fix: hips alone
+        (known_size, for a Skirts/Trousers category) recommend XXL, but
+        bust/waist are proportioned like a much smaller body. The fixed
+        formula should score the recommendation honestly low (it really
+        is a poor overall match) rather than spuriously letting a
+        non-adjacent size like M look "also good".
+        """
+        from py_src.constants import STANDARD_SIZES
+
+        product = {"sku": "pear-check", "sizes": STANDARD_SIZES}
+        measurements = {"bust": 96.0, "waist": 81.0, "hips": 119.0, "height": 165.0}
+        result = fit_checker.check_fit(
+            "test_user", measurements, product, known_size="XXL"
+        )
+        assert result["recommended_size"] == "XXL"
+
+        rec_score = result["fit_scores"]["XXL"]
+        notes_text = " ".join(result["fit_notes"])
+        for size, score in result["fit_scores"].items():
+            if size == "XXL" or score <= rec_score:
+                continue
+            assert f"Size {size} is also a good option" not in notes_text, (
+                f"Size {size} ({score}) outscores the recommendation XXL ({rec_score}) "
+                "and should never be offered as a supporting 'alternative'"
+            )
+
+
+class TestM7CategoryAwareDimensionWeights:
+    """
+    Regression coverage for the exact real-world report: a customer with
+    bust=110, waist=81, hips=91, height=180 got "Recommended Size: XL
+    (43%)" for a Vest, with the breakdown showing M at 70% and L at 60% --
+    both HIGHER than the recommended XL. The displayed ranking directly
+    contradicted the recommendation it was supposed to support.
+
+    Root cause: a vest doesn't cover the hips, but _calculate_fit_scores
+    blended bust+waist+hips at equal weight for every category, so this
+    customer's much-smaller hips (91cm, nowhere near XL's ~110.5cm
+    reference) dragged XL's blended score down even though bust -- the
+    only measurement that actually determines a vest's fit -- put them
+    solidly in XL (108-117cm, per M3's own SIZE_BOUNDARIES). Fixed by
+    weighting each category's score by the same single measurement M3
+    uses to size it (FIT_SCORE_DIMENSION_WEIGHTS), which guarantees the
+    highest-scoring size and the recommendation can never disagree for
+    these categories.
+    """
+
+    def test_reported_vest_scenario_recommendation_matches_highest_score(self, fit_checker):
+        from py_src.constants import STANDARD_SIZES
+
+        product = {"sku": "vest-check", "category": "Vests", "sizes": STANDARD_SIZES}
+        measurements = {"bust": 110.0, "waist": 81.0, "hips": 91.0, "height": 180.0}
+
+        result = fit_checker.check_fit("test_user", measurements, product)
+
+        assert result["recommended_size"] == "XL", (
+            f"Expected XL (bust=110 falls in M3's 108-117 bust range), got {result['recommended_size']}"
+        )
+        top_scored = max(result["fit_scores"].items(), key=lambda x: x[1])[0]
+        assert top_scored == "XL", (
+            f"The highest-scoring size ({top_scored}: {result['fit_scores'][top_scored]}) must be the "
+            f"recommended size (XL: {result['fit_scores']['XL']}) -- a customer should never see a "
+            "size other than the recommendation scoring higher"
+        )
+
+    def test_vest_score_ignores_hips_entirely(self, fit_checker):
+        """Two bodies with identical bust/waist but wildly different hips
+        must score identically for a Vest -- hips don't affect how a vest
+        fits, so they shouldn't affect its score."""
+        from py_src.constants import STANDARD_SIZES
+
+        product = {"sku": "vest-check", "category": "Vests", "sizes": STANDARD_SIZES}
+        result_a = fit_checker.check_fit(
+            "test_user", {"bust": 110.0, "waist": 81.0, "hips": 85.0, "height": 165.0}, product
+        )
+        result_b = fit_checker.check_fit(
+            "test_user", {"bust": 110.0, "waist": 81.0, "hips": 140.0, "height": 165.0}, product
+        )
+        assert result_a["fit_scores"] == result_b["fit_scores"]
+
+    def test_skirt_score_ignores_bust_entirely(self, fit_checker):
+        """Same principle for the bottom-half categories: a skirt doesn't
+        care about bust."""
+        from py_src.constants import STANDARD_SIZES
+
+        product = {"sku": "skirt-check", "category": "Skirts", "sizes": STANDARD_SIZES}
+        measurements = {"bust": 130.0, "waist": 87.0, "hips": 104.0, "height": 165.0}
+        result = fit_checker.check_fit("test_user", measurements, product)
+
+        assert result["recommended_size"] == "L", (
+            f"Expected L (hips=104 is L's own chart center), got {result['recommended_size']}"
+        )
+        top_scored = max(result["fit_scores"].items(), key=lambda x: x[1])[0]
+        assert top_scored == "L"
+
+    def test_unmapped_categories_keep_the_equal_blend(self, fit_checker):
+        """Any category not in FIT_SCORE_DIMENSION_WEIGHTS (or no category
+        at all) has no defined 'correct' single measurement, so it should
+        still blend all three evenly."""
+        from py_src.constants import STANDARD_SIZES
+
+        measurements = {"bust": 96.0, "waist": 81.0, "hips": 98.0, "height": 165.0}
+        unmapped_product = {"sku": "unmapped-check", "category": "Something Else", "sizes": STANDARD_SIZES}
+        no_category_product = {"sku": "no-cat-check", "sizes": STANDARD_SIZES}
+
+        for product in (unmapped_product, no_category_product):
+            result = fit_checker.check_fit("test_user", measurements, product)
+            # These measurements are M's exact chart center in all three
+            # dimensions, so an equal blend scores M at a perfect 1.0.
+            assert result["fit_scores"]["M"] == 1.0
+            assert result["recommended_size"] == "M"
+
+    def test_coord_sets_is_sized_like_a_top(self, fit_checker):
+        """
+        A Co-ord Set only has one size field to fill (there's no separate
+        top/bottom selector), and a two-piece outfit genuinely can need
+        different sizes for each half -- blending bust+waist+hips equally
+        just produces an unexplained compromise (e.g. bust says XL, hips
+        say S, but the customer sees "M"). Sized like a Top instead
+        (bust-driven only), matching the same "tops" convention M5's
+        recommendation engine already uses as the general default size
+        elsewhere in this system -- at least it's then a single,
+        traceable, explainable number.
+        """
+        from py_src.constants import STANDARD_SIZES
+
+        product = {"sku": "coord-check", "category": "Co-ord Sets", "sizes": STANDARD_SIZES}
+        # bust -> XL, hips -> S: a genuinely mismatched body.
+        measurements = {"bust": 111.0, "waist": 78.0, "hips": 85.0, "height": 165.0}
+
+        result = fit_checker.check_fit("test_user", measurements, product, known_size="XL")
+
+        assert result["recommended_size"] == "XL"
+        assert result["fit_scores"]["XL"] == max(result["fit_scores"].values())
+        # Hips must have zero influence, the same as any other bust-driven category.
+        result_different_hips = fit_checker.check_fit(
+            "test_user", {**measurements, "hips": 145.0}, product, known_size="XL"
+        )
+        assert result["fit_scores"] == result_different_hips["fit_scores"]
+
+
 class TestM7EdgeCases:
     """Test edge cases and boundary conditions."""
 
@@ -590,9 +1110,9 @@ class TestM7EdgeCases:
     def test_measurements_as_integers(self, fit_checker, test_product):
         """Measurements provided as integers should be accepted."""
         int_measurements = {
-            "bust": 90,  # Integer, not float
-            "waist": 72,
-            "hips": 97,
+            "bust": 96,  # Integer, not float
+            "waist": 81,
+            "hips": 98,
             "height": 165,
         }
         result = fit_checker.check_fit("test_user", int_measurements, test_product)

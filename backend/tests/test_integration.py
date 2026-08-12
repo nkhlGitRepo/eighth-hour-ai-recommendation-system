@@ -151,7 +151,7 @@ class TestIntegration:
         assert len(shapes) >= 3
 
     def test_workflow_mixed_filters_work_together(self):
-        """Multiple filters should all apply."""
+        """Multiple filters should all apply (relaxation disabled to test strict AND-combination)."""
         profile = self.profiler.profile(MEASUREMENTS["pear"])
         results = self.catalog.retrieve({
             "shape_class": profile["shape_class"],
@@ -159,7 +159,8 @@ class TestIntegration:
             "preferred_colors": ["Black"],
             "fabrics": ["Cotton"],
             "k": 5,
-        })
+        }, min_results=0)
+        assert len(results) > 0
         for result in results:
             assert result["category"] == "Tops"
             assert "Black" in result["colors"]

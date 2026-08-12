@@ -363,6 +363,43 @@ class TestM5RecommendationGeneration:
                 f"(the size shown to this customer)"
             )
 
+    def test_niche_category_filter_still_returns_minimum_via_relaxation(
+        self, recommendation_engine, completed_session, consent_tracker
+    ):
+        """
+        M5 requires no code of its own to benefit from M6's filter
+        relaxation -- it just needs to not override M6's default
+        min_results. A category that doesn't exist in the catalog at all
+        must still yield at least MIN_RECOMMENDATIONS results, since even
+        an explicit category restriction is eventually relaxed rather than
+        leaving the customer with nothing.
+        """
+        consent_tracker.record_consent(
+            user_id=completed_session.user_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+
+        recs = recommendation_engine.generate_recommendations(
+            completed_session,
+            category_filter=["CategoryThatDoesNotExist"],
+            k=10,
+        )
+        assert len(recs) >= 2
+
+    def test_generate_recommendations_never_returns_fewer_than_minimum_when_catalog_allows(
+        self, recommendation_engine, completed_session, consent_tracker
+    ):
+        """General guarantee, exercised through the full M5 path (not M6 directly)."""
+        consent_tracker.record_consent(
+            user_id=completed_session.user_id,
+            photo_consent=True,
+            measurement_consent=True,
+        )
+
+        recs = recommendation_engine.generate_recommendations(completed_session, k=10)
+        assert len(recs) >= 2
+
 
 class TestM5SizeInference:
     """

@@ -14,7 +14,7 @@ retrieve() (session completion already guarantees consent), so this module
 takes no ConsentTracker dependency of its own.
 """
 
-from py_src.constants import SHAPE_CATEGORY_AFFINITY
+from py_src.constants import SHAPE_CATEGORY_AFFINITY, MIN_RECOMMENDATIONS, FILTER_RELAXATION_ORDER
 from py_src.guardrails.injection_defense import InjectionDefense
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.utils.logger import logger
@@ -214,7 +214,59 @@ class CatalogKB:
 
         return "; ".join(hints) if hints else "versatile fit"
 
-    def retrieve(self, query_params, user_id=None, consent_tracker=None):
+    def _apply_hard_filters(self, candidates, safe_query, active_filters):
+        """
+        Apply only the named hard filters, in a fixed order, to a candidate
+        list. Used both for the normal (all-filters) pass and for each
+        progressively-relaxed retry in retrieve() -- keeping this as its own
+        method means "what does each filter actually check" has exactly one
+        implementation, regardless of how many of them end up active.
+
+        Args:
+            candidates: List of CatalogItem dicts to filter
+            safe_query: Sanitized query dict (from InjectionDefense)
+            active_filters: Set/iterable of filter names (matching
+                FILTER_RELAXATION_ORDER entries) currently in effect
+
+        Returns:
+            Filtered list of CatalogItem dicts
+        """
+        if "categories" in active_filters and safe_query.get("categories"):
+            categories = safe_query["categories"]
+            candidates = [item for item in candidates if item["category"] in categories]
+
+        if "fabrics" in active_filters and safe_query.get("fabrics"):
+            fabrics = safe_query["fabrics"]
+            candidates = [item for item in candidates if item["fabric"] in fabrics]
+
+        if "size" in active_filters and safe_query.get("size"):
+            size = safe_query["size"]
+            candidates = [
+                item for item in candidates
+                if item["sizes_in_stock"].get(size) and item["in_stock"]
+            ]
+
+        if "preferred_colors" in active_filters and safe_query.get("preferred_colors"):
+            preferred_colors = safe_query["preferred_colors"]
+            candidates = [
+                item for item in candidates
+                if any(c in preferred_colors for c in item["colors"])
+            ]
+
+        if "preferred_silhouettes" in active_filters and safe_query.get("preferred_silhouettes"):
+            preferred_silhouettes = safe_query["preferred_silhouettes"]
+            candidates = [item for item in candidates if item["silhouette_class"] in preferred_silhouettes]
+
+        if "occasions" in active_filters and safe_query.get("occasions"):
+            occasions = safe_query["occasions"]
+            candidates = [
+                item for item in candidates
+                if any(o in occasions for o in item["occasions"])
+            ]
+
+        return candidates
+
+    def retrieve(self, query_params, user_id=None, consent_tracker=None, min_results=MIN_RECOMMENDATIONS):
         """
         Main retrieval method with guardrails.
 
@@ -222,6 +274,14 @@ class CatalogKB:
             query_params: Dict with shape_class, categories, etc.
             user_id: Optional user ID for audit logging
             consent_tracker: Unused (kept for API compatibility)
+            min_results: Guarantee at least this many results by
+                progressively relaxing (dropping) hard filters -- softest
+                preference signals first, see FILTER_RELAXATION_ORDER --
+                when the full-strictness filter set returns fewer than this.
+                Pass 0 to disable relaxation entirely and get the exact,
+                unrelaxed filter result (including possibly empty).
+                Never disclosed to the customer: a relaxed result looks
+                exactly like any other recommendation in the response.
 
         Returns:
             List of CatalogItem dicts ranked by relevance
@@ -232,52 +292,28 @@ class CatalogKB:
 
             shape_class = safe_query.get("shape_class")
             categories = safe_query.get("categories", [])
-            preferred_colors = safe_query.get("preferred_colors", [])
-            preferred_silhouettes = safe_query.get("preferred_silhouettes", [])
-            occasions = safe_query.get("occasions", [])
-            fabrics = safe_query.get("fabrics", [])
-            size = safe_query.get("size")
             k = safe_query.get("k", 10)
 
-            # Phase 1: Hard filters (structured)
-            candidates = list(self.items.values())
+            # Phase 1: Hard filters, relaxing one at a time (softest signal
+            # first) until min_results is met or there's nothing left to drop.
+            all_items = list(self.items.values())
+            active_filters = list(FILTER_RELAXATION_ORDER)
+            candidates = self._apply_hard_filters(all_items, safe_query, active_filters)
 
-            if categories:
-                candidates = [
-                    item for item in candidates if item["category"] in categories
-                ]
+            relaxed = []
+            target = min(min_results, k) if min_results else 0
+            remaining_to_drop = list(FILTER_RELAXATION_ORDER)
+            while len(candidates) < target and remaining_to_drop:
+                dropped = remaining_to_drop.pop(0)
+                active_filters.remove(dropped)
+                relaxed.append(dropped)
+                candidates = self._apply_hard_filters(all_items, safe_query, active_filters)
 
-            if fabrics:
-                candidates = [item for item in candidates if item["fabric"] in fabrics]
-
-            if size:
-                candidates = [
-                    item
-                    for item in candidates
-                    if item["sizes_in_stock"].get(size)
-                    and item["in_stock"]
-                ]
-
-            if preferred_colors:
-                candidates = [
-                    item
-                    for item in candidates
-                    if any(c in preferred_colors for c in item["colors"])
-                ]
-
-            if preferred_silhouettes:
-                candidates = [
-                    item
-                    for item in candidates
-                    if item["silhouette_class"] in preferred_silhouettes
-                ]
-
-            if occasions:
-                candidates = [
-                    item
-                    for item in candidates
-                    if any(o in occasions for o in item["occasions"])
-                ]
+            if relaxed:
+                logger.info(
+                    "M6 relaxed filters to meet minimum recommendations",
+                    {"dropped": relaxed, "candidates_after": len(candidates), "target": target},
+                )
 
             # Phase 2: Shape-based ranking. A specific flatters_shapes match
             # always scores 1.0, strictly above any SHAPE_CATEGORY_AFFINITY
@@ -295,8 +331,8 @@ class CatalogKB:
                 {
                     "shape_class": shape_class,
                     "categories": len(categories),
-                    "colors": len(preferred_colors),
                     "results": len(results),
+                    "filters_relaxed": relaxed,
                 },
             )
 
@@ -309,6 +345,7 @@ class CatalogKB:
                         "shape_class": shape_class,
                         "num_results": len(results),
                         "categories_requested": len(categories),
+                        "filters_relaxed": relaxed,
                     }
                 )
 

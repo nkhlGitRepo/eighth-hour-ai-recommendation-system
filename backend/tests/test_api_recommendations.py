@@ -122,15 +122,26 @@ class TestRecommendationsEndpoint:
         assert fitted_skus != flowing_skus
 
     def test_occasion_preference_changes_results(self, client):
-        """Regression coverage: occasion preference must not be a no-op."""
+        """
+        Regression coverage: occasion preference must not be a no-op.
+
+        Uses a broad color list (rather than the single-color default) so
+        both "work" and "evening" independently have well over
+        MIN_RECOMMENDATIONS matches -- otherwise filter relaxation (a
+        separate, intentional feature -- see TestFilterRelaxation-style
+        coverage) could drop the narrower occasion and mask the very
+        difference this test exists to catch.
+        """
+        broad_colors = ["Ebony", "Pageant Blue", "Sky Captain", "Chocolate Truffle", "Pure Cashmere"]
+
         user_a = unique_user()
-        session_work, real_a = complete_intake(client, user_a, occasions=["work"])
+        session_work, real_a = complete_intake(client, user_a, colors=broad_colors, occasions=["work"])
         recs_work = client.get(
             f"/recommendations/{session_work}", params={"k": 20, "user_id": real_a}
         ).json()["recommendations"]
 
         user_b = unique_user()
-        session_evening, real_b = complete_intake(client, user_b, occasions=["evening"])
+        session_evening, real_b = complete_intake(client, user_b, colors=broad_colors, occasions=["evening"])
         recs_evening = client.get(
             f"/recommendations/{session_evening}", params={"k": 20, "user_id": real_b}
         ).json()["recommendations"]

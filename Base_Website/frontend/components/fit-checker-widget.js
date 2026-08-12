@@ -46,55 +46,15 @@ class FitCheckerWidget {
     const container = document.getElementById('fitCheckerWidget');
     if (!container || !this.fitResult) return;
 
-    const recommendedSize = this.fitResult.recommended_size;
-    const confidence = Math.round(this.fitResult.confidence * 100);
-    const fitScores = this.fitResult.fit_scores || {};
+    // Every product, including Co-ord Sets, has exactly one size field
+    // for the customer to fill in -- always show a single recommendation.
+    const sizeBlockHtml = this.renderSizeBlock('Recommended Size', 'How each size fits you:', this.fitResult);
 
     container.innerHTML = `
       <div class="fit-checker-container">
         <h3>Fit Recommendation for You</h3>
 
-        <div class="fit-recommendation">
-          <div class="recommendation-box">
-            <div class="recommendation-label">Recommended Size</div>
-            <div class="recommendation-size">${recommendedSize}</div>
-            <div class="confidence-badge">
-              ${confidence}% confidence
-            </div>
-          </div>
-        </div>
-
-        <div class="fit-scores">
-          <div class="fit-scores-label">How each size fits you:</div>
-          <div class="score-bars">
-            ${Object.entries(fitScores)
-              .map(([size, score]) => {
-                const percentage = Math.round(score * 100);
-                const isRecommended = size === recommendedSize;
-                return `
-                  <div class="score-bar-row ${isRecommended ? 'recommended' : ''}">
-                    <div class="size-label">${size}</div>
-                    <div class="score-bar">
-                      <div class="score-fill" style="width: ${percentage}%"></div>
-                    </div>
-                    <div class="score-value">${percentage}%</div>
-                  </div>
-                `;
-              })
-              .join('')}
-          </div>
-        </div>
-
-        ${this.fitResult.fit_notes && this.fitResult.fit_notes.length > 0 ? `
-          <div class="fit-notes">
-            <div class="fit-notes-label">Fit Details</div>
-            <ul class="fit-notes-list">
-              ${this.fitResult.fit_notes
-                .map(note => `<li>${note}</li>`)
-                .join('')}
-            </ul>
-          </div>
-        ` : ''}
+        ${sizeBlockHtml}
 
         <div class="fit-actions">
           <button class="fit-feedback-btn" onclick="fitCheckerWidget.openFeedbackModal()">
@@ -105,6 +65,55 @@ class FitCheckerWidget {
     `;
 
     this.attachEventListeners();
+  }
+
+  renderSizeBlock(recommendationLabel, scoresLabel, sizeData) {
+    const recommendedSize = sizeData.recommended_size;
+    const confidence = Math.round(sizeData.confidence * 100);
+    const fitScores = sizeData.fit_scores || {};
+    const fitNotes = sizeData.fit_notes || [];
+
+    return `
+      <div class="fit-recommendation">
+        <div class="recommendation-box">
+          <div class="recommendation-label">${recommendationLabel}</div>
+          <div class="recommendation-size">${recommendedSize}</div>
+          <div class="confidence-badge">
+            ${confidence}% confidence
+          </div>
+        </div>
+      </div>
+
+      <div class="fit-scores">
+        <div class="fit-scores-label">${scoresLabel}</div>
+        <div class="score-bars">
+          ${Object.entries(fitScores)
+            .map(([size, score]) => {
+              const percentage = Math.round(score * 100);
+              const isRecommended = size === recommendedSize;
+              return `
+                <div class="score-bar-row ${isRecommended ? 'recommended' : ''}">
+                  <div class="size-label">${size}</div>
+                  <div class="score-bar">
+                    <div class="score-fill" style="width: ${percentage}%"></div>
+                  </div>
+                  <div class="score-value">${percentage}%</div>
+                </div>
+              `;
+            })
+            .join('')}
+        </div>
+      </div>
+
+      ${fitNotes.length > 0 ? `
+        <div class="fit-notes">
+          <div class="fit-notes-label">Fit Details</div>
+          <ul class="fit-notes-list">
+            ${fitNotes.map(note => `<li>${note}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+    `;
   }
 
   attachEventListeners() {

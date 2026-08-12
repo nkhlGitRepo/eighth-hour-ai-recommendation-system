@@ -14,7 +14,7 @@ from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
-from py_src.constants import SIZE_BOUNDARIES
+from py_src.constants import SIZE_BOUNDARIES, WAIST_SIZE_BOUNDARIES, HIP_SIZE_BOUNDARIES
 
 
 class BodyShapeProfiler:
@@ -167,32 +167,12 @@ class BodyShapeProfiler:
 
     def _recommend_sizes(self, shape_class, bust, waist, hips):
         """Generate size recommendations per category."""
-        # Bust boundaries: shared with M5/M9 via constants.SIZE_BOUNDARIES so the
-        # size shown to the customer here always matches what's used to filter
-        # their recommendations.
+        # Bust/waist/hip boundaries: shared with M5/M7/M9 via constants.py so
+        # the size shown to the customer here always matches what's used to
+        # filter their recommendations and to score garment fit.
         size_by_bust = SIZE_BOUNDARIES
-
-        size_by_waist = {
-            "XXS": (60, 66),
-            "XS": (66, 72),
-            "S": (72, 78),
-            "M": (78, 84),
-            "L": (84, 90),
-            "XL": (90, 96),
-            "XXL": (96, 150),
-        }
-
-        # Hip boundaries per standard sizing guidelines
-        # XS: 83-89cm, S: 89-95cm, M: 95-101cm, L: 101-107cm, XL: 107-114cm, XXL: 114+cm
-        size_by_hip = {
-            "XXS": (70, 83),
-            "XS": (83, 89),
-            "S": (89, 95),
-            "M": (95, 101),
-            "L": (101, 107),
-            "XL": (107, 114),
-            "XXL": (114, 150),
-        }
+        size_by_waist = WAIST_SIZE_BOUNDARIES
+        size_by_hip = HIP_SIZE_BOUNDARIES
 
         def find_size(measurement, chart):
             for size, (min_val, max_val) in chart.items():

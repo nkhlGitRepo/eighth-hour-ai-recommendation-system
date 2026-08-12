@@ -156,6 +156,22 @@ class IntakeFlow {
     this.recommendations = [];
   }
 
+  /**
+   * If an API call failed because the backend no longer has this
+   * session_id (e.g. a stale localStorage session_id restored via
+   * restoreSession() from a dev database reset, or a very old bookmark),
+   * clear the dead state and restart at step 1 instead of leaving the
+   * user stuck retrying the same call against a session_id that will
+   * never resolve. Returns true if it handled recovery.
+   */
+  recoverFromMissingSession(error) {
+    if (!/session .* not found/i.test(error.message || '')) return false;
+    this.clearSession();
+    alert('Your style profile session has expired. Please start again.');
+    location.reload();
+    return true;
+  }
+
   updateConsentButton() {
     const photoConsent = document.getElementById('photoConsent').checked;
     const measurementConsent = document.getElementById('measurementConsent').checked;
@@ -240,8 +256,8 @@ class IntakeFlow {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server error (${response.status})`);
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.detail || `Server error (${response.status})`);
       }
 
       const data = await response.json();
@@ -251,6 +267,7 @@ class IntakeFlow {
       this.goToStep(3);
     } catch (error) {
       console.error('Measurements error:', error);
+      if (this.recoverFromMissingSession(error)) return;
       alert('Error processing measurements: ' + error.message);
     }
   }
@@ -278,13 +295,17 @@ class IntakeFlow {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to save preferences');
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.detail || 'Failed to save preferences');
+      }
 
       this.saveSessionState();
       await this.loadRecommendations();
       this.goToStep(5);
     } catch (error) {
       console.error('Preferences error:', error);
+      if (this.recoverFromMissingSession(error)) return;
       alert('Error saving preferences: ' + error.message);
     }
   }

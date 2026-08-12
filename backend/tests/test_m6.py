@@ -128,14 +128,27 @@ class TestCatalogKB:
         assert "shoulder" in boat_neck["fit_flatterers"].lower()
 
     def test_retrieval_with_no_results(self):
-        """Query with non-matching filters should return empty."""
-        results = self.catalog.retrieve({"shape_class": "balanced", "categories": ["NonExistentCategory"]})
+        """
+        Query with non-matching filters should return empty -- when
+        relaxation is explicitly disabled (min_results=0). By default,
+        retrieve() now guarantees a minimum via filter relaxation (see
+        TestFilterRelaxation); this test verifies the underlying strict
+        filter logic itself is still exactly correct.
+        """
+        results = self.catalog.retrieve(
+            {"shape_class": "balanced", "categories": ["NonExistentCategory"]},
+            min_results=0,
+        )
         assert isinstance(results, list)
         assert len(results) == 0
 
     def test_retrieval_respects_multiple_filters(self):
-        """Should respect category AND fabric filters together."""
-        results = self.catalog.retrieve({"shape_class": "pear", "categories": ["Tops"], "fabrics": ["Cotton"]})
+        """Should respect category AND fabric filters together (relaxation disabled)."""
+        results = self.catalog.retrieve(
+            {"shape_class": "pear", "categories": ["Tops"], "fabrics": ["Cotton"]},
+            min_results=0,
+        )
+        assert len(results) > 0
         for item in results:
             assert item["category"] == "Tops"
             assert item["fabric"] == "Cotton"
@@ -233,14 +246,18 @@ class TestSilhouetteHandling:
         assert aline_skirt["silhouette_class"] == "a_line"
 
     def test_retrieval_by_silhouette_filter(self):
-        """Silhouette preference is a real hard filter, not decorative."""
-        results = self.catalog.retrieve({"shape_class": "balanced", "preferred_silhouettes": ["fitted"]})
+        """Silhouette preference is a real hard filter, not decorative (relaxation disabled)."""
+        results = self.catalog.retrieve(
+            {"shape_class": "balanced", "preferred_silhouettes": ["fitted"]}, min_results=0,
+        )
         assert len(results) > 0
         assert all(item["silhouette_class"] == "fitted" for item in results)
 
     def test_retrieval_by_silhouette_filter_excludes_non_matching(self):
-        """Items with a different silhouette must not appear."""
-        results = self.catalog.retrieve({"shape_class": "balanced", "preferred_silhouettes": ["fitted"]})
+        """Items with a different silhouette must not appear (relaxation disabled)."""
+        results = self.catalog.retrieve(
+            {"shape_class": "balanced", "preferred_silhouettes": ["fitted"]}, min_results=0,
+        )
         skus = {item["sku"] for item in results}
         assert "dress-wrap" not in skus  # flowing, not fitted
 
@@ -302,13 +319,17 @@ class TestOccasionHandling:
         skus = {item["sku"] for item in results}
         assert "vest-overlap" not in skus  # Vests aren't tagged "evening"
 
-    def test_retrieval_by_occasion_with_no_matching_products_returns_empty(self):
+    def test_retrieval_by_occasion_with_no_matching_products_returns_empty_when_unrelaxed(self):
         """
         An occasion with no matching category (e.g. gym, in a catalog with
-        no activewear) must honestly return nothing rather than falling
-        back to unrelated items.
+        no activewear) returns nothing when relaxation is disabled --
+        verifying the strict occasion filter itself is exactly correct.
+        By default (min_results > 0), retrieve() instead relaxes filters
+        to guarantee a minimum -- see TestFilterRelaxation.
         """
-        results = self.catalog.retrieve({"shape_class": "balanced", "occasions": ["gym"]})
+        results = self.catalog.retrieve(
+            {"shape_class": "balanced", "occasions": ["gym"]}, min_results=0,
+        )
         assert results == []
 
     def test_no_occasion_preference_does_not_filter(self):
@@ -317,12 +338,13 @@ class TestOccasionHandling:
         assert len(results) == len(PRODUCTS)
 
     def test_silhouette_and_occasion_filters_combine_with_and(self):
-        """Combined preferences should intersect, not just apply one of them."""
+        """Combined preferences should intersect, not just apply one of them (relaxation disabled)."""
         results = self.catalog.retrieve({
             "shape_class": "balanced",
             "preferred_silhouettes": ["fitted"],
             "occasions": ["work"],
-        })
+        }, min_results=0)
+        assert len(results) > 0
         for item in results:
             assert item["silhouette_class"] == "fitted"
             assert "work" in item["occasions"]
@@ -417,3 +439,202 @@ class TestShapeAffinityScore:
     def test_missing_flatters_shapes_field_does_not_crash(self):
         item = {"category": "Tops"}
         assert shape_affinity_score("pear", item) == SHAPE_CATEGORY_AFFINITY["pear"]["Tops"]
+
+
+# Purpose-built catalog for relaxation tests: category choice controls each
+# item's inferred occasions (Vests/Trousers -> no "evening"; Dresses -> no
+# "work"; etc.), giving precise control over which filter combination
+# leaves how many survivors, so each test below can assert the *exact*
+# relaxation cascade it expects rather than just "more than before".
+RELAXATION_PRODUCTS = [
+    {
+        "slug": "item-a-red-fitted-vest",
+        "name": "Item A", "category": "Vests", "fabric": "Silk", "price": 100.0,
+        "colors": ["Red"], "sizes": ["S", "M"], "silhouette": "fitted",
+    },
+    {
+        "slug": "item-b-blue-flowing-top",
+        "name": "Item B", "category": "Tops", "fabric": "Silk", "price": 100.0,
+        "colors": ["Blue"], "sizes": ["S", "M"], "silhouette": "flowing",
+    },
+    {
+        "slug": "item-c-red-fitted-dress",
+        "name": "Item C", "category": "Dresses", "fabric": "Silk", "price": 100.0,
+        "colors": ["Red"], "sizes": ["S", "M"], "silhouette": "fitted",
+    },
+    {
+        "slug": "item-d-green-straight-skirt",
+        "name": "Item D", "category": "Skirts", "fabric": "Silk", "price": 100.0,
+        "colors": ["Green"], "sizes": ["S", "M"], "silhouette": "straight",
+    },
+    {
+        "slug": "item-e-purple-straight-vest",
+        "name": "Item E", "category": "Vests", "fabric": "Silk", "price": 100.0,
+        "colors": ["Purple"], "sizes": ["L"], "silhouette": "straight",
+    },
+]
+
+
+class TestFilterRelaxation:
+    """
+    retrieve() must guarantee MIN_RECOMMENDATIONS results by progressively
+    relaxing (dropping) hard filters -- softest preference signal first --
+    rather than ever returning fewer than that when the catalog physically
+    has enough items to satisfy some relaxed version of the query.
+    """
+
+    def setup_method(self):
+        self.catalog = CatalogKB(RELAXATION_PRODUCTS)
+
+    def test_niche_query_still_returns_minimum(self):
+        """
+        Strict AND of color=Red, silhouette=fitted, occasion=date_night
+        matches only item-c (item-a is Red+fitted but has no date_night
+        occasion -- Vests never get "date_night"). Dropping just the
+        occasion filter brings item-a back in, reaching the minimum of 2
+        without needing to touch silhouette or color at all.
+        """
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Red"],
+            "preferred_silhouettes": ["fitted"],
+            "occasions": ["date_night"],
+            "k": 10,
+        })
+        skus = {item["sku"] for item in results}
+        assert skus == {"item-a-red-fitted-vest", "item-c-red-fitted-dress"}
+        # Color and silhouette were never relaxed -- both survivors still
+        # honor them exactly.
+        for item in results:
+            assert "Red" in item["colors"]
+            assert item["silhouette_class"] == "fitted"
+
+    def test_relaxation_stops_as_soon_as_minimum_is_met(self):
+        """Must not over-relax past what's actually needed to hit the minimum."""
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Red"],
+            "preferred_silhouettes": ["fitted"],
+            "occasions": ["date_night"],
+            "k": 10,
+        })
+        # If this over-relaxed all the way to dropping color too, item-b
+        # (Blue) or item-d (Green) would leak in.
+        skus = {item["sku"] for item in results}
+        assert "item-b-blue-flowing-top" not in skus
+        assert "item-d-green-straight-skirt" not in skus
+
+    def test_two_step_relaxation_cascade(self):
+        """
+        color=Red, silhouette=flowing, occasion=work matches nobody (no
+        item is both Red and flowing). Dropping occasion alone still
+        matches nobody (still no Red+flowing item) -- only after ALSO
+        dropping silhouette do item-a and item-c (both Red) appear.
+        """
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Red"],
+            "preferred_silhouettes": ["flowing"],
+            "occasions": ["work"],
+            "k": 10,
+        })
+        skus = {item["sku"] for item in results}
+        assert skus == {"item-a-red-fitted-vest", "item-c-red-fitted-dress"}
+
+    def test_cascades_all_the_way_to_full_catalog_when_color_itself_is_impossible(self):
+        """
+        No item is Yellow, oversized, or gym-appropriate -- individually or
+        combined. Relaxing occasion then silhouette still leaves "Yellow"
+        matching nothing, so color must also be dropped, falling through to
+        the full, unfiltered candidate set.
+        """
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Yellow"],
+            "preferred_silhouettes": ["oversized"],
+            "occasions": ["gym"],
+            "k": 10,
+        })
+        assert len(results) == len(RELAXATION_PRODUCTS)
+
+    def test_cascades_to_size_as_true_last_resort(self):
+        """
+        No item exists in a nonexistent category, and no item is size XXL.
+        Every softer filter (none set here) has nothing to drop, so this
+        must relax all the way through categories and finally size to
+        reach the minimum -- proving even the two most "functional"
+        constraints give way rather than returning too few results.
+        """
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "categories": ["NonexistentCategory"],
+            "size": "XXL",
+            "k": 10,
+        })
+        assert len(results) >= 2
+
+    def test_min_results_zero_disables_relaxation(self):
+        """Explicit opt-out: callers that need exact filter semantics (e.g.
+        tests of filter correctness itself) must be able to see a true empty result."""
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Yellow"],
+            "preferred_silhouettes": ["oversized"],
+            "occasions": ["gym"],
+            "k": 10,
+        }, min_results=0)
+        assert results == []
+
+    def test_k_smaller_than_min_recommendations_does_not_over_relax(self):
+        """
+        With k=1, the target is min(MIN_RECOMMENDATIONS, k) = 1. The strict
+        (unrelaxed) query already has exactly 1 match (item-c), so no
+        relaxation should happen at all -- item-a must NOT appear, since
+        that would mean relaxing further than the caller actually asked for.
+        """
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Red"],
+            "preferred_silhouettes": ["fitted"],
+            "occasions": ["date_night"],
+            "k": 1,
+        })
+        assert len(results) == 1
+        assert results[0]["sku"] == "item-c-red-fitted-dress"
+
+    def test_already_sufficient_results_are_never_relaxed(self):
+        """A query that already meets the minimum must return exactly the
+        strict filter result, untouched."""
+        results = self.catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Red"],
+            "k": 10,
+        })
+        skus = {item["sku"] for item in results}
+        assert skus == {"item-a-red-fitted-vest", "item-c-red-fitted-dress"}
+
+    def test_results_still_ranked_by_shape_after_relaxation(self):
+        """Relaxed candidates still go through normal shape-based ranking, not arbitrary order."""
+        results = self.catalog.retrieve({
+            "shape_class": "pear",
+            "preferred_colors": ["Yellow"],  # impossible -- forces relaxation to full catalog
+            "k": 10,
+        })
+        scores = [shape_affinity_score("pear", item) for item in results]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_catalog_smaller_than_minimum_returns_what_exists_without_erroring(self):
+        """A catalog with fewer than MIN_RECOMMENDATIONS items total must not
+        error or infinite-loop -- it should just return everything it has."""
+        tiny_catalog = CatalogKB([RELAXATION_PRODUCTS[0]])
+        results = tiny_catalog.retrieve({
+            "shape_class": "balanced",
+            "preferred_colors": ["Nonexistent Color"],
+            "k": 10,
+        })
+        assert len(results) == 1
+
+    def test_empty_catalog_returns_empty_without_erroring(self):
+        empty_catalog = CatalogKB([])
+        results = empty_catalog.retrieve({"shape_class": "balanced", "k": 10})
+        assert results == []

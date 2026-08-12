@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Your Recommendations — Eighth Hour</title>
+  <title>New Releases — Eighth Hour</title>
   <link rel="stylesheet" href="../../css/style.css" />
   <link rel="stylesheet" href="recommendations.css" />
 </head>
@@ -33,53 +33,14 @@
 
   <section class="section wrap">
     <div class="recommendations-header">
-      <h1>Your Personalized Recommendations</h1>
-      <p class="subtitle">Based on your shape and style preferences</p>
+      <h1>New Releases</h1>
+      <p class="subtitle" id="newReleasesSubtitle">Our newest arrivals</p>
     </div>
 
-    <div class="recommendations-sidebar">
-      <div class="filter-section">
-        <h3>Filters</h3>
-        <div class="filter-group">
-          <label class="filter-option">
-            <input type="checkbox" name="category" value="Tops" />
-            <span>Tops</span>
-          </label>
-          <label class="filter-option">
-            <input type="checkbox" name="category" value="Skirts" />
-            <span>Skirts</span>
-          </label>
-          <label class="filter-option">
-            <input type="checkbox" name="category" value="Dresses" />
-            <span>Dresses</span>
-          </label>
-          <label class="filter-option">
-            <input type="checkbox" name="category" value="Vests" />
-            <span>Vests</span>
-          </label>
-          <label class="filter-option">
-            <input type="checkbox" name="category" value="Trousers" />
-            <span>Trousers</span>
-          </label>
-          <label class="filter-option">
-            <input type="checkbox" name="category" value="Co-ord Sets" />
-            <span>Co-ord Sets</span>
-          </label>
-        </div>
-      </div>
+    <div id="newReleasesBanner"></div>
 
-      <div class="filter-section">
-        <h3>Your Profile</h3>
-        <div id="profileSummary" class="profile-summary">
-          <div class="loading">Loading...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="recommendations-main">
-      <div id="recommendationsList" class="product-grid">
-        <div class="loading">Loading your recommendations...</div>
-      </div>
+    <div id="newReleasesGrid" class="product-grid">
+      <div class="loading">Loading new releases...</div>
     </div>
   </section>
 
@@ -113,6 +74,6 @@
   <script src="../../js/cart.js"></script>
   <script src="../../js/menu.js"></script>
   <script src="../../js/recommendations-nav-link.js"></script>
-  <script src="recommendations.js"></script>
+  <script src="new-releases.js"></script>
 </body>
 </html>

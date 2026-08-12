@@ -26,6 +26,7 @@ from py_src.guardrails.access_control import AccessControl
 from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.utils.logger import logger
+from py_src.constants import CATEGORY_TO_SIZE_PROFILE_KEY
 
 # Initialize FastAPI app
 app = FastAPI(title="AI Styling Engine", version="1.0.0")
@@ -697,6 +698,11 @@ async def check_product_fit(session_id: str, product_sku: str):
     back as fit_check_id in POST /feedback/fit so the feedback can be
     correlated to this exact check (null if the check couldn't be saved
     to history, e.g. due to a consent issue).
+
+    A "Co-ord Sets" product (a two-piece outfit) only has one size field
+    to fill, so it's sized like a Top -- recommended_size reflects the
+    customer's bust-driven size, matching the "tops" size already shown
+    on their Shape Profile.
     """
     try:
         # Retrieve the completed session
@@ -724,12 +730,25 @@ async def check_product_fit(session_id: str, product_sku: str):
                 "M7"
             )
 
+        # Look up the size M3 already computed for this product's category
+        # (e.g. hips-based for Skirts/Trousers, bust-based for Tops/
+        # Dresses/Vests/Co-ord Sets) so the fit checker's recommended_size
+        # can never disagree with what's already shown on the customer's
+        # Shape Profile.
+        known_size = None
+        category = product.get("category")
+        size_by_category = (session.shape_profile or {}).get("size_recommendation_by_category", {})
+        size_profile_key = CATEGORY_TO_SIZE_PROFILE_KEY.get(category)
+        if size_profile_key:
+            known_size = size_by_category.get(size_profile_key)
+
         # Check fit
         fit_assessment = fit_checker.check_fit(
             user_id=session.user_id,
             measurements=session.body_measurements.to_dict(),
             product=product,
             session_id=session_id,
+            known_size=known_size,
         )
 
         # Save to history (M8) - non-critical, don't fail the fit check if save fails.

@@ -4,7 +4,31 @@
  * color/size selection and an "add to cart" action.
  * Runs only on product.html.
  */
-document.addEventListener("DOMContentLoaded", () => {
+const PRODUCT_API_BASE = "http://localhost:8000";
+
+/**
+ * Looks up this customer's fit-checked size for a product, if a style
+ * profile session exists. Returns null (never throws) when there's no
+ * active session, the request fails, or the recommended size isn't one
+ * of the product's actual sizes -- callers fall back to the default.
+ */
+async function getRecommendedSize(productSku) {
+  const sessionId = localStorage.getItem("currentSessionId");
+  if (!sessionId) return null;
+
+  try {
+    const response = await fetch(`${PRODUCT_API_BASE}/fit-check/${sessionId}/${productSku}`, {
+      method: "POST",
+    });
+    if (!response.ok) return null;
+    const result = await response.json();
+    return result.recommended_size || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
   const container = document.getElementById("productDetail");
   if (!container) return;
 
@@ -18,7 +42,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("pageTitle").textContent = `${product.name} — Eighth Hour`;
 
-  const selection = { color: product.colors[0], size: product.sizes[0] };
+  const recommendedSize = await getRecommendedSize(product.slug);
+  const defaultSize = recommendedSize && product.sizes.includes(recommendedSize)
+    ? recommendedSize
+    : product.sizes[0];
+  const selection = { color: product.colors[0], size: defaultSize };
   const mainImg = placeholderImage(product.name, 700, 900);
   const thumbs = [product.name, `${product.name} detail`, `${product.name} back`];
 

@@ -697,3 +697,45 @@ class TestM9ResponseStructure:
         feed = feed_manager.generate_feed("test_user", hourglass_profile, None, None)
         for item in feed:
             assert isinstance(item["name"], str)
+
+
+class TestM9IndependentOfM6FilterRelaxation:
+    """
+    M6's retrieve() (used by the main recommendation engine) guarantees a
+    minimum result count via progressive filter relaxation. M9 must be
+    completely unaffected by that -- it scores products by threshold, not
+    hard AND-filters, and reads self.catalog.items directly rather than
+    going through retrieve() at all. Proven directly (not just "M9's tests
+    still pass", which wouldn't rule out coincidental agreement) by
+    spying on CatalogKB.retrieve and asserting it's never called.
+    """
+
+    def test_generate_feed_never_calls_catalog_retrieve(self, feed_manager, hourglass_profile, style_profile, measurements):
+        with patch.object(CatalogKB, "retrieve") as mock_retrieve:
+            feed_manager.generate_feed("test_user", hourglass_profile, style_profile, measurements)
+            mock_retrieve.assert_not_called()
+
+    def test_new_releases_can_legitimately_return_zero(self, fit_checker, consent_tracker):
+        """
+        Unlike M6/M5's recommendations, New Releases has no minimum-result
+        guarantee and is not expected to have one -- an empty feed (nothing
+        new happens to match this customer right now) is a valid, honest
+        result, not a bug.
+        """
+        catalog_with_no_recent_items = CatalogKB([{
+            "slug": "old-item",
+            "name": "Old Item",
+            "category": "Tops",
+            "fabric": "Cotton",
+            "price": 40.0,
+            "colors": ["Ebony"],
+            "sizes": ["M"],
+            "launched_at": days_ago(400),  # well outside the recency window
+        }])
+        feed_mgr = NewReleasesFeed(
+            catalog=catalog_with_no_recent_items,
+            fit_checker=fit_checker,
+            consent_tracker=consent_tracker,
+        )
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None)
+        assert feed == []

@@ -104,6 +104,136 @@ class TestFitCheckReturnsCorrelationId:
         assert returned_check_id in history_check_ids
 
 
+class TestFitCheckAgreesWithShapeProfile:
+    """
+    Regression coverage: /fit-check's recommended_size must always match
+    the size already shown on the customer's Shape Profile
+    (size_recommendation_by_category) for that product's category --
+    otherwise a customer sees e.g. "S" for skirts on their profile, then
+    "M" pre-selected (and called a "perfect fit") the moment they click
+    into an actual skirt recommendation.
+    """
+
+    CATEGORY_TO_SIZE_PROFILE_KEY = {
+        "Tops": "tops",
+        "Dresses": "dresses",
+        "Vests": "vests",
+        "Skirts": "skirts",
+        "Trousers": "trousers",
+    }
+
+    def test_fit_check_matches_shape_profile_across_recommended_categories(self, client):
+        user_id = f"e2e-{uuid.uuid4().hex[:8]}"
+        s = client.post("/intake/session", params={"user_id": user_id}).json()
+        session_id, real_user_id = s["session_id"], s["user_id"]
+
+        client.post("/intake/consent", json={
+            "session_id": session_id, "photo_consent": True, "measurement_consent": True,
+        })
+        client.post("/consent", json={
+            "user_id": real_user_id, "photo_consent": True, "measurement_consent": True,
+        })
+        # bust=96 -> M3 classifies tops as "M"; hips=92 -> M3 classifies
+        # skirts as "S" -- a body where the bust-driven and hips-driven
+        # category sizes genuinely differ, which is exactly what exposes
+        # the bug (a single bust+waist+hips-blended fit-check average
+        # disagreeing with M3's single-measurement, category-specific size).
+        confirm = client.post("/intake/confirm", json={
+            "session_id": session_id,
+            "manual_overrides": {"bust": 96, "waist": 84, "hips": 92, "height": 165},
+        }).json()
+        size_by_category = confirm["shape_profile"]["size_recommendation_by_category"]
+        assert size_by_category["tops"] == "M"
+        assert size_by_category["skirts"] == "S"
+
+        client.post("/intake/preferences", json={
+            "session_id": session_id,
+            "preferred_colors": [],
+            "preferred_silhouettes": [],
+            "occasions": [],
+        })
+
+        recs = client.get(
+            f"/recommendations/{session_id}", params={"k": 30, "user_id": real_user_id}
+        ).json()["recommendations"]
+
+        checked_categories = set()
+        for rec in recs:
+            size_key = self.CATEGORY_TO_SIZE_PROFILE_KEY.get(rec["category"])
+            if not size_key or rec["category"] in checked_categories:
+                continue
+            expected_size = size_by_category[size_key]
+            if expected_size not in rec["sizes"]:
+                continue  # known_size only applies when the product stocks it
+
+            fc = client.post(f"/fit-check/{session_id}/{rec['sku']}")
+            assert fc.status_code == 200
+            assert fc.json()["recommended_size"] == expected_size, (
+                f"{rec['category']} product {rec['sku']} should recommend "
+                f"{expected_size} (this session's shape profile size for "
+                f"{size_key}), got {fc.json()['recommended_size']}"
+            )
+            checked_categories.add(rec["category"])
+
+        # Sanity check: the test actually exercised at least one of the
+        # bust-driven and one of the hips-driven categories, not zero.
+        assert checked_categories & {"Tops", "Dresses", "Vests"}
+        assert checked_categories & {"Skirts", "Trousers"}
+
+
+class TestFitCheckCoordSetsSizedLikeATop:
+    """
+    API-level regression coverage: a Co-ord Set only has one size field
+    for the customer to fill in, so /fit-check must return a single
+    recommended_size for it -- sized like a Top (bust-driven), matching
+    the "tops" value already shown on the customer's Shape Profile,
+    rather than an unexplained blended compromise between the top and
+    bottom halves' separate sizes.
+    """
+
+    def test_coord_set_fit_check_matches_the_tops_shape_profile_size(self, client):
+        user_id = f"e2e-coord-{uuid.uuid4().hex[:8]}"
+        s = client.post("/intake/session", params={"user_id": user_id}).json()
+        session_id, real_user_id = s["session_id"], s["user_id"]
+
+        client.post("/intake/consent", json={
+            "session_id": session_id, "photo_consent": True, "measurement_consent": True,
+        })
+        client.post("/consent", json={
+            "user_id": real_user_id, "photo_consent": True, "measurement_consent": True,
+        })
+        # bust -> XL, hips -> S: a genuinely mismatched body, where the old
+        # equal blend used to land on an unrelated third size (e.g. "M").
+        confirm = client.post("/intake/confirm", json={
+            "session_id": session_id,
+            "manual_overrides": {"bust": 111, "waist": 78, "hips": 90, "height": 165},
+        }).json()
+        size_by_category = confirm["shape_profile"]["size_recommendation_by_category"]
+        assert size_by_category["tops"] == "XL"
+        assert size_by_category["skirts"] == "S"
+
+        client.post("/intake/preferences", json={
+            "session_id": session_id,
+            "preferred_colors": [],
+            "preferred_silhouettes": [],
+            "occasions": [],
+        })
+
+        recs = client.get(
+            f"/recommendations/{session_id}", params={"k": 30, "user_id": real_user_id}
+        ).json()["recommendations"]
+        coord_product = next((r for r in recs if r["category"] == "Co-ord Sets"), None)
+        assert coord_product is not None, "Test catalog should include at least one Co-ord Sets item"
+
+        fc = client.post(f"/fit-check/{session_id}/{coord_product['sku']}")
+        assert fc.status_code == 200
+        body = fc.json()
+
+        assert "top_size" not in body and "bottom_size" not in body
+        assert body["recommended_size"] == "XL"
+        assert body["fit_scores"][body["recommended_size"]] == max(body["fit_scores"].values())
+
+
 class TestLearningLoopEndToEnd:
     """The full loop: fit-check -> submit feedback referencing the real
     check_id -> feedback summary reflects it."""
