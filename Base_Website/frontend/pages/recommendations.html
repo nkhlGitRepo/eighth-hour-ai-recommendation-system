@@ -17,14 +17,24 @@
         <a href="../../collection.html?category=skirts">Skirts</a>
         <a href="../../collection.html?category=dresses">Dresses</a>
         <a href="../../collection.html?category=trousers">Trousers</a>
-        <a href="../../collection.html?category=vests">Vests</a>
-        <a href="../../collection.html?category=co-ord-sets">Co-ord Sets</a>
+        <div class="nav-more">
+          <button class="nav-more-toggle" type="button">More &#9662;</button>
+          <div class="nav-more-menu">
+            <a href="../../collection.html?category=vests">Vests</a>
+            <a href="../../collection.html?category=co-ord-sets">Co-ord Sets</a>
+            <a href="../../collection.html?fabric=handwoven-silk">Handwoven Silks</a>
+            <a href="../../collection.html?fabric=natural-crepe">Natural Crepe</a>
+          </div>
+        </div>
       </nav>
       <a class="logo" href="../../index.html">EIGHTH HOUR</a>
       <div class="header-actions">
-        <a href="intake-flow.html?step=2" class="style-profile-link">Update Style</a>
+        <a href="intake-flow.html" class="style-profile-link">My Style</a>
         <a href="new-releases.html">New Releases</a>
         <a href="recommendations.html" id="myRecommendationsLink" style="display: none;">My Recommendations</a>
+        <a href="login.html" id="loginLink">Log In</a>
+        <a href="account.html" id="accountLink" style="display: none;">My Account</a>
+        <a href="#" id="logoutLink" style="display: none;">Log Out</a>
         <a href="../../faq.html">Size Guide</a>
         <a href="../../cart.html">Cart (<span id="cartCount">0</span>)</a>
       </div>
@@ -113,6 +123,8 @@
   <script src="../../js/cart.js"></script>
   <script src="../../js/menu.js"></script>
   <script src="../../js/recommendations-nav-link.js"></script>
+  <script src="../../js/style-profile-link.js"></script>
+  <script src="../../js/auth-nav-link.js"></script>
   <script src="recommendations.js"></script>
 </body>
 </html>

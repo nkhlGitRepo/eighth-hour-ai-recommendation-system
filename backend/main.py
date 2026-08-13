@@ -5,8 +5,9 @@ Runs on localhost:8000 by default.
 Website calls this API to get styling recommendations.
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import json
@@ -23,8 +24,10 @@ from py_src.modules.m10_learning_loop import LearningLoop
 from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.access_control import AccessControl
+from py_src.guardrails.auth_manager import AuthManager
 from py_src.persistence.session_repository import SQLiteSessionRepository
-from py_src.utils.errors import ModuleError, GuardrailError
+from py_src.persistence.user_repository import UserRepository
+from py_src.utils.errors import ModuleError, GuardrailError, AuthError
 from py_src.utils.logger import logger
 from py_src.constants import CATEGORY_TO_SIZE_PROFILE_KEY
 
@@ -40,6 +43,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(AuthError)
+async def handle_auth_error(request, exc: AuthError):
+    """
+    AuthError -> 401 ("we don't know who you are"), kept distinct from
+    GuardrailError -> 403 ("we know who you are but you lack permission").
+    Registered globally because AuthError can be raised inside a FastAPI
+    dependency (get_current_user_id below), before an endpoint's own
+    try/except body ever runs.
+    """
+    return JSONResponse(status_code=401, content={"detail": exc.message})
+
+
 # Initialize modules
 profiler = BodyShapeProfiler()
 catalog = CatalogKB([])  # Will be populated from website
@@ -48,7 +64,10 @@ session_repo = SQLiteSessionRepository()
 # server restarts instead of silently reverting to "not consented" for
 # customers whose sessions are still valid on disk.
 consent_tracker = ConsentTracker(db_path=session_repo.db_path)
-intake_orchestrator = IntakeOrchestrator(session_repo=session_repo, consent_tracker=consent_tracker)
+# Same db-file-sharing pattern as consent_tracker above.
+user_repository = UserRepository(db_path=session_repo.db_path)
+auth_manager = AuthManager(user_repository)
+intake_orchestrator = IntakeOrchestrator(session_repo=session_repo, consent_tracker=consent_tracker, catalog=catalog)
 recommendation_engine = RecommendationEngine(catalog, consent_tracker)
 fit_checker = FitChecker(consent_tracker)
 recommendation_history = RecommendationHistory(consent_tracker=consent_tracker)
@@ -161,6 +180,44 @@ class IntakePreferencesRequest(BaseModel):
 
 class IntakeResumeRequest(BaseModel):
     user_id: str
+
+
+# =========================================================================
+# ACCOUNT AUTHENTICATION MODELS + DEPENDENCY
+# =========================================================================
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+def get_bearer_token(authorization: Optional[str] = Header(None)) -> str:
+    """Defensive header parsing -- malformed/missing Authorization always
+    raises a clean AuthError (-> 401), never a 500."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise AuthError("Missing or malformed Authorization header")
+    token = authorization[len("Bearer "):].strip()
+    if not token:
+        raise AuthError("Missing or malformed Authorization header")
+    return token
+
+
+def get_current_user_id(token: str = Depends(get_bearer_token)) -> str:
+    """FastAPI dependency: resolves the bearer token to a user_id, or
+    raises AuthError (-> 401) if it's missing, malformed, or expired."""
+    return auth_manager.get_current_user_id(token)
 
 
 # =========================================================================
@@ -311,17 +368,163 @@ async def get_consent(user_id: str):
 
 
 # =========================================================================
+# ACCOUNT AUTHENTICATION ENDPOINTS
+# =========================================================================
+
+
+@app.post("/auth/register")
+async def register(request: RegisterRequest):
+    """
+    Create a new account. Does NOT log the user in -- registration only
+    creates the account; the user logs in separately afterward.
+
+    Request body:
+    {
+      "username": "alice",
+      "email": "alice@example.com",
+      "password": "correct horse battery staple"
+    }
+
+    Returns:
+    {
+      "user_id": "user_...",
+      "username": "alice"
+    }
+    """
+    try:
+        return auth_manager.register(request.username, request.email, request.password)
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err.message))
+    except Exception as err:
+        logger.error("Registration failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/auth/login")
+async def login(request: LoginRequest):
+    """
+    Log in with username + password.
+
+    Request body:
+    {
+      "username": "alice",
+      "password": "correct horse battery staple"
+    }
+
+    Returns:
+    {
+      "user_id": "user_...",
+      "username": "alice",
+      "token": "..."
+    }
+    """
+    try:
+        return auth_manager.login(request.username, request.password)
+    except AuthError as err:
+        raise HTTPException(status_code=401, detail=err.message)
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err.message))
+    except Exception as err:
+        logger.error("Login failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/auth/logout")
+async def logout(user_id: str = Depends(get_current_user_id), token: str = Depends(get_bearer_token)):
+    """Revoke the current token only (other devices/sessions stay logged in)."""
+    try:
+        auth_manager.logout(token)
+        return {"logged_out": True}
+    except Exception as err:
+        logger.error("Logout failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/auth/logout-all")
+async def logout_all(user_id: str = Depends(get_current_user_id)):
+    """Revoke every token for this account (all devices/sessions)."""
+    try:
+        auth_manager.logout_all(user_id)
+        return {"logged_out_all": True}
+    except Exception as err:
+        logger.error("Logout-all failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/auth/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    user_id: str = Depends(get_current_user_id),
+    token: str = Depends(get_bearer_token),
+):
+    """Change password. Requires the current password. Revokes every other token."""
+    try:
+        auth_manager.change_password(user_id, request.current_password, request.new_password, token)
+        return {"password_changed": True}
+    except AuthError as err:
+        raise HTTPException(status_code=401, detail=err.message)
+    except ModuleError as err:
+        raise HTTPException(status_code=400, detail=str(err.message))
+    except Exception as err:
+        logger.error("Password change failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/auth/me")
+async def get_me(user_id: str = Depends(get_current_user_id)):
+    """Get the current account's own identity."""
+    try:
+        user = user_repository.get_user_by_id(user_id)
+        if not user:
+            raise AuthError("Invalid or expired token")
+        return {"user_id": user["user_id"], "username": user["username"], "email": user["email"]}
+    except AuthError as err:
+        raise HTTPException(status_code=401, detail=err.message)
+    except Exception as err:
+        logger.error("Get current user failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/account/profile")
+async def get_account_profile(user_id: str = Depends(get_current_user_id)):
+    """
+    Get the account's most recently completed style profile, or null if
+    the account hasn't completed the intake quiz yet.
+
+    Returns:
+    {
+      "session_id": "uuid-...",
+      "shape_profile": {...},
+      "style_profile": {...},
+      "measurements": {"bust": ..., "waist": ..., "hips": ..., "height": ...}
+    } or null
+    """
+    try:
+        session = session_repo.get_latest_completed_session_by_user(user_id)
+        if not session:
+            return None
+        return {
+            "session_id": session.session_id,
+            "shape_profile": session.shape_profile,
+            "style_profile": session.style_profile.to_dict() if session.style_profile else None,
+            "measurements": session.body_measurements.to_dict() if session.body_measurements else None,
+        }
+    except Exception as err:
+        logger.error("Account profile retrieval failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
 # PHASE 1: INTAKE ORCHESTRATION ENDPOINTS
 # =========================================================================
 
 
 @app.post("/intake/session")
-async def create_intake_session(user_id: str):
+async def create_intake_session(user_id: str = Depends(get_current_user_id)):
     """
-    Create a new intake session for a user.
+    Create a new intake session for the authenticated user.
 
-    Query param:
-    - user_id: unique user identifier
+    Requires: Authorization: Bearer <token>
 
     Returns:
     {

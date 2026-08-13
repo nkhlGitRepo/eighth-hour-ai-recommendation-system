@@ -354,14 +354,22 @@ class TestM7FitNotes:
             f"Should have specific note about loose bust. Notes: {result['fit_notes']}"
 
     def test_snug_waist_generates_specific_note(self, fit_checker, test_product):
-        """Snug waist should generate specific note about waist, not other measurements."""
+        """
+        Snug waist should generate specific note about waist, not other
+        measurements. Uses a category outside FIT_SCORE_DIMENSION_WEIGHTS
+        (falls back to FIT_SCORE_DEFAULT_WEIGHTS, which weights waist)
+        rather than test_product's "Tops" category -- Tops are sized by
+        bust alone, so a waist note there would now be correctly
+        suppressed as irrelevant to how the size was actually chosen.
+        """
+        waist_driven_product = {**test_product, "category": "Test Waist-Driven Category"}
         measurements = {
             "bust": 96.0,    # Exact match to M
             "waist": 85.0,   # Larger than size M (81), will be snug
             "hips": 98.0,    # Exact match to M
             "height": 165.0,
         }
-        result = fit_checker.check_fit("test_user", measurements, test_product)
+        result = fit_checker.check_fit("test_user", measurements, waist_driven_product)
 
         # Verify note exists and mentions the specific issue
         notes_text = " ".join(result["fit_notes"]).lower()
@@ -369,6 +377,118 @@ class TestM7FitNotes:
         found_waist_note = "waist" in notes_text and ("snug" in notes_text or "small" in notes_text)
         assert found_waist_note, \
             f"Should have specific note about snug waist. Notes: {result['fit_notes']}"
+
+    def test_skirt_bust_mismatch_generates_no_bust_note(self, fit_checker):
+        """
+        Regression coverage: a Skirt is sized by hips alone (see
+        FIT_SCORE_DIMENSION_WEIGHTS), so an off bust measurement never
+        drove the size choice and must not generate a "runs small/large in
+        the bust" note -- that would be actively misleading, not just
+        irrelevant, for a garment bust has no bearing on.
+        """
+        skirt = {
+            "sku": "skirt-123",
+            "name": "Test Skirt",
+            "sizes": ["XS", "S", "M", "L", "XL"],
+            "category": "Skirts",
+        }
+        measurements = {
+            "bust": 130.0,   # wildly off -- would trigger a bust note if bust were checked
+            "waist": 72.0,
+            "hips": 97.0,    # exact match to M
+            "height": 165.0,
+        }
+        result = fit_checker.check_fit("test_user", measurements, skirt)
+
+        notes_text = " ".join(result["fit_notes"]).lower()
+        assert "bust" not in notes_text, f"Skirt fit notes must never mention bust. Notes: {result['fit_notes']}"
+
+    def test_vest_hips_mismatch_generates_no_hips_note(self, fit_checker):
+        """
+        Regression coverage: a Vest is sized by bust alone (see
+        FIT_SCORE_DIMENSION_WEIGHTS), so an off hips measurement must not
+        generate a "loose/snug in the hips" note.
+        """
+        vest = {
+            "sku": "vest-123",
+            "name": "Test Vest",
+            "sizes": ["XS", "S", "M", "L", "XL"],
+            "category": "Vests",
+        }
+        measurements = {
+            "bust": 90.0,    # exact match to M
+            "waist": 72.0,
+            "hips": 130.0,   # wildly off -- would trigger a hips note if hips were checked
+            "height": 165.0,
+        }
+        result = fit_checker.check_fit("test_user", measurements, vest)
+
+        notes_text = " ".join(result["fit_notes"]).lower()
+        assert "hips" not in notes_text, f"Vest fit notes must never mention hips. Notes: {result['fit_notes']}"
+
+    def test_trousers_bust_mismatch_generates_no_bust_note(self, fit_checker):
+        """Trousers are lower-body-only -- an off bust measurement must not generate a bust note."""
+        trousers = {
+            "sku": "trousers-123",
+            "name": "Test Trousers",
+            "sizes": ["XS", "S", "M", "L", "XL"],
+            "category": "Trousers",
+        }
+        measurements = {
+            "bust": 130.0,   # wildly off -- would trigger a bust note if bust were checked
+            "waist": 72.0,
+            "hips": 97.0,    # exact match to M
+            "height": 165.0,
+        }
+        result = fit_checker.check_fit("test_user", measurements, trousers)
+
+        notes_text = " ".join(result["fit_notes"]).lower()
+        assert "bust" not in notes_text, f"Trousers fit notes must never mention bust. Notes: {result['fit_notes']}"
+
+    def test_dress_can_show_waist_and_hips_notes_alongside_bust(self, fit_checker):
+        """
+        A Dress is whole-body: even though its recommended size is chosen
+        from bust alone (FIT_SCORE_DIMENSION_WEIGHTS), a real waist/hips
+        mismatch is still useful guidance and must be allowed to appear --
+        unlike Tops/Vests, which only cover the upper body.
+        """
+        dress = {
+            "sku": "dress-123",
+            "name": "Test Dress",
+            "sizes": ["XS", "S", "M", "L", "XL"],
+            "category": "Dresses",
+        }
+        measurements = {
+            "bust": 90.0,    # exact match to M -- drives the M recommendation
+            "waist": 85.0,   # larger than M (81) -- snug
+            "hips": 110.0,   # larger than M (97) -- snug
+            "height": 165.0,
+        }
+        result = fit_checker.check_fit("test_user", measurements, dress)
+
+        notes_text = " ".join(result["fit_notes"]).lower()
+        assert "waist" in notes_text, f"Dress fit notes should mention waist. Notes: {result['fit_notes']}"
+        assert "hips" in notes_text, f"Dress fit notes should mention hips. Notes: {result['fit_notes']}"
+
+    def test_coord_set_can_show_waist_and_hips_notes_alongside_bust(self, fit_checker):
+        """Co-ord Sets get the same whole-body note treatment as Dresses."""
+        coord_set = {
+            "sku": "coord-123",
+            "name": "Test Co-ord Set",
+            "sizes": ["XS", "S", "M", "L", "XL"],
+            "category": "Co-ord Sets",
+        }
+        measurements = {
+            "bust": 90.0,    # exact match to M -- drives the M recommendation
+            "waist": 85.0,   # larger than M (81) -- snug
+            "hips": 110.0,   # larger than M (97) -- snug
+            "height": 165.0,
+        }
+        result = fit_checker.check_fit("test_user", measurements, coord_set)
+
+        notes_text = " ".join(result["fit_notes"]).lower()
+        assert "waist" in notes_text, f"Co-ord Set fit notes should mention waist. Notes: {result['fit_notes']}"
+        assert "hips" in notes_text, f"Co-ord Set fit notes should mention hips. Notes: {result['fit_notes']}"
 
     def test_all_notes_are_non_empty_strings(self, fit_checker, test_product, test_measurements):
         """All fit notes should be non-empty strings."""

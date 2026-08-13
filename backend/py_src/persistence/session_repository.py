@@ -207,6 +207,30 @@ class SQLiteSessionRepository(SessionRepository):
             logger.error("Session deletion failed", err)
             raise
 
+    def get_latest_completed_session_by_user(self, user_id: str) -> Optional["IntakeSession"]:
+        """Get the most recently completed session for a user (for account login hydration)."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute(
+                    """
+                    SELECT * FROM intake_sessions
+                    WHERE user_id = ? AND status = 'complete'
+                    ORDER BY updated_at DESC
+                    LIMIT 1
+                    """,
+                    (user_id,),
+                ).fetchone()
+
+            if not row:
+                return None
+
+            return self._row_to_session(row)
+
+        except Exception as err:
+            logger.error("Latest completed session retrieval failed", err)
+            raise
+
     def save_fit_check(self, user_id: str, session_id: str, product_sku: str, fit_result: dict) -> str:
         """Save a fit check result to history. Returns check_id."""
         import uuid

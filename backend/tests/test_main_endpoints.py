@@ -31,9 +31,27 @@ def client():
         yield c
 
 
+def _create_session(client, name_hint):
+    """
+    /intake/session is now account-gated: registers a fresh account
+    (derived from name_hint, sanitized to fit the username charset) and
+    logs in, then creates the session with that account's bearer token.
+    Returns the /intake/session response -- same shape as the old direct
+    call, so every caller's `.json()["user_id"]` still works, it's just
+    now server-assigned rather than the caller-chosen name_hint.
+    """
+    username = "".join(c for c in name_hint.lower() if c.isalnum() or c == "_")[:32]
+    password = "TestPassw0rd!"
+    client.post("/auth/register", json={
+        "username": username, "email": f"{username}@example.test", "password": password,
+    })
+    token = client.post("/auth/login", json={"username": username, "password": password}).json()["token"]
+    return client.post("/intake/session", headers={"Authorization": f"Bearer {token}"})
+
+
 def _complete_intake(client, user_id):
     """Run a full intake to a completed session, returning (session_id, real_user_id)."""
-    s = client.post("/intake/session", params={"user_id": user_id}).json()
+    s = _create_session(client, user_id).json()
     session_id = s["session_id"]
     real_user_id = s["user_id"]
 
@@ -124,7 +142,7 @@ class TestFitCheckAgreesWithShapeProfile:
 
     def test_fit_check_matches_shape_profile_across_recommended_categories(self, client):
         user_id = f"e2e-{uuid.uuid4().hex[:8]}"
-        s = client.post("/intake/session", params={"user_id": user_id}).json()
+        s = _create_session(client, user_id).json()
         session_id, real_user_id = s["session_id"], s["user_id"]
 
         client.post("/intake/consent", json={
@@ -193,7 +211,7 @@ class TestFitCheckCoordSetsSizedLikeATop:
 
     def test_coord_set_fit_check_matches_the_tops_shape_profile_size(self, client):
         user_id = f"e2e-coord-{uuid.uuid4().hex[:8]}"
-        s = client.post("/intake/session", params={"user_id": user_id}).json()
+        s = _create_session(client, user_id).json()
         session_id, real_user_id = s["session_id"], s["user_id"]
 
         client.post("/intake/consent", json={

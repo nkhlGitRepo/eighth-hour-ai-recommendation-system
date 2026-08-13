@@ -7,9 +7,18 @@ const API_BASE = 'http://localhost:8000';
 
 class IntakeFlow {
   constructor() {
+    // The style quiz is account-gated: a logged-out visitor is sent to
+    // sign up before anything else here runs (before touching localStorage
+    // session state or calling the backend at all).
+    if (!isAuthenticated()) {
+      window.location.href = 'signup.html?redirect=intake-flow.html&message=' +
+        encodeURIComponent('Sign up to build your style profile.');
+      return;
+    }
+
     this.currentStep = 1;
     this.sessionId = null;
-    this.userId = this.generateUserId();
+    this.userId = this.getAuthenticatedUserId();
     this.measurements = {};
     this.shapeProfile = null;
     this.styleProfile = null;
@@ -34,13 +43,10 @@ class IntakeFlow {
     }
   }
 
-  generateUserId() {
-    let userId = localStorage.getItem('userId');
-    if (!userId) {
-      userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('userId', userId);
-    }
-    return userId;
+  getAuthenticatedUserId() {
+    // Set by loginAccount() in auth.js -- always present once
+    // isAuthenticated() is true (checked in the constructor above).
+    return localStorage.getItem('userId');
   }
 
   async loadAvailableColors() {
@@ -191,11 +197,18 @@ class IntakeFlow {
       const photoConsent = document.getElementById('photoConsent').checked;
       const measurementConsent = document.getElementById('measurementConsent').checked;
 
-      const sessionResponse = await fetch(`${API_BASE}/intake/session?user_id=${this.userId}`, {
+      const sessionResponse = await fetch(`${API_BASE}/intake/session`, {
         method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
       });
 
-      if (!sessionResponse.ok) throw new Error(`Failed to create session: ${sessionResponse.status}`);
+      if (!sessionResponse.ok) {
+        if (sessionResponse.status === 401) {
+          window.location.href = 'login.html?redirect=intake-flow.html';
+          return;
+        }
+        throw new Error(`Failed to create session: ${sessionResponse.status}`);
+      }
       const session = await sessionResponse.json();
       this.sessionId = session.session_id;
       this.userId = session.user_id;
@@ -496,7 +509,7 @@ class IntakeFlow {
 
   continueShopping() {
     localStorage.setItem('currentSessionId', this.sessionId);
-    window.location.href = '../index.html';
+    window.location.href = '../../index.html';
   }
 }
 

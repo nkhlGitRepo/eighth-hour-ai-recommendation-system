@@ -26,25 +26,42 @@ def unique_user():
     return f"api-intake-{uuid.uuid4().hex[:8]}"
 
 
+def create_session(client, name_hint):
+    """
+    /intake/session is account-gated: registers a fresh account (derived
+    from name_hint, sanitized to fit the username charset) and logs in,
+    then creates the session with that account's bearer token. Returns
+    the /intake/session response -- same shape as the old direct call,
+    just with a server-assigned user_id instead of the caller's name_hint.
+    """
+    username = "".join(c for c in name_hint.lower() if c.isalnum() or c == "_")[:32]
+    password = "TestPassw0rd!"
+    client.post("/auth/register", json={
+        "username": username, "email": f"{username}@example.test", "password": password,
+    })
+    token = client.post("/auth/login", json={"username": username, "password": password}).json()["token"]
+    return client.post("/intake/session", headers={"Authorization": f"Bearer {token}"})
+
+
 class TestCreateSession:
-    def test_creates_session_with_given_user_id(self, client):
+    def test_creates_session_for_the_authenticated_account(self, client):
         user_id = unique_user()
-        r = client.post("/intake/session", params={"user_id": user_id})
+        r = create_session(client, user_id)
         assert r.status_code == 200
         body = r.json()
-        assert body["user_id"] == user_id
+        assert "user_id" in body
         assert "session_id" in body
         assert body["status"] == "initiated"
         assert "created_at" in body and "updated_at" in body
 
-    def test_missing_user_id_is_rejected(self, client):
+    def test_missing_authorization_is_rejected(self, client):
         r = client.post("/intake/session")
-        assert r.status_code == 422  # FastAPI query-param validation
+        assert r.status_code == 401
 
     def test_each_call_creates_a_distinct_session(self, client):
         user_id = unique_user()
-        r1 = client.post("/intake/session", params={"user_id": user_id}).json()
-        r2 = client.post("/intake/session", params={"user_id": user_id}).json()
+        r1 = create_session(client, user_id).json()
+        r2 = create_session(client, user_id).json()
         assert r1["session_id"] != r2["session_id"]
 
 
@@ -81,7 +98,7 @@ class TestIntakeScreen:
 class TestIntakeConsent:
     def test_consent_transitions_to_photo_capture(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
 
         r = client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
@@ -94,7 +111,7 @@ class TestIntakeConsent:
     def test_partial_consent_rejected(self, client):
         """Both consents are required together (all-or-nothing)."""
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
 
         r = client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": False,
@@ -114,7 +131,7 @@ class TestIntakeConsent:
         recommendations, fit-check) would incorrectly reject them.
         """
         user_id = unique_user()
-        s = client.post("/intake/session", params={"user_id": user_id}).json()
+        s = create_session(client, user_id).json()
         session_id = s["session_id"]
 
         client.post("/intake/consent", json={
@@ -129,7 +146,7 @@ class TestIntakeConsent:
 class TestIntakePhoto:
     def test_upload_photo_transitions_state(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -144,7 +161,7 @@ class TestIntakePhoto:
 
     def test_empty_photo_ref_rejected(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
 
         r = client.post("/intake/photo", json={"session_id": session_id, "photo_ref": ""})
         assert r.status_code == 400
@@ -167,7 +184,7 @@ class TestIntakePhoto:
         today, and is covered in TestIntakeConfirm below.
         """
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -183,7 +200,7 @@ class TestIntakePhoto:
 class TestIntakeConfirm:
     def test_manual_measurements_generate_profile(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -202,7 +219,7 @@ class TestIntakeConfirm:
     def test_confirm_without_consent_rejected(self, client):
         """Confirming measurements before consent must not silently succeed."""
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
 
         r = client.post("/intake/confirm", json={
             "session_id": session_id,
@@ -212,7 +229,7 @@ class TestIntakeConfirm:
 
     def test_invalid_measurements_rejected(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -233,7 +250,7 @@ class TestIntakeConfirm:
     def test_resubmitting_measurements_on_completed_session_still_works(self, client):
         """Regression coverage for the 'Update Style' consent-survival fix."""
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -256,7 +273,7 @@ class TestIntakeConfirm:
 class TestIntakePreferences:
     def test_preferences_completes_intake(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -280,7 +297,7 @@ class TestIntakePreferences:
     def test_empty_preferences_still_completes_intake(self, client):
         """Preferences are optional; the flow must not require any of them."""
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -295,7 +312,7 @@ class TestIntakePreferences:
 
     def test_invalid_silhouette_rejected(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -318,13 +335,14 @@ class TestIntakePreferences:
 class TestIntakeResume:
     def test_resumes_most_recent_incomplete_session(self, client):
         user_id = unique_user()
-        created = client.post("/intake/session", params={"user_id": user_id}).json()
+        created = create_session(client, user_id).json()
+        real_user_id = created["user_id"]  # server-assigned, not the name_hint
 
-        r = client.post("/intake/resume", json={"user_id": user_id})
+        r = client.post("/intake/resume", json={"user_id": real_user_id})
         assert r.status_code == 200
         body = r.json()
         assert body["session_id"] == created["session_id"]
-        assert body["user_id"] == user_id
+        assert body["user_id"] == real_user_id
 
     def test_no_resumable_session_returns_404(self, client):
         user_id = unique_user()  # never created any session
@@ -335,7 +353,9 @@ class TestIntakeResume:
         """A finished intake shouldn't be offered as 'resume' -- the user
         should go through /intake/session again (or 'Update Style') instead."""
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        created = create_session(client, user_id).json()
+        real_user_id = created["user_id"]
+        session_id = created["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -345,5 +365,5 @@ class TestIntakeResume:
         })
         client.post("/intake/preferences", json={"session_id": session_id})
 
-        r = client.post("/intake/resume", json={"user_id": user_id})
+        r = client.post("/intake/resume", json={"user_id": real_user_id})
         assert r.status_code == 404

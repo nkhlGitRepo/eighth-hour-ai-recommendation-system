@@ -28,6 +28,11 @@ class AuditLogger:
         "SESSION_CHECKS_RETRIEVED": "Session fit checks retrieved",
         "TREND_ANALYSIS_COMPLETED": "Fit preference trend analysis completed",
         "NEW_RELEASES_FEED_GENERATED": "Personalized new releases feed generated",
+        # Auth events
+        "ACCOUNT_REGISTERED": "User account registered",
+        "LOGIN_SUCCEEDED": "User logged in",
+        "LOGOUT_ALL": "User logged out of all devices",
+        "PASSWORD_CHANGED": "User changed their password",
         # General events
         "CONSENT_RECORDED": "Consent recorded",
         "CONSENT_WITHDRAWN": "Consent withdrawn",

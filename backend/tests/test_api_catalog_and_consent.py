@@ -20,6 +20,23 @@ def unique_user():
     return f"api-catalog-{uuid.uuid4().hex[:8]}"
 
 
+def create_session(client, name_hint):
+    """
+    /intake/session is account-gated: registers a fresh account (derived
+    from name_hint, sanitized to fit the username charset) and logs in,
+    then creates the session with that account's bearer token. Returns
+    the /intake/session response -- same shape as the old direct call,
+    just with a server-assigned user_id instead of the caller's name_hint.
+    """
+    username = "".join(c for c in name_hint.lower() if c.isalnum() or c == "_")[:32]
+    password = "TestPassw0rd!"
+    client.post("/auth/register", json={
+        "username": username, "email": f"{username}@example.test", "password": password,
+    })
+    token = client.post("/auth/login", json={"username": username, "password": password}).json()["token"]
+    return client.post("/intake/session", headers={"Authorization": f"Bearer {token}"})
+
+
 class TestCatalogStats:
     def test_returns_real_catalog_stats(self, client):
         r = client.get("/catalog/stats")
@@ -233,12 +250,14 @@ class TestConsentEndpoints:
     def test_consent_survives_across_requests(self, client):
         """Consent recorded via POST /consent must be visible to endpoints
         that gate on ConsentTracker.has_measurement_consent (e.g. /intake/confirm)."""
-        user_id = unique_user()
+        name_hint = unique_user()
+        session = create_session(client, name_hint).json()
+        session_id = session["session_id"]
+        real_user_id = session["user_id"]
         client.post("/consent", json={
-            "user_id": user_id, "photo_consent": True, "measurement_consent": True,
+            "user_id": real_user_id, "photo_consent": True, "measurement_consent": True,
         })
 
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
         client.post("/intake/consent", json={
             "session_id": session_id, "photo_consent": True, "measurement_consent": True,
         })

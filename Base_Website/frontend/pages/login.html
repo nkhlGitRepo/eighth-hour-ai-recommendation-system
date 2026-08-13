@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>New Releases — Eighth Hour</title>
+  <title>Log In — Eighth Hour</title>
   <link rel="stylesheet" href="../../css/style.css" />
-  <link rel="stylesheet" href="recommendations.css" />
+  <link rel="stylesheet" href="auth.css" />
 </head>
 <body>
 
@@ -42,15 +42,32 @@
   </header>
 
   <section class="section wrap">
-    <div class="recommendations-header">
-      <h1>New Releases</h1>
-      <p class="subtitle" id="newReleasesSubtitle">Our newest arrivals</p>
-    </div>
+    <div class="auth-container">
+      <div class="auth-card">
+        <h1>Log In</h1>
+        <p class="subtitle">Welcome back. Log in to view or edit your style profile.</p>
 
-    <div id="newReleasesBanner"></div>
+        <div class="auth-banner" id="registeredBanner" style="display: none;">
+          Account created — please log in.
+        </div>
+        <div class="auth-error" id="authError"></div>
 
-    <div id="newReleasesGrid" class="product-grid">
-      <div class="loading">Loading new releases...</div>
+        <form id="loginForm">
+          <div class="auth-field">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" autocomplete="username" required />
+          </div>
+          <div class="auth-field">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required />
+          </div>
+          <button type="submit" class="auth-submit">Log In</button>
+        </form>
+
+        <p class="auth-switch">
+          Don't have an account? <a href="signup.html" id="signupSwitchLink">Sign up</a>
+        </p>
+      </div>
     </div>
   </section>
 
@@ -79,13 +96,12 @@
     <p class="copyright">This is a local, non-commercial demo clone built for reference purposes. Not affiliated with Eighth Hour Inc.</p>
   </footer>
 
-  <script src="../../js/data.js"></script>
-  <script src="../../js/placeholder.js"></script>
   <script src="../../js/cart.js"></script>
   <script src="../../js/menu.js"></script>
   <script src="../../js/recommendations-nav-link.js"></script>
   <script src="../../js/style-profile-link.js"></script>
   <script src="../../js/auth-nav-link.js"></script>
-  <script src="new-releases.js"></script>
+  <script src="../../js/auth.js"></script>
+  <script src="login.js"></script>
 </body>
 </html>

@@ -81,6 +81,7 @@ button.btn-outline {
   font-size: 1.4rem;
   letter-spacing: 0.12em;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 .menu-toggle {
   display: none;
@@ -92,15 +93,65 @@ button.btn-outline {
 }
 .main-nav {
   display: flex;
-  flex-wrap: wrap;
+  flex: 1;
+  flex-wrap: nowrap;
+  justify-content: space-evenly;
   gap: 18px;
   font-size: 0.85rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 .main-nav a:hover { color: var(--color-accent); }
+
+/* "More" dropdown: pages with more than 4 category links put the rest in
+   here (see the nav markup) instead of letting .main-nav wrap onto a
+   second line. Pure CSS hover -- no JS involved. */
+.nav-more {
+  position: relative;
+  flex: 0 0 auto;
+}
+.nav-more-toggle {
+  background: none;
+  border: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+.nav-more:hover .nav-more-toggle,
+.nav-more:focus-within .nav-more-toggle {
+  color: var(--color-accent);
+}
+.nav-more-menu {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 180px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  padding: 8px 0;
+  z-index: 60;
+}
+.nav-more:hover .nav-more-menu,
+.nav-more:focus-within .nav-more-menu {
+  display: flex;
+}
+.nav-more-menu a {
+  padding: 8px 18px;
+  white-space: nowrap;
+}
+.nav-more-menu a:hover { background: var(--color-bg); color: var(--color-accent); }
+
 .header-actions {
   display: flex;
+  flex: 1;
+  justify-content: space-evenly;
   gap: 18px;
   font-size: 0.85rem;
   text-transform: uppercase;
@@ -112,13 +163,17 @@ button.btn-outline {
   .menu-toggle { display: block; order: -1; }
   .main-nav {
     display: none;
+    flex: none;
     flex-direction: column;
+    justify-content: flex-start;
     width: 100%;
     order: 3;
     padding-top: 12px;
     gap: 10px;
   }
   .main-nav.open { display: flex; }
+  .nav-more { display: none !important; }
+  .header-actions { flex: none; justify-content: flex-start; }
   .header-inner { flex-wrap: wrap; }
 }
 
@@ -318,7 +373,7 @@ button.btn-outline {
 /* ============================
    Simple form styling (contact, newsletter)
    ============================ */
-input[type="text"], input[type="email"], textarea {
+input[type="text"], input[type="email"], input[type="password"], textarea {
   width: 100%;
   padding: 12px;
   border: 1px solid var(--color-line);

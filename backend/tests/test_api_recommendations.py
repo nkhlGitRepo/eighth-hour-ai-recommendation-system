@@ -20,8 +20,25 @@ def unique_user():
     return f"api-recs-{uuid.uuid4().hex[:8]}"
 
 
+def create_session(client, name_hint):
+    """
+    /intake/session is account-gated: registers a fresh account (derived
+    from name_hint, sanitized to fit the username charset) and logs in,
+    then creates the session with that account's bearer token. Returns
+    the /intake/session response -- same shape as the old direct call,
+    just with a server-assigned user_id instead of the caller's name_hint.
+    """
+    username = "".join(c for c in name_hint.lower() if c.isalnum() or c == "_")[:32]
+    password = "TestPassw0rd!"
+    client.post("/auth/register", json={
+        "username": username, "email": f"{username}@example.test", "password": password,
+    })
+    token = client.post("/auth/login", json={"username": username, "password": password}).json()["token"]
+    return client.post("/intake/session", headers={"Authorization": f"Bearer {token}"})
+
+
 def complete_intake(client, user_id, colors=None, silhouettes=None, occasions=None):
-    s = client.post("/intake/session", params={"user_id": user_id}).json()
+    s = create_session(client, user_id).json()
     session_id = s["session_id"]
     real_user_id = s["user_id"]
     client.post("/intake/consent", json={
@@ -56,7 +73,7 @@ class TestRecommendationsEndpoint:
 
     def test_rejects_incomplete_session(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
 
         r = client.get(f"/recommendations/{session_id}")
         assert r.status_code == 400
@@ -178,7 +195,7 @@ class TestNewReleasesEndpoint:
 
     def test_rejects_incomplete_session(self, client):
         user_id = unique_user()
-        session_id = client.post("/intake/session", params={"user_id": user_id}).json()["session_id"]
+        session_id = create_session(client, user_id).json()["session_id"]
 
         r = client.get(f"/new-releases/{session_id}")
         assert r.status_code == 400

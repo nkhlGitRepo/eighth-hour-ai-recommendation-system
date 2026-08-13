@@ -22,6 +22,7 @@ from py_src.constants import (
     FIT_SCORE_TOLERANCE_SIZE_STEPS,
     FIT_SCORE_DIMENSION_WEIGHTS,
     FIT_SCORE_DEFAULT_WEIGHTS,
+    FIT_NOTE_RELEVANT_DIMENSIONS,
     FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE,
     FIT_SCORE_BOUNDARY_EDGE_CUSHION_CM,
     SIZE_BOUNDARIES,
@@ -151,12 +152,19 @@ class FitChecker:
                 key=lambda x: x[1]
             )[0]
 
-        # Generate fit notes
+        # Generate fit notes. Deliberately NOT dimension_weights (that's
+        # the SIZE/SCORE calculation above, unaffected by this) -- see
+        # FIT_NOTE_RELEVANT_DIMENSIONS for why note guidance uses a wider
+        # set of relevant dimensions for whole-body categories.
+        note_dimensions = FIT_NOTE_RELEVANT_DIMENSIONS.get(
+            product.get("category"), {"bust", "waist", "hips"}
+        )
         fit_notes = self._generate_fit_notes(
             measurements,
             size_chart,
             fit_scores,
-            recommended_size
+            recommended_size,
+            note_dimensions,
         )
 
         # Calculate overall confidence -- already rounded to 2 decimals in
@@ -363,8 +371,20 @@ class FitChecker:
         size_chart: Dict[str, Dict[str, float]],
         fit_scores: Dict[str, float],
         recommended_size: str,
+        note_dimensions: set,
     ) -> List[str]:
-        """Generate specific fit guidance notes."""
+        """
+        Generate specific fit guidance notes.
+
+        note_dimensions (see FIT_NOTE_RELEVANT_DIMENSIONS) gates which
+        measurement-specific notes below can fire, based on which part of
+        the body this category actually covers -- upper-body-only for
+        Tops/Vests (bust), lower-body-only for Skirts/Trousers (waist,
+        hips), and everything for whole-body categories like Dresses/
+        Co-ord Sets. A note about a dimension the garment doesn't even
+        cover (e.g. "runs small in the bust" for a skirt) would be
+        actively misleading, not just noise.
+        """
         notes = []
 
         # Get recommended size measurements
@@ -399,21 +419,25 @@ class FitChecker:
         else:
             notes.append(f"Size {recommended_size} may require alterations for optimal fit.")
 
-        # Add measurement-specific guidance
-        if bust_diff < -2:
-            notes.append("Recommended size runs large in the bust.")
-        elif bust_diff > 2:
-            notes.append("Recommended size runs small in the bust.")
+        # Add measurement-specific guidance -- only for dimensions that
+        # actually matter for this category (see docstring above).
+        if "bust" in note_dimensions:
+            if bust_diff < -2:
+                notes.append("Recommended size runs large in the bust.")
+            elif bust_diff > 2:
+                notes.append("Recommended size runs small in the bust.")
 
-        if waist_diff < -2:
-            notes.append("Recommended size is loose in the waist.")
-        elif waist_diff > 2:
-            notes.append("Recommended size is snug in the waist.")
+        if "waist" in note_dimensions:
+            if waist_diff < -2:
+                notes.append("Recommended size is loose in the waist.")
+            elif waist_diff > 2:
+                notes.append("Recommended size is snug in the waist.")
 
-        if hips_diff < -2:
-            notes.append("Recommended size is loose in the hips.")
-        elif hips_diff > 2:
-            notes.append("Recommended size is snug in the hips.")
+        if "hips" in note_dimensions:
+            if hips_diff < -2:
+                notes.append("Recommended size is loose in the hips.")
+            elif hips_diff > 2:
+                notes.append("Recommended size is snug in the hips.")
 
         # Alternative size suggestion: the best-scoring size other than
         # recommended_size, capped at recommended_size's own score (a

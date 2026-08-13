@@ -163,6 +163,27 @@ FIT_SCORE_DIMENSION_WEIGHTS = {
 }
 FIT_SCORE_DEFAULT_WEIGHTS = {"bust": 1 / 3, "waist": 1 / 3, "hips": 1 / 3}
 
+# Which measurement dimensions are relevant for M7's *fit-note guidance
+# text* ("runs small in the bust", "snug in the hips", ...) per category --
+# deliberately separate from FIT_SCORE_DIMENSION_WEIGHTS above, which
+# governs the SIZE/SCORE and stays bust-only for Dresses/Co-ord Sets (see
+# that constant's comment for why). A garment covering the whole body can
+# still owe the customer advice about a dimension that didn't drive which
+# size got picked -- e.g. a dress fits the whole torso, so a waist or hips
+# mismatch is real, useful guidance even though the recommended size itself
+# is chosen from bust alone. Tops/Vests only ever cover the upper body, so
+# a waist/hips note there would describe fit for a part of the body the
+# garment doesn't touch; Skirts/Trousers are the mirror case for the lower
+# body. Categories not listed here fall back to all three (see check_fit).
+FIT_NOTE_RELEVANT_DIMENSIONS = {
+    "Tops": {"bust"},
+    "Vests": {"bust"},
+    "Dresses": {"bust", "waist", "hips"},
+    "Co-ord Sets": {"bust", "waist", "hips"},
+    "Skirts": {"waist", "hips"},
+    "Trousers": {"waist", "hips"},
+}
+
 # Measurement validation ranges (cm) -- must match InputValidator's
 # enforced ranges (py_src/guardrails/input_validation.py) so size
 # inference never rejects/accepts a measurement the API itself allows.
@@ -178,6 +199,12 @@ MEASUREMENT_RANGES = {
 # New releases feed configuration
 NEW_RELEASES_MATCH_THRESHOLD = 0.65  # Minimum match score to include in feed
 NEW_RELEASES_WINDOW_DAYS = 30  # Products launched within this many days count as "new"
+
+# Minimum items NewReleasesFeed.generate_feed() guarantees via relaxation
+# (see its own docstring for the relaxation order) when strict scoring
+# would otherwise return fewer than this. Pass min_items=0 to disable and
+# get the exact, unrelaxed result (including possibly empty).
+MIN_NEW_RELEASES_ITEMS = 1
 
 # Maps catalog category names to the corresponding key in M3's
 # size_recommendation_by_category, so M7's fit checker can look up the same
@@ -219,3 +246,12 @@ FILTER_RELAXATION_ORDER = [
 # Learning loop feedback types (M10)
 FIT_FEEDBACK_TYPES = ["too_tight", "perfect", "too_loose"]
 PRODUCT_FEEDBACK_TYPES = ["liked", "disliked", "neutral"]
+
+# User accounts / authentication
+AUTH_TOKEN_EXPIRY_DAYS = 30
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 128  # bcrypt silently truncates at 72 bytes -- cap input rather than let it lie
+MIN_USERNAME_LENGTH = 3
+MAX_USERNAME_LENGTH = 32
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_LOCKOUT_MINUTES = 15
