@@ -8,7 +8,7 @@ from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.modules.m7_fit_checker import FitChecker
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
-from py_src.constants import SHAPE_CATEGORY_AFFINITY
+from py_src.constants import SHAPE_CATEGORY_AFFINITY, SIZE_BOUNDARIES
 from py_src.utils.errors import ModuleError
 
 
@@ -388,7 +388,10 @@ class TestM9RecencyFiltering:
         assert skus & {"wrap-dress-navy", "fitted-vest-navy", "aline-skirt-black"}
 
     def test_product_with_no_launched_at_is_excluded(self, fit_checker, consent_tracker):
-        """A product with no launch date is treated as legacy, not new."""
+        """A product with no launch date is treated as legacy, not new --
+        checked with min_items=0 so the minimum-items guarantee (which
+        would otherwise fall back to this same item as a last resort)
+        doesn't mask the recency exclusion this test is actually about."""
         catalog = CatalogKB([{
             "slug": "no-date-item",
             "name": "No Date Item",
@@ -400,7 +403,7 @@ class TestM9RecencyFiltering:
             # No launched_at field at all.
         }])
         feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
-        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, limit=50)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, limit=50, min_items=0)
         assert feed == []
 
     def test_is_recent_handles_malformed_date_gracefully(self, feed_manager):
@@ -555,6 +558,85 @@ class TestM9MatchAttributeIdentification:
         attrs = feed_manager._identify_match_attributes(product, None, style)
         assert not any("silhouette" in attr.lower() for attr in attrs)
 
+    def test_identifies_occasion_match(self, feed_manager):
+        """Should identify occasion overlap as a match reason."""
+        product = {"occasions": ["work", "evening"]}
+        style = {"occasions": ["work"]}
+        attrs = feed_manager._identify_match_attributes(product, None, style)
+        assert any("occasion" in attr.lower() for attr in attrs)
+
+
+class TestM9MatchReasonGeneration:
+    """
+    Regression coverage for the reported bug: every product showed the
+    identical "We think you'll like this because flatters X shapes and
+    it's selected for X shapes" sentence, because the old
+    _generate_match_reason only ever used matched_attributes[0] and then
+    unconditionally appended a second, redundant restatement of the same
+    shape fact. The rewrite combines every signal that actually matched
+    into one sentence (never repeating a fact) and folds in the product's
+    own category, so two products only produce the same reason when they
+    genuinely matched on the exact same signals.
+    """
+
+    def test_shape_match_is_not_stated_twice(self, feed_manager, hourglass_profile):
+        """The old bug verbatim: a shape match must appear exactly once,
+        not "flatters X shapes ... selected for X shapes"."""
+        product = {"category": "Tops", "flatters_shapes": ["hourglass"], "colors": [], "occasions": []}
+        reason = feed_manager._generate_match_reason(product, hourglass_profile, None)
+        assert reason.lower().count("hourglass") == 1
+
+    def test_products_with_different_matches_get_different_reasons(self, feed_manager, hourglass_profile):
+        """Two products matching on different signals must not produce
+        the same explanation."""
+        shape_only = {"category": "Tops", "flatters_shapes": ["hourglass"], "colors": [], "occasions": []}
+        color_only = {"category": "Tops", "flatters_shapes": [], "colors": ["Sky Captain"], "occasions": []}
+        style = {"preferred_colors": ["Sky Captain"], "preferred_silhouettes": [], "occasions": []}
+
+        reason_shape = feed_manager._generate_match_reason(shape_only, hourglass_profile, style)
+        reason_color = feed_manager._generate_match_reason(color_only, hourglass_profile, style)
+        assert reason_shape != reason_color
+        assert "sky captain" in reason_color.lower()
+
+    def test_reason_mentions_product_category(self, feed_manager, hourglass_profile):
+        """The category should flow naturally into the sentence (e.g.
+        'this top', not the raw catalog string 'this Tops')."""
+        product = {"category": "Skirts", "flatters_shapes": ["hourglass"], "colors": [], "occasions": []}
+        reason = feed_manager._generate_match_reason(product, hourglass_profile, None)
+        assert "this skirt" in reason.lower()
+        assert "tops" not in reason.lower()
+
+    def test_multiple_matches_are_combined_not_truncated_to_one(self, feed_manager, hourglass_profile):
+        """A product matching on shape AND color should mention both,
+        not just whichever was checked first."""
+        product = {
+            "category": "Dresses", "flatters_shapes": ["hourglass"],
+            "colors": ["Sky Captain"], "silhouette_class": "fitted", "occasions": [],
+        }
+        style = {"preferred_colors": ["Sky Captain"], "preferred_silhouettes": ["fitted"], "occasions": []}
+        reason = feed_manager._generate_match_reason(product, hourglass_profile, style)
+        assert "hourglass" in reason.lower()
+        assert "sky captain" in reason.lower()
+        assert "fitted" in reason.lower()
+
+    def test_fallback_reason_when_nothing_specific_matched_still_mentions_shape_and_category(
+        self, feed_manager, hourglass_profile
+    ):
+        """When an item cleared the threshold without any single specific
+        signal matching (e.g. via the category-level shape affinity
+        fallback), the reason should still be true and product-specific,
+        not a generic string identical for every category."""
+        product = {"category": "Trousers", "flatters_shapes": [], "colors": [], "occasions": []}
+        reason = feed_manager._generate_match_reason(product, hourglass_profile, None)
+        assert "trousers" in reason.lower()
+        assert "hourglass" in reason.lower()
+
+    def test_no_profiles_at_all_still_returns_a_sensible_string(self, feed_manager):
+        product = {"category": "Vests", "flatters_shapes": [], "colors": [], "occasions": []}
+        reason = feed_manager._generate_match_reason(product, None, None)
+        assert "vest" in reason.lower()
+        assert reason.endswith(".")
+
 
 class TestM9AuditLogging:
     """Test audit trail logging."""
@@ -581,53 +663,40 @@ class TestM9SizeInference:
     """
 
     def test_infers_xs_for_small_bust(self, feed_manager):
-        """Bust 76-83 should be XS."""
-        measurements = {"bust": 78}
+        """A bust below the smallest size's upper edge should be XS."""
+        measurements = {"bust": SIZE_BOUNDARIES["XS"][1] - 1}
         size = feed_manager._infer_size_from_measurements(measurements)
         assert size == "XS"
 
-    def test_infers_s_for_84_91(self, feed_manager):
-        """Bust 84-91 should be S."""
-        for bust in [84, 87, 91]:
+    @pytest.mark.parametrize("size", ["S", "M", "L"])
+    def test_infers_each_mid_size_across_its_whole_band(self, feed_manager, size):
+        """
+        Every bust value inside a size's band must infer that size -- checked
+        across the band rather than at a few transcribed points, so a chart
+        revision can't leave this asserting the wrong range.
+        """
+        low, high = SIZE_BOUNDARIES[size]
+        span = high - low
+        for bust in (low, low + span / 4, low + span / 2, high - 0.01):
             measurements = {"bust": bust}
-            size = feed_manager._infer_size_from_measurements(measurements)
-            assert size == "S", f"bust={bust} should be S, got {size}"
-
-    def test_infers_m_for_92_99(self, feed_manager):
-        """Bust 92.0-99.99 should be M (boundary [92, 100))."""
-        for bust in [92.0, 95, 97, 99.0, 99.99]:
-            measurements = {"bust": bust}
-            size = feed_manager._infer_size_from_measurements(measurements)
-            assert size == "M", f"bust={bust} should be M, got {size}"
-
-    def test_infers_l_for_100_107(self, feed_manager):
-        """Bust 100-107 should be L."""
-        for bust in [100, 103, 107]:
-            measurements = {"bust": bust}
-            size = feed_manager._infer_size_from_measurements(measurements)
-            assert size == "L", f"bust={bust} should be L, got {size}"
+            inferred = feed_manager._infer_size_from_measurements(measurements)
+            assert inferred == size, f"bust={bust} should be {size}, got {inferred}"
 
     def test_infers_xxl_for_large_bust(self, feed_manager):
-        """Bust >= 117 should be XXL."""
-        measurements = {"bust": 120}
+        """A bust at or above the largest size's lower edge should be XXL."""
+        measurements = {"bust": SIZE_BOUNDARIES["XXL"][0] + 3}
         size = feed_manager._infer_size_from_measurements(measurements)
         assert size == "XXL"
 
     def test_size_boundary_transitions_exact(self, feed_manager):
         """Verify exact boundary transitions (off-by-one bug detection)."""
+        # Derived from the shared table rather than transcribed, so this keeps
+        # catching off-by-one errors after a chart revision instead of just
+        # failing because the numbers moved.
         test_cases = [
-            (75.9, "XXS"),
-            (76.0, "XS"),
-            (83.9, "XS"),
-            (84.0, "S"),
-            (91.9, "S"),
-            (92.0, "M"),
-            (99.9, "M"),
-            (100.0, "L"),
-            (107.9, "L"),
-            (108.0, "XL"),
-            (116.9, "XL"),
-            (117.0, "XXL"),
+            (edge, size)
+            for size, (low, high) in SIZE_BOUNDARIES.items()
+            for edge in (low, high - 0.1)
         ]
 
         for bust, expected_size in test_cases:
@@ -699,6 +768,49 @@ class TestM9ResponseStructure:
             assert isinstance(item["name"], str)
 
 
+class TestM9AvailabilityMatchesShapeProfile:
+    """
+    Regression coverage: availability.recommended_size in the New Releases
+    feed must always match the size shown on the customer's Shape Profile
+    for that product's category -- otherwise a customer sees "Recommended
+    size: M" on the New Releases card, then "L" (correctly) on the product
+    page when they click through.
+
+    Root cause: unlike main.py's /fit-check endpoint, generate_feed() never
+    passed known_size to FitChecker.check_fit(), so it fell back to the
+    argmax of fit_scores. That argmax agrees with M3's Shape Profile in the
+    common case (boundary-aware scoring guarantees the correct size scores
+    highest), but right at a size boundary two sizes can tie on score, and
+    the argmax's tie-break (first size in STANDARD_SIZES order) can
+    disagree with M3's own boundary convention.
+    """
+
+    def test_availability_recommended_size_matches_shape_profile_at_a_boundary_tie(self, fit_checker, consent_tracker):
+        from py_src.constants import STANDARD_SIZES, SIZE_BOUNDARIES
+
+        catalog = CatalogKB([{
+            "slug": "boundary-top",
+            "name": "Boundary Top", "category": "Tops", "fabric": "Cotton",
+            "price": 60.0, "colors": ["Ebony"], "sizes": STANDARD_SIZES,
+            "launched_at": days_ago(5),
+        }])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+
+        # bust right at the L boundary edge -- M and L tie on the blended
+        # argmax, but M3's own boundary convention says L.
+        lo, _hi = SIZE_BOUNDARIES["L"]
+        measurements = {"bust": lo + 0.01, "waist": 87.0, "hips": 104.0, "height": 165.0}
+        shape_profile = {
+            "shape_class": "balanced",
+            "size_recommendation_by_category": {"tops": "L", "skirts": "L"},
+        }
+
+        feed = feed_mgr.generate_feed("test_user", shape_profile, None, measurements)
+
+        assert len(feed) == 1
+        assert feed[0]["availability"]["recommended_size"] == "L"
+
+
 class TestM9IndependentOfM6FilterRelaxation:
     """
     M6's retrieve() (used by the main recommendation engine) guarantees a
@@ -717,10 +829,14 @@ class TestM9IndependentOfM6FilterRelaxation:
 
     def test_new_releases_can_legitimately_return_zero(self, fit_checker, consent_tracker):
         """
-        Unlike M6/M5's recommendations, New Releases has no minimum-result
-        guarantee and is not expected to have one -- an empty feed (nothing
-        new happens to match this customer right now) is a valid, honest
-        result, not a bug.
+        Without the minimum-items guarantee (min_items=0), an empty feed
+        (nothing new happens to match this customer right now) is a valid,
+        honest result, not a bug -- unlike M6/M5's recommendations, which
+        always guarantee a minimum. With the default guarantee active,
+        this same scenario instead falls back to the catalog's best-scoring
+        item regardless of age (see the relaxation tests below) -- min_items=0
+        is what verifies the strict, unrelaxed scoring/recency logic in
+        isolation from that fallback.
         """
         catalog_with_no_recent_items = CatalogKB([{
             "slug": "old-item",
@@ -737,5 +853,124 @@ class TestM9IndependentOfM6FilterRelaxation:
             fit_checker=fit_checker,
             consent_tracker=consent_tracker,
         )
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, min_items=0)
+        assert feed == []
+
+
+class TestM9MinimumItemsGuarantee:
+    """
+    New Releases guarantees at least min_items (default 1) via a two-tier
+    relaxation, mirroring M6's filter relaxation for the main
+    recommendations engine but adapted to what's actually relaxable here:
+    the match_threshold (a personalization quality bar) relaxes before the
+    recency window (the actual definition of "new"), since dropping
+    recency is a much bigger compromise to the feature's core promise.
+    """
+
+    def test_backfills_below_threshold_items_within_recency_window_first(self, fit_checker, consent_tracker):
+        """Two recent items, both below the match threshold -- the
+        best-scoring one should still surface rather than returning
+        empty, and it should stay within the recency window (no need to
+        reach for the whole-catalog fallback when the window itself has
+        enough candidates)."""
+        catalog = CatalogKB([
+            {
+                "slug": "recent-partial-match",
+                "name": "Recent Partial Match", "category": "Tops", "fabric": "Cotton",
+                "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],  # matches 1 of 2 preferred colors
+                "launched_at": days_ago(5),
+            },
+            {
+                "slug": "recent-no-match",
+                "name": "Recent No Match", "category": "Tops", "fabric": "Cotton",
+                "price": 40.0, "colors": ["Chartreuse"], "sizes": ["M"],  # matches neither
+                "launched_at": days_ago(6),
+            },
+        ])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+        # A style profile with 2 preferred colors, only one of which either
+        # item stocks -- both score well below the 0.65 threshold on style
+        # (0.5 and 0.0 respectively), and there's no shape profile to pull
+        # the average up, but they're NOT tied, so the backfill pick is
+        # genuinely the better match, not an artifact of list order.
+        feed = feed_mgr.generate_feed(
+            "test_user", None,
+            {"preferred_colors": ["Ebony", "Sky Captain"], "preferred_silhouettes": [], "occasions": []},
+            None,
+        )
+        assert len(feed) == 1
+        assert feed[0]["sku"] == "recent-partial-match"
+        assert feed[0]["match_score"] < 0.65
+
+    def test_falls_back_to_whole_catalog_only_when_recency_window_is_insufficient(self, fit_checker, consent_tracker):
+        """Nothing launched recently at all -- the only way to satisfy
+        min_items is to reach past the recency window."""
+        catalog = CatalogKB([{
+            "slug": "old-item",
+            "name": "Old Item", "category": "Tops", "fabric": "Cotton",
+            "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],
+            "launched_at": days_ago(400),
+        }])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None)
+        assert len(feed) == 1
+        assert feed[0]["sku"] == "old-item"
+
+    def test_already_sufficient_recent_matches_are_never_relaxed(self, feed_manager, hourglass_profile, style_profile, measurements):
+        """When the strict, unrelaxed feed already has >= min_items,
+        relaxation must not fire (result should be identical to the
+        min_items=0 result)."""
+        strict = feed_manager.generate_feed("test_user", hourglass_profile, style_profile, measurements, min_items=0)
+        guaranteed = feed_manager.generate_feed("test_user", hourglass_profile, style_profile, measurements)
+        assert len(strict) >= 1
+        assert strict == guaranteed
+
+    def test_min_items_zero_disables_the_guarantee(self, fit_checker, consent_tracker):
+        """Explicit opt-out: min_items=0 preserves the old exact-scoring
+        behavior, including a legitimately empty result."""
+        catalog = CatalogKB([{
+            "slug": "old-item",
+            "name": "Old Item", "category": "Tops", "fabric": "Cotton",
+            "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],
+            "launched_at": days_ago(400),
+        }])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, min_items=0)
+        assert feed == []
+
+    def test_empty_catalog_returns_empty_without_erroring(self, fit_checker, consent_tracker):
+        """The one case that can still legitimately return fewer than
+        min_items even with the guarantee active: there's nothing in the
+        catalog at all, so there's nothing to fall back to."""
+        feed_mgr = NewReleasesFeed(catalog=CatalogKB([]), fit_checker=fit_checker, consent_tracker=consent_tracker)
         feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None)
         assert feed == []
+
+    def test_relaxation_is_never_disclosed_on_the_item_itself(self, fit_checker, consent_tracker):
+        """A relaxed item's response shape must be indistinguishable from
+        a normal one -- no special flag, no altered fields."""
+        catalog = CatalogKB([{
+            "slug": "old-item",
+            "name": "Old Item", "category": "Tops", "fabric": "Cotton",
+            "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],
+            "launched_at": days_ago(400),
+        }])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None)
+        assert set(feed[0].keys()) == {
+            "sku", "name", "category", "match_score", "matched_attributes", "reason", "availability"
+        }
+
+    def test_respects_limit_smaller_than_min_items(self, fit_checker, consent_tracker):
+        """limit acts as a hard cap even when it's below min_items --
+        target = min(min_items, limit), so relaxation never overshoots
+        what was actually requested."""
+        catalog = CatalogKB([{
+            "slug": "old-item",
+            "name": "Old Item", "category": "Tops", "fabric": "Cotton",
+            "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],
+            "launched_at": days_ago(400),
+        }])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, limit=1, min_items=1)
+        assert len(feed) <= 1

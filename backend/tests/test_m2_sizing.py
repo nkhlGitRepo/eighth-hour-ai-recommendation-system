@@ -334,3 +334,166 @@ class TestMeasurementValidation:
         m = sizing.extract_measurements("photo.jpg", height_cm=165.0)
         assert m.extracted_at is not None
         assert m.extracted_at > 0
+
+
+# Minimal valid image payloads for the upload path. Content is never
+# inspected by the mock provider -- these just need to be real bytes.
+JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+
+
+class TestExtractFromImage:
+    """Test the uploaded-bytes extraction path (POST /intake/photo-measure)."""
+
+    def test_returns_measurements_from_bytes(self, sizing):
+        m = sizing.extract_from_image(JPEG_BYTES, "image/jpeg", height_cm=170.0)
+        assert m.bust == 88.0
+        assert m.waist == 70.0
+        assert m.hips == 102.0
+        assert m.provider == "mock"
+
+    def test_height_is_passed_through_as_scale_reference(self, sizing):
+        m = sizing.extract_from_image(JPEG_BYTES, "image/jpeg", height_cm=182.0)
+        assert m.height == 182.0
+
+    def test_defaults_height_when_omitted(self, sizing):
+        m = sizing.extract_from_image(JPEG_BYTES, "image/jpeg")
+        assert m.height == 165.0
+
+    def test_matches_the_photo_ref_path(self, sizing):
+        """
+        Both entry points must produce identical measurements for the same
+        height -- they share one definition inside the provider, and this is
+        the test that keeps them from drifting.
+        """
+        from_ref = sizing.extract_measurements("photo.jpg", height_cm=171.0)
+        from_bytes = sizing.extract_from_image(PNG_BYTES, "image/png", height_cm=171.0)
+
+        ref_dict = from_ref.to_dict()
+        bytes_dict = from_bytes.to_dict()
+        # extracted_at is a wall-clock stamp, so compare everything else.
+        ref_dict.pop("extracted_at")
+        bytes_dict.pop("extracted_at")
+        assert ref_dict == bytes_dict
+
+    def test_empty_bytes_rejected(self, sizing):
+        with pytest.raises(ModuleError):
+            sizing.extract_from_image(b"", "image/jpeg", height_cm=165.0)
+
+    def test_non_bytes_rejected(self, sizing):
+        with pytest.raises(ModuleError):
+            sizing.extract_from_image("not-bytes", "image/jpeg", height_cm=165.0)
+
+    def test_result_passes_measurement_validation(self, sizing):
+        """SizingIntegration validates provider output the same way both paths do."""
+        m = sizing.extract_from_image(JPEG_BYTES, "image/jpeg", height_cm=165.0)
+        assert m.unit == "cm"
+        assert m.min_confidence() > 0.75
+
+    def test_base_provider_rejects_direct_upload_by_default(self):
+        """
+        extract_from_image is concrete-but-unsupported on the ABC, so a
+        provider that only implements the photo_ref flow stays valid rather
+        than failing to instantiate.
+        """
+        from py_src.modules.m2_sizing_integration import SizingProvider
+
+        class RefOnlyProvider(SizingProvider):
+            def extract_measurements(self, photo_ref, height_cm=None):
+                return Measurements(bust=88, waist=70, hips=102, height=165)
+
+        provider = RefOnlyProvider()
+        assert isinstance(provider, SizingProvider)  # instantiable
+        with pytest.raises(ModuleError) as exc:
+            provider.extract_from_image(JPEG_BYTES, "image/jpeg", 165.0)
+        assert "does not support direct image upload" in str(exc.value)
+
+
+class TestProviderRegistry:
+    """Test the swap surface for a real vendor integration."""
+
+    def test_defaults_to_mock(self, monkeypatch):
+        from py_src.modules.m2_sizing_integration import build_sizing_provider
+
+        monkeypatch.delenv("SIZING_PROVIDER", raising=False)
+        provider = build_sizing_provider()
+        assert isinstance(provider, MockSizingProvider)
+
+    def test_honors_env_var(self, monkeypatch):
+        from py_src.modules.m2_sizing_integration import build_sizing_provider
+
+        monkeypatch.setenv("SIZING_PROVIDER", "mock")
+        assert isinstance(build_sizing_provider(), MockSizingProvider)
+
+    def test_explicit_name_beats_env(self, monkeypatch):
+        from py_src.modules.m2_sizing_integration import build_sizing_provider
+
+        monkeypatch.setenv("SIZING_PROVIDER", "nonexistent")
+        assert isinstance(build_sizing_provider("mock"), MockSizingProvider)
+
+    def test_unknown_provider_fails_loudly(self, monkeypatch):
+        """
+        A typo must not silently serve mock measurements -- that would be far
+        worse in production than refusing to start.
+        """
+        from py_src.modules.m2_sizing_integration import build_sizing_provider
+
+        monkeypatch.setenv("SIZING_PROVIDER", "typo-vendor")
+        with pytest.raises(ModuleError) as exc:
+            build_sizing_provider()
+        assert "typo-vendor" in str(exc.value)
+
+    def test_name_is_case_and_whitespace_insensitive(self, monkeypatch):
+        from py_src.modules.m2_sizing_integration import build_sizing_provider
+
+        monkeypatch.setenv("SIZING_PROVIDER", "  MOCK  ")
+        assert isinstance(build_sizing_provider(), MockSizingProvider)
+
+
+class TestProviderDisclosure:
+    """
+    The upload screen's legal notice is rendered from the provider's own
+    disclosure, so these are the tests that keep the UI from telling a
+    customer something untrue about their photo.
+    """
+
+    def test_mock_declares_no_offsite_transmission(self):
+        d = MockSizingProvider().disclosure
+        assert d["sends_image_offsite"] is False
+        assert d["stores_image"] is False
+
+    def test_mock_declares_that_it_does_not_analyse_the_image(self):
+        """
+        The mock returns fixed values regardless of input, so it must say so --
+        this flag is what makes the UI label them as samples instead of
+        claiming they were measured from the customer's photo.
+        """
+        assert MockSizingProvider().disclosure["derives_from_image"] is False
+
+    def test_mock_returns_identical_values_for_different_images(self):
+        """Documents the limitation explicitly: a person and a car match."""
+        p = MockSizingProvider()
+        person = p.extract_from_image(JPEG_BYTES, "image/jpeg", 170.0)
+        car = p.extract_from_image(PNG_BYTES + b"\x42" * 2048, "image/png", 170.0)
+        assert (person.bust, person.waist, person.hips) == (car.bust, car.waist, car.hips)
+
+    def test_mock_does_not_claim_a_third_party(self):
+        """With the mock active, nothing leaves the machine -- the notice
+        must not imply a third-party processor is involved."""
+        d = MockSizingProvider().disclosure
+        assert "third party" not in d["processor_name"].lower()
+        assert "third-party" not in d["processor_name"].lower()
+
+    def test_integration_passes_provider_disclosure_through(self, sizing):
+        assert sizing.disclosure == MockSizingProvider().disclosure
+
+    def test_provider_without_disclosure_raises(self):
+        """A vendor cannot be plugged in without declaring photo handling."""
+        from py_src.modules.m2_sizing_integration import SizingProvider
+
+        class Undeclared(SizingProvider):
+            def extract_measurements(self, photo_ref, height_cm=None):
+                return Measurements(bust=88, waist=70, hips=102, height=165)
+
+        with pytest.raises(NotImplementedError):
+            Undeclared().disclosure

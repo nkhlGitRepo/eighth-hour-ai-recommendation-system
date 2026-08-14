@@ -1,6 +1,7 @@
 """Tests for M3 (Body Shape Profiler)."""
 
 import pytest
+from py_src.constants import MEASUREMENT_RANGES, SIZE_BOUNDARIES
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
 from py_src.utils.errors import ModuleError
 from tests.fixtures import MEASUREMENTS
@@ -193,22 +194,32 @@ class TestBodyShapeProfiler:
         These boundaries are the ones actually shown to customers, so an
         off-by-one here is customer-visible, not just internal.
         """
+        # Derived from the shared table rather than transcribed, so this keeps
+        # catching off-by-one errors after a chart revision instead of just
+        # failing because the numbers moved.
         test_cases = [
-            (75.9, "XXS"),
-            (76.0, "XS"),
-            (83.9, "XS"),
-            (84.0, "S"),
-            (91.9, "S"),
-            (92.0, "M"),
-            (99.9, "M"),
-            (100.0, "L"),
-            (107.9, "L"),
-            (108.0, "XL"),
-            (116.9, "XL"),
-            (117.0, "XXL"),
+            (edge, size)
+            for size, (low, high) in SIZE_BOUNDARIES.items()
+            for edge in (low, high - 0.1)
         ]
+
+        def in_range(dimension, value):
+            """
+            The smallest and largest bust bands open out to the full supported
+            bust range, so a fixed offset from the band edge would put waist or
+            hips outside what the API accepts. Clamped, since only the bust is
+            under test here.
+            """
+            low, high = MEASUREMENT_RANGES[dimension]
+            return min(max(value, low), high)
+
         for bust, expected_size in test_cases:
-            measurements = {"bust": bust, "waist": bust - 15, "hips": bust + 10, "height": 165}
+            measurements = {
+                "bust": bust,
+                "waist": in_range("waist", bust - 15),
+                "hips": in_range("hips", bust + 10),
+                "height": 165,
+            }
             profile = self.profiler.profile(measurements)
             actual = profile["size_recommendation_by_category"]["tops"]
             assert actual == expected_size, f"bust={bust}: expected {expected_size}, got {actual}"

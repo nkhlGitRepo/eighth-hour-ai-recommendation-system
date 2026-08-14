@@ -5,7 +5,7 @@ Runs on localhost:8000 by default.
 Website calls this API to get styling recommendations.
 """
 
-from fastapi import FastAPI, HTTPException, Query, Header, Depends
+from fastapi import FastAPI, HTTPException, Query, Header, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ import json
 import os
 
 from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator, IntakeState
+from py_src.modules.m2_sizing_integration import SizingIntegration, build_sizing_provider
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
 from py_src.modules.m5_recommendation_engine import RecommendationEngine
 from py_src.modules.m6_catalog_kb import CatalogKB
@@ -25,6 +26,11 @@ from py_src.guardrails.input_validation import InputValidator
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.access_control import AccessControl
 from py_src.guardrails.auth_manager import AuthManager
+from py_src.guardrails.image_validation import (
+    ImageValidator,
+    ImageTooLargeError,
+    MAX_IMAGE_BYTES,
+)
 from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.persistence.user_repository import UserRepository
 from py_src.utils.errors import ModuleError, GuardrailError, AuthError
@@ -67,7 +73,16 @@ consent_tracker = ConsentTracker(db_path=session_repo.db_path)
 # Same db-file-sharing pattern as consent_tracker above.
 user_repository = UserRepository(db_path=session_repo.db_path)
 auth_manager = AuthManager(user_repository)
-intake_orchestrator = IntakeOrchestrator(session_repo=session_repo, consent_tracker=consent_tracker, catalog=catalog)
+# Sizing provider comes from the SIZING_PROVIDER env var (defaults to the
+# mock estimator). This is the only wiring a real vendor integration needs --
+# see py_src/modules/m2_sizing_integration.py's registry and README_PYTHON.md.
+sizing_integration = SizingIntegration(provider=build_sizing_provider())
+intake_orchestrator = IntakeOrchestrator(
+    session_repo=session_repo,
+    consent_tracker=consent_tracker,
+    catalog=catalog,
+    sizing=sizing_integration,
+)
 recommendation_engine = RecommendationEngine(catalog, consent_tracker)
 fit_checker = FitChecker(consent_tracker)
 recommendation_history = RecommendationHistory(consent_tracker=consent_tracker)
@@ -677,6 +692,145 @@ async def upload_intake_photo(request: IntakePhotoRequest):
     except Exception as err:
         logger.error("Intake photo upload failed", err)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/intake/photo-disclosure")
+async def get_photo_disclosure():
+    """
+    How the currently-configured sizing provider handles a customer's photo.
+
+    The upload screen renders its legal notice from this rather than from
+    hardcoded copy, so the disclosure can't silently go stale: with the mock
+    provider nothing leaves this server, and the day a real vendor is
+    configured the notice starts naming it automatically.
+
+    Returns:
+    {
+      "processor_name": "...",
+      "sends_image_offsite": false,
+      "stores_image": false,
+      "retention": "..."
+    }
+    """
+    try:
+        return sizing_integration.disclosure
+    except NotImplementedError as err:
+        # Fail closed. The frontend refuses to show upload controls without a
+        # valid disclosure, which is the correct outcome: better to disable
+        # the feature than to collect a body photo under a notice we can't
+        # actually stand behind.
+        logger.error("Sizing provider does not declare a disclosure", err)
+        raise HTTPException(
+            status_code=500,
+            detail="Photo measurement is unavailable: provider disclosure missing",
+        )
+
+
+@app.post("/intake/photo-measure")
+async def measure_from_photo(
+    session_id: str = Form(...),
+    height_cm: float = Form(...),
+    photo: UploadFile = File(...),
+    usual_top_size: Optional[str] = Form(None),
+    usual_bottom_size: Optional[str] = Form(None),
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Estimate body measurements from an uploaded photo, then generate the
+    shape profile -- the backing call for "Use photo measurement" on the
+    intake flow's measurements step.
+
+    Multipart form fields:
+    - session_id: the caller's intake session
+    - height_cm: the customer's height, used as the scale reference
+    - photo: JPEG/PNG/WEBP image
+
+    Requires: Authorization: Bearer <token>, and photo consent on record.
+
+    The image is never persisted: it is not stored in the database, not
+    recorded on the session, and not logged. Like any upload it is buffered
+    for the life of the request (Starlette spools bodies over 1 MB to a temp
+    file), and that buffer is released in the `finally` below -- so the
+    customer-facing claim is non-retention, not "never touches disk".
+
+    Returns:
+    {
+      "session_id": "...",
+      "status": "profile_generation",
+      "shape_profile": {...},
+      "measurements": {...},
+      "low_confidence_fields": [],
+      "provider": "mock"
+    }
+    """
+    try:
+        # Ownership: the session must belong to the authenticated caller.
+        session = intake_orchestrator.get_session(session_id)
+        if not AccessControl.user_owns_resource(user_id, session.user_id):
+            raise GuardrailError(
+                "User does not have access to this intake session",
+                "AccessControl",
+            )
+
+        # Biometric data needs explicit photo consent. Until now this app
+        # collected photo consent but never actually enforced it anywhere.
+        if not consent_tracker.has_photo_consent(user_id):
+            raise GuardrailError(
+                "User has not consented to photo processing",
+                "ConsentTracker",
+            )
+
+        # Read with a hard bound, then validate before the bytes go anywhere.
+        # Reading one byte past the cap is enough to detect an over-size
+        # upload without buffering the whole thing.
+        image_bytes = await photo.read(MAX_IMAGE_BYTES + 1)
+        content_type = ImageValidator.validate(image_bytes, photo.content_type)
+
+        session = intake_orchestrator.extract_measurements_from_upload(
+            session_id=session_id,
+            image_bytes=image_bytes,
+            content_type=content_type,
+            height_cm=height_cm,
+            usual_top_size=usual_top_size,
+            usual_bottom_size=usual_bottom_size,
+        )
+
+        measurements = session.body_measurements
+        return {
+            "session_id": session.session_id,
+            "status": session.status,
+            "shape_profile": session.shape_profile,
+            "measurements": measurements.to_dict() if measurements else None,
+            "low_confidence_fields": measurements.low_confidence_fields() if measurements else [],
+            # Read from the measurements themselves rather than the session's
+            # redundant mirror field, which doesn't survive a reload.
+            "provider": measurements.provider if measurements else None,
+        }
+
+    except ImageTooLargeError as err:
+        logger.info("Photo measurement rejected: too large", {
+            "content_type": photo.content_type, "filename": photo.filename,
+        })
+        raise HTTPException(status_code=413, detail=err.message)
+    except GuardrailError as err:
+        logger.info("Photo measurement rejected: not permitted", {"reason": str(err)})
+        raise HTTPException(status_code=403, detail=str(err))
+    except ModuleError as err:
+        # Log every rejection with the format details. Without this, a photo
+        # refused by the image validator produced a silent 400 -- which is
+        # exactly how unsupported iPhone HEIC uploads went unnoticed.
+        logger.info("Photo measurement rejected", {
+            "reason": err.message,
+            "content_type": photo.content_type,
+            "filename": photo.filename,
+        })
+        raise HTTPException(status_code=400, detail=err.message)
+    except Exception as err:
+        logger.error("Photo measurement failed", err)
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        # Drop the upload's handle explicitly; nothing retains the bytes.
+        await photo.close()
 
 
 @app.post("/intake/confirm")

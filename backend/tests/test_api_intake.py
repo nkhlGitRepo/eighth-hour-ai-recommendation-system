@@ -174,14 +174,18 @@ class TestIntakePhoto:
 
     def test_auto_confirm_after_photo_upload_currently_fails(self, client):
         """
-        Documents the current, real gap: no endpoint ever calls
-        extract_measurements(), so uploading a photo and then confirming
-        with no manual_overrides has no measurements to generate a profile
-        from. This is a known, deliberately deferred limitation (photo-based
-        measurement extraction uses a real third-party API not yet wired
-        in) -- not something this test suite should paper over by skipping.
-        Manual entry (providing manual_overrides) is the only working path
-        today, and is covered in TestIntakeConfirm below.
+        Documents the behavior of the *photo-ref* endpoint specifically:
+        POST /intake/photo only records a reference string, it never calls
+        extraction, so confirming afterwards with no manual_overrides still
+        has no measurements to build a profile from.
+
+        This is not a gap in photo measurement overall -- the working photo
+        path is POST /intake/photo-measure, which accepts the actual image
+        bytes, runs extraction, and generates the shape profile (see
+        tests/test_api_photo_measure.py). This ref-based endpoint is kept for
+        a future vendor flow where the image is uploaded out-of-band and
+        referenced by URI, and it is deliberately left un-wired until such a
+        provider exists.
         """
         user_id = unique_user()
         session_id = create_session(client, user_id).json()["session_id"]

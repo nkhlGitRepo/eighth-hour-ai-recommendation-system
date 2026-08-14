@@ -23,6 +23,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from py_src.constants import HIP_SIZE_BOUNDARIES, SIZE_BOUNDARIES, STANDARD_SIZES
+
+
+def _size_for(measurement, boundaries):
+    """The size a measurement falls into, per the shared boundary tables."""
+    for size, (low, high) in boundaries.items():
+        if low <= measurement < high:
+            return size
+    raise AssertionError(f"{measurement} outside every band in {boundaries}")
 
 
 @pytest.fixture(scope="module")
@@ -220,15 +229,26 @@ class TestFitCheckCoordSetsSizedLikeATop:
         client.post("/consent", json={
             "user_id": real_user_id, "photo_consent": True, "measurement_consent": True,
         })
-        # bust -> XL, hips -> S: a genuinely mismatched body, where the old
-        # equal blend used to land on an unrelated third size (e.g. "M").
+        # A genuinely mismatched body -- a large bust with much smaller hips --
+        # where the old equal blend used to land on an unrelated third size.
+        # The two expected sizes are derived from the shared boundary tables so
+        # this stays a test about co-ords being sized like a top, rather than a
+        # record of which sizes the chart happened to name when it was written.
+        body = {"bust": 111, "waist": 78, "hips": 90, "height": 165}
+        expected_top = _size_for(body["bust"], SIZE_BOUNDARIES)
+        expected_bottom = _size_for(body["hips"], HIP_SIZE_BOUNDARIES)
+        assert STANDARD_SIZES.index(expected_top) - STANDARD_SIZES.index(expected_bottom) >= 3, (
+            "This test needs a body whose bust and hips sizes are far apart; "
+            f"got {expected_top} vs {expected_bottom}"
+        )
+
         confirm = client.post("/intake/confirm", json={
             "session_id": session_id,
-            "manual_overrides": {"bust": 111, "waist": 78, "hips": 90, "height": 165},
+            "manual_overrides": body,
         }).json()
         size_by_category = confirm["shape_profile"]["size_recommendation_by_category"]
-        assert size_by_category["tops"] == "XL"
-        assert size_by_category["skirts"] == "S"
+        assert size_by_category["tops"] == expected_top
+        assert size_by_category["skirts"] == expected_bottom
 
         client.post("/intake/preferences", json={
             "session_id": session_id,

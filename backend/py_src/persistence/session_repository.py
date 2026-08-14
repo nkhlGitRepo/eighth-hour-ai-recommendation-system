@@ -392,6 +392,13 @@ class SQLiteSessionRepository(SessionRepository):
                     provider=m_dict.get("provider", "mock"),
                     provider_version=m_dict.get("provider_version", "1.0"),
                 )
+                # Measurements.__init__ stamps extracted_at with "now", which
+                # would make every reload look like the measurements were
+                # just taken. The real value is already persisted inside the
+                # JSON above (to_dict includes it) -- restore it so "when was
+                # this measured" survives a round-trip.
+                if m_dict.get("extracted_at"):
+                    session.body_measurements.extracted_at = m_dict["extracted_at"]
             except (json.JSONDecodeError, KeyError, ValueError) as err:
                 logger.error("Session reconstruction failed", {"error": str(err), "session_id": row["session_id"]})
                 raise ModuleError(

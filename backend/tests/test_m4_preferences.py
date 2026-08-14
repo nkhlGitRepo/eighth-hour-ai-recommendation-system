@@ -2,6 +2,7 @@
 
 import pytest
 from py_src.modules.m4_style_preference import StyleProfile, PreferenceCapture
+from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.utils.errors import ModuleError
 
 
@@ -88,6 +89,92 @@ class TestColorValidation:
             preferred_colors=[],
         )
         assert profile.preferred_colors == []
+
+
+class TestCatalogDrivenColorValidation:
+    """
+    Regression coverage: valid product colors must come from the live
+    catalog, not a hand-maintained list that has to be manually updated
+    every time a new color is added to the catalog. PreferenceCapture
+    reads catalog.by_color live (see _valid_colors()) instead.
+    """
+
+    def test_catalog_color_is_valid_when_catalog_injected(self):
+        """A color that exists in the injected catalog should validate,
+        even though it's not one of the static generic buckets."""
+        catalog = CatalogKB([{
+            "slug": "sky-captain-top", "name": "Sky Captain Top", "category": "Tops",
+            "fabric": "Cotton", "price": 50.0, "colors": ["Sky Captain"], "sizes": ["M"],
+        }])
+        capture_with_catalog = PreferenceCapture(catalog=catalog)
+
+        profile = capture_with_catalog.capture_preferences(
+            user_id="test_user", preferred_colors=["Sky Captain"],
+        )
+        assert profile.preferred_colors == ["Sky Captain"]
+
+    def test_catalog_color_is_invalid_without_a_catalog(self, capture):
+        """Without an injected catalog, only the generic buckets are
+        valid -- a real product-specific color name is rejected rather
+        than silently trusted from a stale hardcoded list."""
+        with pytest.raises(ModuleError):
+            capture.capture_preferences(
+                user_id="test_user", preferred_colors=["Sky Captain"],
+            )
+
+    def test_newly_added_catalog_color_becomes_valid_without_any_code_change(self):
+        """
+        The exact scenario this feature exists for: a brand-new product
+        with a brand-new color gets added to the catalog (simulated here
+        via catalog.rebuild(), the same call main.py makes whenever the
+        catalog is synced) -- a preference using that color must go from
+        invalid to valid automatically, with no change to PreferenceCapture,
+        StyleProfile, or any hardcoded list.
+        """
+        catalog = CatalogKB([{
+            "slug": "existing-item", "name": "Existing Item", "category": "Tops",
+            "fabric": "Cotton", "price": 50.0, "colors": ["Ebony"], "sizes": ["M"],
+        }])
+        capture_with_catalog = PreferenceCapture(catalog=catalog)
+
+        # Before: this brand-new color doesn't exist in the catalog yet.
+        with pytest.raises(ModuleError):
+            capture_with_catalog.capture_preferences(
+                user_id="test_user", preferred_colors=["Chartreuse Dream"],
+            )
+
+        # A new product with that color gets added to the catalog.
+        catalog.rebuild([
+            {
+                "slug": "existing-item", "name": "Existing Item", "category": "Tops",
+                "fabric": "Cotton", "price": 50.0, "colors": ["Ebony"], "sizes": ["M"],
+            },
+            {
+                "slug": "new-item", "name": "New Item", "category": "Dresses",
+                "fabric": "Silk", "price": 80.0, "colors": ["Chartreuse Dream"], "sizes": ["M"],
+            },
+        ])
+
+        # After: the same PreferenceCapture instance (same catalog
+        # reference) now accepts it -- no restart, no code change.
+        profile = capture_with_catalog.capture_preferences(
+            user_id="test_user", preferred_colors=["Chartreuse Dream"],
+        )
+        assert profile.preferred_colors == ["Chartreuse Dream"]
+
+    def test_generic_color_buckets_still_valid_alongside_catalog_colors(self):
+        """Generic buckets ('black', 'navy', ...) must keep working even
+        when a catalog is injected -- they're not catalog-derived."""
+        catalog = CatalogKB([{
+            "slug": "ebony-top", "name": "Ebony Top", "category": "Tops",
+            "fabric": "Cotton", "price": 50.0, "colors": ["Ebony"], "sizes": ["M"],
+        }])
+        capture_with_catalog = PreferenceCapture(catalog=catalog)
+
+        profile = capture_with_catalog.capture_preferences(
+            user_id="test_user", preferred_colors=["black", "Ebony"],
+        )
+        assert set(profile.preferred_colors) == {"black", "Ebony"}
 
 
 class TestSilhouetteValidation:

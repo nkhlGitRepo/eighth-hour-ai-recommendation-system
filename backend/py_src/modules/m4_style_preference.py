@@ -21,9 +21,17 @@ import time
 class StyleProfile:
     """User's stated style preferences."""
 
-    # Valid options for each preference dimension
-    VALID_COLORS = [
-        # Generic preference colors
+    # Generic preference colors -- customer-facing "vibe" buckets that
+    # exist independent of any specific product (a customer can prefer
+    # "earth_tones" without knowing an exact swatch name), so they stay
+    # static here rather than coming from the catalog.
+    #
+    # The actual product-color half of what used to be VALID_COLORS is
+    # intentionally NOT hardcoded anymore -- see PreferenceCapture._valid_colors(),
+    # which reads it live from the injected CatalogKB instead. That old
+    # hardcoded list had to be manually kept in sync with products.json by
+    # hand, and had already drifted (missing colors from newer products).
+    GENERIC_COLOR_OPTIONS = [
         "black",
         "navy",
         "cream",
@@ -34,24 +42,6 @@ class StyleProfile:
         "pastels",
         "bright",
         "monochrome",
-        # Actual product colors (from catalog)
-        "Ebony",
-        "Moonless Night",
-        "Chocolate Truffle",
-        "Sky Captain",
-        "Forest Night",
-        "Pageant Blue",
-        "Pure Cashmere",
-        "Potent Purple",
-        "Purple Potion",
-        "Kombu Green",
-        "Burnt Russet",
-        "Duffel Bag",
-        "Fig",
-        "Fudge",
-        "Nomad",
-        "Sepia Tint",
-        "White Alyssum",
     ]
 
     VALID_SILHOUETTES = [
@@ -127,8 +117,25 @@ class StyleProfile:
 class PreferenceCapture:
     """Capture and validate user style preferences."""
 
-    def __init__(self):
+    def __init__(self, catalog=None):
+        """
+        Args:
+            catalog: Optional CatalogKB. When given, the product-color half
+                of valid colors (see _valid_colors) is read live from it, so
+                a color newly added to the catalog automatically becomes a
+                valid preference -- no list to update by hand. Falls back
+                to just the generic color buckets (no product-specific
+                colors accepted) when omitted.
+        """
+        self.catalog = catalog
         logger.info("M4 PreferenceCapture initialized")
+
+    def _valid_colors(self) -> list:
+        """Colors a customer may currently select: the static generic
+        buckets plus whichever colors actually exist in the live catalog
+        right now (empty if no catalog was injected)."""
+        catalog_colors = sorted(self.catalog.by_color.keys()) if self.catalog is not None else []
+        return StyleProfile.GENERIC_COLOR_OPTIONS + catalog_colors
 
     def capture_preferences(
         self,
@@ -221,10 +228,11 @@ class PreferenceCapture:
         if not isinstance(colors, list):
             raise ModuleError("Colors must be a list", "M4")
 
-        valid = [c for c in colors if c in StyleProfile.VALID_COLORS]
+        valid_colors = self._valid_colors()
+        valid = [c for c in colors if c in valid_colors]
         if len(valid) == 0 and len(colors) > 0:
             raise ModuleError(
-                f"No valid colors. Valid options: {StyleProfile.VALID_COLORS}", "M4"
+                f"No valid colors. Valid options: {valid_colors}", "M4"
             )
 
         return valid

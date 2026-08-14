@@ -104,12 +104,20 @@ class IntakeSession:
 class IntakeOrchestrator:
     """Orchestrates the multi-screen intake flow."""
 
-    def __init__(self, session_repo: SessionRepository = None, consent_tracker: ConsentTracker = None):
+    def __init__(self, session_repo: SessionRepository = None, consent_tracker: ConsentTracker = None, catalog=None, sizing: SizingIntegration = None):
         # Session persistence layer (defaults to SQLite)
         self.session_repo = session_repo or SQLiteSessionRepository()
-        self.sizing = SizingIntegration()
+        # An explicitly-provided integration (production wiring in main.py,
+        # which selects the provider from SIZING_PROVIDER) always wins;
+        # defaulting to SizingIntegration() keeps every existing caller and
+        # test on the mock provider exactly as before.
+        self.sizing = sizing or SizingIntegration()
         self.profiler = BodyShapeProfiler()
-        self.preferences = PreferenceCapture()
+        # Passing the live catalog lets M4 validate colors against whatever
+        # products actually exist right now, instead of a hand-maintained
+        # list that has to be manually updated every time a new color is
+        # added to the catalog.
+        self.preferences = PreferenceCapture(catalog=catalog)
         # Share the session repo's db file by default, so a session and its
         # consent record live in (and survive restarts from) the same
         # database -- an explicitly-provided tracker (production wiring in
@@ -255,10 +263,88 @@ class IntakeOrchestrator:
         self.session_repo.save(session)
         return session
 
+    def _apply_extracted_measurements(
+        self,
+        session: IntakeSession,
+        measurements,
+        confidence_threshold: float = 0.75,
+    ) -> list:
+        """
+        Store freshly-extracted measurements on the session and route based
+        on confidence. Shared by BOTH extraction entry points (the photo_ref
+        path in extract_measurements and the uploaded-bytes path in
+        extract_measurements_from_upload) so the two can never drift apart
+        in what they record or where they leave the session.
+
+        Covers the success path only -- each entry point keeps its own error
+        handling, deliberately: the photo_ref path soft-fails to manual_entry,
+        while the upload path must surface the failure so the HTTP layer can
+        tell the customer their photo couldn't be read.
+
+        Returns:
+            List of low-confidence field names (empty when all cleared the
+            threshold), so callers can report it without recomputing.
+        """
+        session.body_measurements = measurements
+        session.measurement_provider = measurements.provider
+        session.measurement_confidence = measurements.confidence_scores
+
+        low_confidence_fields = measurements.low_confidence_fields(confidence_threshold)
+
+        if low_confidence_fields:
+            # Route to manual_entry for user confirmation
+            old_status = session.status
+            session.status = IntakeState.MANUAL_ENTRY.value
+            session.updated_at = time.time()
+            session.record_event(
+                old_status,
+                session.status,
+                f"Low confidence: {low_confidence_fields}",
+                "auto_route_low_confidence"
+            )
+
+            logger.info(
+                "Routing to manual entry (low confidence)",
+                {
+                    "session_id": session.session_id,
+                    "low_fields": low_confidence_fields,
+                    "min_confidence": measurements.min_confidence(),
+                },
+            )
+        else:
+            # Proceed to profile generation
+            old_status = session.status
+            session.status = IntakeState.PROFILE_GENERATION.value
+            session.updated_at = time.time()
+            session.record_event(
+                old_status,
+                session.status,
+                "Measurements extracted with high confidence",
+                "auto_proceed_high_confidence"
+            )
+
+            # Call M3 to generate shape profile
+            self._generate_profile(session)
+
+        return low_confidence_fields
+
+    def _resolve_photo_height(self, session: IntakeSession, photo_ref: str) -> float:
+        """
+        Height to use as the extraction scale reference.
+
+        upload_photo() already stores the customer's height per photo in
+        photo_metadata, but extraction used to ignore it and always assume
+        165cm -- so someone who uploaded at 180cm was measured as though
+        they were 165cm. Prefer the stored value, falling back to 165 only
+        when nothing was recorded.
+        """
+        stored = (session.photo_metadata.get(photo_ref) or {}).get("height_cm")
+        return stored if stored else 165.0
+
     def extract_measurements(
         self,
         session_id: str,
-        height_cm: float = 165.0,
+        height_cm: float = None,
         confidence_threshold: float = 0.75,
     ) -> IntakeSession:
         """
@@ -266,7 +352,8 @@ class IntakeOrchestrator:
 
         Args:
             session_id: Intake session ID
-            height_cm: Height in cm
+            height_cm: Height in cm. When omitted, falls back to the height
+                recorded for this photo by upload_photo(), then to 165.
             confidence_threshold: Minimum confidence to proceed (default 0.75)
 
         Returns:
@@ -283,6 +370,9 @@ class IntakeOrchestrator:
         # Use first photo for extraction (Phase 1)
         photo_ref = session.photo_refs[0]
 
+        if height_cm is None:
+            height_cm = self._resolve_photo_height(session, photo_ref)
+
         try:
             # Call M2 to extract measurements
             measurements = self.sizing.extract_measurements(
@@ -291,47 +381,9 @@ class IntakeOrchestrator:
                 user_id=session.user_id,
             )
 
-            session.body_measurements = measurements
-            session.measurement_provider = measurements.provider
-            session.measurement_confidence = measurements.confidence_scores
-
-            # Check confidence
-            low_confidence_fields = measurements.low_confidence_fields(confidence_threshold)
-
-            if low_confidence_fields:
-                # Route to manual_entry for user confirmation
-                old_status = session.status
-                session.status = IntakeState.MANUAL_ENTRY.value
-                session.updated_at = time.time()
-                session.record_event(
-                    old_status,
-                    session.status,
-                    f"Low confidence: {low_confidence_fields}",
-                    "auto_route_low_confidence"
-                )
-
-                logger.info(
-                    "Routing to manual entry (low confidence)",
-                    {
-                        "session_id": session_id,
-                        "low_fields": low_confidence_fields,
-                        "min_confidence": measurements.min_confidence(),
-                    },
-                )
-            else:
-                # Proceed to profile generation
-                old_status = session.status
-                session.status = IntakeState.PROFILE_GENERATION.value
-                session.updated_at = time.time()
-                session.record_event(
-                    old_status,
-                    session.status,
-                    "Measurements extracted with high confidence",
-                    "auto_proceed_high_confidence"
-                )
-
-                # Call M3 to generate shape profile
-                self._generate_profile(session)
+            self._apply_extracted_measurements(
+                session, measurements, confidence_threshold
+            )
 
         except Exception as err:
             logger.error("M2 extraction failed", err)
@@ -345,6 +397,60 @@ class IntakeOrchestrator:
                 f"Extraction error: {str(err)}",
                 "error_fallback"
             )
+
+        self.session_repo.save(session)
+        return session
+
+    def extract_measurements_from_upload(
+        self,
+        session_id: str,
+        image_bytes: bytes,
+        content_type: str,
+        height_cm: float = None,
+        confidence_threshold: float = 0.75,
+        usual_top_size: str = None,
+        usual_bottom_size: str = None,
+    ) -> IntakeSession:
+        """
+        Extract measurements from a directly-uploaded image.
+
+        The image bytes are never persisted -- they're passed to the provider,
+        used, and dropped when this call returns. Nothing about the image is
+        written to the session; only the resulting measurements are.
+
+        Unlike extract_measurements(), extraction failures propagate rather
+        than silently routing to manual_entry: this path is driven by a
+        customer action in the UI, which needs to show a real error (and its
+        "enter measurements manually instead" fallback) rather than appearing
+        to succeed. The session is left untouched when extraction fails.
+
+        Args:
+            session_id: Intake session ID
+            image_bytes: Raw image data (caller must have validated it)
+            content_type: Validated MIME type
+            height_cm: Customer-supplied height, the scale reference
+            confidence_threshold: Minimum confidence to proceed (default 0.75)
+
+        Returns:
+            Updated IntakeSession (status = profile_generation or manual_entry)
+
+        Raises:
+            ModuleError: If the provider can't extract usable measurements
+        """
+        session = self.get_session(session_id)
+
+        measurements = self.sizing.extract_from_image(
+            image_bytes=image_bytes,
+            content_type=content_type,
+            height_cm=height_cm,
+            user_id=session.user_id,
+            usual_top_size=usual_top_size,
+            usual_bottom_size=usual_bottom_size,
+        )
+
+        self._apply_extracted_measurements(
+            session, measurements, confidence_threshold
+        )
 
         self.session_repo.save(session)
         return session
@@ -377,19 +483,43 @@ class IntakeOrchestrator:
 
             session.manual_overrides = manual_overrides
 
-            # Create Measurements from overrides
-            session.body_measurements = Measurements(
-                bust=manual_overrides["bust"],
-                waist=manual_overrides["waist"],
-                hips=manual_overrides["hips"],
-                height=manual_overrides.get("height", 165),
-                shoulder=manual_overrides.get("shoulder"),
-                inseam=manual_overrides.get("inseam"),
-                provider="manual_entry",
-                provider_version="1.0",
+            # Photo measurement returns the customer to the measurements screen
+            # to review the estimates, so a scan is always followed by a
+            # confirm submitting those same numbers back. Blindly relabelling
+            # them "manual_entry" would erase the real provenance on every
+            # single scan (and, with a real vendor configured, would make the
+            # audit trail claim the customer typed values the vendor produced).
+            # So provenance is only reassigned when the values actually differ
+            # from what was extracted -- i.e. when the human really did
+            # override something.
+            existing = session.body_measurements
+            unchanged_from_extraction = existing is not None and all(
+                manual_overrides.get(field) == getattr(existing, field)
+                for field in ("bust", "waist", "hips", "height")
             )
 
-            logger.debug("Measurements manually corrected", {"session_id": session_id})
+            if unchanged_from_extraction:
+                logger.debug(
+                    "Measurements confirmed unchanged; keeping extraction provenance",
+                    {"session_id": session_id, "provider": existing.provider},
+                )
+            else:
+                session.body_measurements = Measurements(
+                    bust=manual_overrides["bust"],
+                    waist=manual_overrides["waist"],
+                    hips=manual_overrides["hips"],
+                    height=manual_overrides.get("height", 165),
+                    shoulder=manual_overrides.get("shoulder"),
+                    inseam=manual_overrides.get("inseam"),
+                    provider="manual_entry",
+                    provider_version="1.0",
+                )
+                session.measurement_provider = "manual_entry"
+                session.measurement_confidence = (
+                    session.body_measurements.confidence_scores
+                )
+
+                logger.debug("Measurements manually corrected", {"session_id": session_id})
 
         # Generate profile
         self._generate_profile(session)

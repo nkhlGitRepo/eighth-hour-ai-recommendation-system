@@ -76,6 +76,10 @@
         <h2>Your Measurements</h2>
         <p class="subtitle">Tell us your body measurements for an accurate fit.</p>
 
+        <!-- Shown right after a photo scan so the customer knows these values
+             were estimated (and are editable) rather than typed by them. -->
+        <div class="measurement-scan-note" id="measurementScanNote" hidden></div>
+
         <div class="measurements-grid">
           <div class="measurement-input">
             <label for="bust">Bust (cm)</label>
@@ -104,6 +108,166 @@
           <button class="btn btn-primary" id="measurementsNext" disabled>Continue</button>
         </div>
         <p class="intake-note">Don't know your exact measurements? <a href="#" id="photoCapture">Use photo measurement</a></p>
+      </div>
+
+      <!--
+        Photo measurement: an ALTERNATE view of step 2, not a sixth step.
+        The progress indicator deliberately still reads "Measurements" while
+        this is showing, and currentStep stays 2 -- photo measurement IS the
+        measurements step, just a different way of completing it.
+      -->
+      <div class="intake-screen" id="screen-photo" data-screen="photo">
+        <h2>Photo Measurement</h2>
+        <p class="subtitle">Upload a full-body photo and we'll estimate your measurements.</p>
+
+        <!--
+          Legal notice. Rendered from GET /intake/photo-disclosure rather than
+          hardcoded here, so it always describes what the configured provider
+          actually does with the image. Upload controls stay hidden until it
+          loads (fail closed) -- we don't collect a body photo under a notice
+          we can't display.
+        -->
+        <div class="photo-disclosure" id="photoDisclosure">
+          <div class="loading">Loading privacy information...</div>
+        </div>
+
+        <div class="photo-upload-body" id="photoUploadBody" hidden>
+          <label class="photo-ack">
+            <input type="checkbox" id="photoAck" />
+            <span>
+              I'm 18 or older (or have a parent/guardian's permission) and I understand
+              my photo will be used only to estimate my measurements, as described above.
+            </span>
+          </label>
+
+          <!--
+            Shown BEFORE the file picker, not as helper text under it. Measured
+            against 65 real photographs, 71% were refused, and 39 of those 46
+            rejections were framing alone -- the body was only partly in frame.
+            The remaining reasons, in order, were uneven shoulders, feet too far
+            apart, implausible proportions, uneven hips and a rotated torso.
+            Each item below is one of those causes, most common first, so this
+            list stays tied to what actually fails rather than generic advice.
+          -->
+          <div class="photo-tips">
+            <p class="photo-tips-heading">What makes a photo work</p>
+            <ul>
+              <li><strong>Your whole body in frame, head to feet.</strong> This is
+                  by far the most common reason a photo can't be used.</li>
+              <li><strong>Stand square to the camera</strong> — shoulders and hips
+                  level, not turned or leaning.</li>
+              <li><strong>Feet close together</strong>, arms slightly away from
+                  your sides.</li>
+              <li><strong>Flat shoes or bare feet</strong>, on level ground.</li>
+              <li>Reasonably fitted clothing, even lighting, just you in the shot.</li>
+            </ul>
+            <p class="photo-tips-footnote">
+              A phone propped up a few steps away, camera at about waist height,
+              works better than a photo taken from above or at an angle.
+            </p>
+          </div>
+
+          <div class="photo-field">
+            <label for="photoFile">Full-body photo</label>
+            <input type="file" id="photoFile" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/avif,.heic,.heif" />
+            <span class="measurement-help">JPEG, PNG, HEIC (iPhone) or WEBP.</span>
+          </div>
+
+          <div class="photo-preview" id="photoPreview" hidden>
+            <img id="photoPreviewImage" alt="Preview of the photo you selected" />
+          </div>
+
+          <div class="photo-field">
+            <label for="photoHeight">Your height (cm)</label>
+            <input type="number" id="photoHeight" placeholder="e.g., 165" min="140" max="210" />
+            <span class="measurement-help">Required — a photo alone can't tell your scale (140-210 cm)</span>
+          </div>
+
+          <div class="photo-size-block">
+            <p class="photo-size-heading">
+              What sizes do you usually wear?
+              <span class="photo-field-badge">Optional — recommended</span>
+            </p>
+            <p class="measurement-help" style="margin-bottom: 0.9rem;">
+              This noticeably improves accuracy. A photo can't judge body depth, so your
+              usual sizes give us a much better starting point — in our testing they cut
+              the average error roughly in half. Tops and bottoms are asked separately
+              because many people are different sizes above and below the waist.
+            </p>
+
+            <div class="photo-size-grid">
+              <div class="photo-field">
+                <label for="photoTopSize">Tops</label>
+                <select id="photoTopSize">
+                  <option value="">I'd rather not say</option>
+              <option value="XS">XS</option>
+              <option value="S">S</option>
+              <option value="M">M</option>
+              <option value="L">L</option>
+              <option value="XL">XL</option>
+              <option value="XXL">XXL</option>
+                </select>
+                <span class="measurement-help">Used for your bust estimate</span>
+              </div>
+              <div class="photo-field">
+                <label for="photoBottomSize">Bottoms</label>
+                <select id="photoBottomSize">
+                  <option value="">I'd rather not say</option>
+              <option value="XS">XS</option>
+              <option value="S">S</option>
+              <option value="M">M</option>
+              <option value="L">L</option>
+              <option value="XL">XL</option>
+              <option value="XXL">XXL</option>
+                </select>
+                <span class="measurement-help">Used for waist and hips</span>
+              </div>
+            </div>
+          </div>
+
+          <!--
+            One error panel for every failure mode -- unreadable photo, no
+            person found, unusable pose, file too large, network dropout, and
+            (once a paid vendor is wired in) timeouts, rate limits and auth
+            failures. Customers get one clear message and a way forward; the
+            specific technical reason goes to the console and the server log,
+            never to the screen, so vendor error text can't leak out.
+          -->
+          <div class="photo-error" id="photoError" hidden role="alert">
+            <div class="photo-error-head">
+              <span class="photo-error-icon" aria-hidden="true">!</span>
+              <h3>We couldn't measure that photo</h3>
+            </div>
+            <p>Your saved measurements haven't been changed. Most of the time the
+               body wasn't fully in frame — it happens often, and it's easy to fix.</p>
+            <ul>
+              <li><strong>Check your whole body is in frame, head to feet</strong> — the
+                  single most common cause</li>
+              <li>Stand square to the camera, shoulders and hips level</li>
+              <li>Feet close together, flat shoes or bare feet</li>
+              <li>Avoid sitting, posing, leaning or turning to the side</li>
+              <li>Even lighting, fitted clothing, just you in the shot</li>
+            </ul>
+            <p>You can also skip this and type your measurements in yourself — it
+               only takes a moment.</p>
+            <div class="photo-error-actions">
+              <button type="button" class="btn btn-secondary" id="photoErrorRetry">Try another photo</button>
+              <button type="button" class="btn btn-secondary" id="photoErrorManual">Enter measurements manually</button>
+            </div>
+          </div>
+
+          <div class="photo-scanning" id="photoScanning" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Estimating your measurements...</span>
+          </div>
+
+          <div class="intake-actions">
+            <button class="btn btn-secondary" id="photoBack">Back</button>
+            <button class="btn btn-primary" id="photoScan" disabled>Scan Photo</button>
+          </div>
+        </div>
+
+        <p class="intake-note">Prefer not to upload a photo? <a href="#" id="photoManualEntry">Enter measurements manually</a></p>
       </div>
 
       <!-- Screen 3: Shape Profile -->

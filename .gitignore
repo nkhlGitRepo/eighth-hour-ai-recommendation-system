@@ -83,3 +83,6 @@ temp/
 Thumbs.db
 *.bak
 *.log
+
+# MediaPipe pose model (build artifact, auto-downloaded on first use)
+backend/models/

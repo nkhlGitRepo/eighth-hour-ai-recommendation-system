@@ -7,6 +7,7 @@ from py_src.modules.m1_intake_orchestrator import (
     IntakeOrchestrator,
     IntakeState,
 )
+from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.utils.errors import ModuleError, GuardrailError
 
@@ -348,8 +349,16 @@ class TestM1ConsentEnforcement:
         """
         db_path = tempfile.NamedTemporaryFile(delete=False, suffix=".db").name
         try:
+            # M4 validates preferred_colors against the live catalog (see
+            # PreferenceCapture._valid_colors) rather than a hardcoded list
+            # -- inject one with "Ebony" so this test mirrors the real
+            # production wiring (main.py always passes the real catalog).
+            catalog = CatalogKB([{
+                "slug": "ebony-top", "name": "Ebony Top", "category": "Tops",
+                "fabric": "Cotton", "price": 50.0, "colors": ["Ebony"], "sizes": ["M"],
+            }])
             repo_before = SQLiteSessionRepository(db_path=db_path)
-            orch_before_restart = IntakeOrchestrator(session_repo=repo_before)
+            orch_before_restart = IntakeOrchestrator(session_repo=repo_before, catalog=catalog)
 
             session = orch_before_restart.create_session(user_id="update-style-user")
             orch_before_restart.record_consent(

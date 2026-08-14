@@ -266,7 +266,153 @@ export PORT=8000
 
 # Log level (default INFO)
 export LOG_LEVEL=DEBUG
+
+# Which sizing provider powers photo measurement (default "mock")
+export SIZING_PROVIDER=mock
 ```
+
+## Adding a Real Sizing Provider (Photo Measurement)
+
+Photo measurement (`POST /intake/photo-measure`) ships against
+`MockSizingProvider`, which returns fixed measurements so the whole flow —
+upload, validation, consent, profile generation, UI — works without a vendor
+account. Swapping in a real API is intended to be **one class, one registry
+line, and one environment variable**. Nothing in the endpoint, orchestrator,
+or frontend should need to change.
+
+### 1. Write the provider
+
+Subclass `SizingProvider` in `py_src/modules/m2_sizing_integration.py` (or its
+own module). Implement `extract_from_image` — that's the method the upload flow
+calls — and declare `disclosure`:
+
+```python
+class AcmeSizingProvider(SizingProvider):
+    def extract_measurements(self, photo_ref, height_cm=None):
+        # Only needed if you support the URI/object-ref flow. Otherwise
+        # raise ModuleError("not supported", "M2").
+        ...
+
+    def extract_from_image(self, image_bytes, content_type, height_cm=None):
+        api_key = os.environ["ACME_API_KEY"]      # read your own credentials
+        # POST the bytes to the vendor, poll if the job is async, then map
+        # their response onto Measurements. IMPORTANT: convert to CENTIMETRES
+        # if the vendor returns inches -- this codebase is cm end to end.
+        return Measurements(
+            bust=..., waist=..., hips=..., height=...,
+            unit="cm",
+            confidence_scores={"bust": 0.9, "waist": 0.9, "hips": 0.9},
+            provider="acme",
+            provider_version="v2",
+        )
+
+    @property
+    def disclosure(self):
+        # This is rendered verbatim into the notice shown to the customer
+        # BEFORE they upload. If images leave this server, say so plainly --
+        # the contract tests enforce that.
+        return {
+            "processor_name": "Acme Body Scan (third-party processor)",
+            "sends_image_offsite": True,
+            "stores_image": False,
+            "retention": "Your photo is sent to Acme to produce the estimate "
+                         "and is not retained by us afterwards.",
+        }
+```
+
+Raise `ModuleError(message, "M2")` for failures (bad image, auth failure,
+timeout, rate limit). The message reaches the customer as inline error text on
+the upload screen, so make it human-readable.
+
+### 2. Register it
+
+```python
+SIZING_PROVIDERS = {
+    "mock": MockSizingProvider,
+    "mediapipe": _mediapipe_provider,
+    "acme": AcmeSizingProvider,   # <-- one line
+}
+```
+
+### Already available: `mediapipe` (free, local, real analysis)
+
+`SIZING_PROVIDER=mediapipe` uses Google's MediaPipe pose model running on this
+server -- no API key, no rate limit, nothing transmitted off the machine. It
+genuinely analyses the photo: different bodies give different measurements, and
+a photo with no recognisable standing person (a car, a landscape, a yoga pose)
+is refused rather than measured.
+
+```bash
+pip install mediapipe            # ~350 MB installed, ~200 MB RAM at inference
+export SIZING_PROVIDER=mediapipe
+```
+
+The pose model (`pose_landmarker_lite.task`, 5.5 MB) is downloaded from Google's
+CDN into `backend/models/` on first use and cached; it's gitignored as a build
+artifact. For an offline or reproducible deploy, bake the file in and set
+`MEDIAPIPE_POSE_MODEL=/path/to/pose_landmarker_lite.task`.
+
+Accuracy: landmarks give *breadths*, while tape measurements are
+*circumferences*, so `py_src/providers/anthropometry.py` bridges the gap with
+population-average ratios (documented in that file). Results genuinely track the
+customer's proportions and stated height, but are approximate -- materially less
+accurate than a paid vendor doing 3D reconstruction. Treat it as a working,
+honest stand-in that proves the whole pipeline, not as a final answer.
+
+Verifying it:
+
+```bash
+# rejection behaviour (no photo needed)
+python scripts/verify_pose_provider.py
+
+# the happy path, with a real standing photo of a person
+python scripts/verify_pose_provider.py /path/to/photo.jpg 172
+```
+
+That script exists because MediaPipe's inference deadlocks inside pytest on
+macOS/Python 3.13 (identical calls finish in ~1s standalone). The model-free
+logic -- scale math, pose validation, plausibility bounds -- is fully covered by
+`tests/test_anthropometry.py` and `tests/test_mediapipe_provider.py` using
+synthetic landmarks; only the real-model checks live in the script.
+
+### 3. Configure it
+
+```bash
+export SIZING_PROVIDER=acme
+export ACME_API_KEY=...   # your provider's own credentials
+```
+
+An unrecognized `SIZING_PROVIDER` fails at startup rather than silently
+falling back to mock measurements.
+
+### 4. Verify it against the contract suite
+
+```bash
+# Add your class to PROVIDERS_UNDER_TEST at the top of the file, then:
+pytest tests/test_sizing_provider_contract.py -v
+```
+
+`tests/test_sizing_provider_contract.py` encodes every assumption the rest of
+the app makes about a provider: centimetres, values inside
+`constants.MEASUREMENT_RANGES`, the supplied height honored as the scale
+reference, populated `provider`/`provider_version`, confidence scores in 0-1,
+empty uploads rejected, and a complete `disclosure`. **Units are the most
+common real integration bug** — a vendor returning inches will fail
+`test_units_are_centimetres` and `test_values_within_supported_ranges` rather
+than silently producing wrong dress sizes.
+
+### Before going live with a real vendor
+
+- Images will leave this machine, so serve over **HTTPS** and put a
+  data-processing agreement in place with the vendor.
+- The customer-facing notice comes from your `disclosure` — it is not legal
+  advice and should be reviewed by a lawyer, along with the retention policy
+  in the site FAQ (`Base_Website/js/faq.js`, "Photo & Measurement Data").
+- Photo consent is enforced at the endpoint via
+  `ConsentTracker.has_photo_consent`. Note that step 1 of the intake flow
+  currently requires photo consent together with measurement consent; if you
+  need unbundled consent (GDPR "freely given"), that's a separate change to
+  `record_consent` and its tests.
 
 ## Deployment
 

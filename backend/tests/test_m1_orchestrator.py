@@ -474,3 +474,341 @@ class TestFullIntakeFlow:
         assert session.status == IntakeState.PREFERENCES_CAPTURE.value
         assert session.manual_overrides["bust"] == 88.0
         assert session.shape_profile is not None
+
+
+# Minimal valid JPEG bytes for the upload path (mock ignores content).
+UPLOAD_JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 128
+
+
+class TestMeasurementExtractionFromUpload:
+    """
+    Test the uploaded-image extraction path used by POST /intake/photo-measure.
+    """
+
+    def _consented_session(self, orchestrator):
+        session = orchestrator.create_session(user_id="upload_user")
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+        return session
+
+    def test_populates_measurements_and_generates_profile(self, orchestrator):
+        session = self._consented_session(orchestrator)
+
+        updated = orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=172.0,
+        )
+
+        assert updated.body_measurements is not None
+        assert updated.measurement_confidence  # confidence recorded
+        assert updated.shape_profile is not None  # M3 ran
+        assert updated.status == IntakeState.PROFILE_GENERATION.value
+
+    def test_uses_submitted_height_as_scale_reference(self, orchestrator):
+        session = self._consented_session(orchestrator)
+
+        updated = orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=181.0,
+        )
+
+        assert updated.body_measurements.height == 181.0
+
+    def test_does_not_record_the_image_on_the_session(self, orchestrator):
+        """
+        The privacy guarantee: nothing about the uploaded image is stored --
+        no photo_refs entry, no photo_metadata, no bytes anywhere.
+        """
+        session = self._consented_session(orchestrator)
+
+        updated = orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=170.0,
+        )
+
+        assert updated.photo_refs == []
+        assert updated.photo_metadata == {}
+        serialized = str(updated.to_dict())
+        assert "\\xff\\xd8" not in serialized
+
+    def test_survives_a_reload(self, orchestrator):
+        """Extracted measurements persist, so the customer can log back in."""
+        session = self._consented_session(orchestrator)
+        orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=176.0,
+        )
+
+        reloaded = orchestrator.get_session(session.session_id)
+        assert reloaded.body_measurements.height == 176.0
+        assert reloaded.shape_profile is not None
+
+    def test_empty_upload_raises_rather_than_soft_failing(self, orchestrator):
+        """
+        Unlike the photo_ref path (which routes to manual_entry on error),
+        this path must surface failures so the UI can show a real error.
+        """
+        session = self._consented_session(orchestrator)
+
+        with pytest.raises(ModuleError):
+            orchestrator.extract_measurements_from_upload(
+                session_id=session.session_id,
+                image_bytes=b"",
+                content_type="image/jpeg",
+                height_cm=170.0,
+            )
+
+    def test_failed_extraction_leaves_the_session_untouched(self, orchestrator):
+        session = self._consented_session(orchestrator)
+        status_before = orchestrator.get_session(session.session_id).status
+
+        with pytest.raises(ModuleError):
+            orchestrator.extract_measurements_from_upload(
+                session_id=session.session_id,
+                image_bytes=b"",
+                content_type="image/jpeg",
+                height_cm=170.0,
+            )
+
+        after = orchestrator.get_session(session.session_id)
+        assert after.status == status_before
+        assert after.body_measurements is None
+
+    def test_unknown_session_rejected(self, orchestrator):
+        with pytest.raises(ModuleError):
+            orchestrator.extract_measurements_from_upload(
+                session_id="no-such-session",
+                image_bytes=UPLOAD_JPEG,
+                content_type="image/jpeg",
+                height_cm=170.0,
+            )
+
+    def test_matches_the_photo_ref_path_state(self, orchestrator):
+        """
+        Both extraction entry points share _apply_extracted_measurements, so
+        for the same height they must land in the same status with the same
+        measurements. This is the regression guard against the two paths
+        drifting apart.
+        """
+        ref_session = self._consented_session(orchestrator)
+        orchestrator.upload_photo(ref_session.session_id, "s3://bucket/p.jpg", height_cm=174.0)
+        via_ref = orchestrator.extract_measurements(ref_session.session_id)
+
+        upload_session = self._consented_session(orchestrator)
+        via_upload = orchestrator.extract_measurements_from_upload(
+            session_id=upload_session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=174.0,
+        )
+
+        assert via_ref.status == via_upload.status
+        assert via_ref.body_measurements.to_dict()["bust"] == via_upload.body_measurements.to_dict()["bust"]
+        assert via_ref.body_measurements.height == via_upload.body_measurements.height == 174.0
+        assert (via_ref.shape_profile is None) == (via_upload.shape_profile is None)
+
+    def test_completes_intake_like_manual_entry(self, orchestrator):
+        """Photo path must reach `complete` through preferences, same as typing."""
+        session = self._consented_session(orchestrator)
+        orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=170.0,
+        )
+
+        final = orchestrator.capture_preferences(
+            session_id=session.session_id, preferred_colors=["black"]
+        )
+        assert final.status == IntakeState.COMPLETE.value
+        assert final.shape_profile is not None
+
+
+class TestPhotoHeightIsHonored:
+    """
+    Regression: extract_measurements() used to ignore the height stored by
+    upload_photo() and always assume 165cm, so someone who uploaded at 180cm
+    was measured as though they were 165cm.
+    """
+
+    def test_uses_height_recorded_at_upload(self, orchestrator):
+        session = orchestrator.create_session(user_id="height_user")
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/tall.jpg", height_cm=188.0)
+
+        updated = orchestrator.extract_measurements(session.session_id)
+
+        assert updated.body_measurements.height == 188.0
+
+    def test_explicit_argument_still_wins(self, orchestrator):
+        session = orchestrator.create_session(user_id="height_user2")
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/p.jpg", height_cm=188.0)
+
+        updated = orchestrator.extract_measurements(session.session_id, height_cm=150.0)
+
+        assert updated.body_measurements.height == 150.0
+
+    def test_falls_back_to_default_when_no_height_recorded(self, orchestrator):
+        session = orchestrator.create_session(user_id="height_user3")
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+        orchestrator.upload_photo(session.session_id, "s3://bucket/p.jpg")
+
+        updated = orchestrator.extract_measurements(session.session_id)
+
+        assert updated.body_measurements.height == 165.0
+
+
+class TestMeasurementProvenancePersists:
+    """
+    A real sizing vendor's identity and timing must survive a reload --
+    otherwise debugging a live integration (or answering "when was this
+    measured?") is impossible. extracted_at used to be re-stamped with "now"
+    on every load.
+    """
+
+    def test_extracted_at_survives_a_reload(self, orchestrator):
+        session = orchestrator.create_session(user_id="provenance_user")
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+        orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=170.0,
+        )
+        original_extracted_at = orchestrator.get_session(
+            session.session_id
+        ).body_measurements.extracted_at
+
+        reloaded = orchestrator.get_session(session.session_id)
+
+        assert reloaded.body_measurements.extracted_at == original_extracted_at
+
+    def test_provider_name_survives_a_reload(self, orchestrator):
+        """The authoritative provider lives on the measurements themselves."""
+        session = orchestrator.create_session(user_id="provenance_user2")
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+        orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=170.0,
+        )
+
+        reloaded = orchestrator.get_session(session.session_id)
+
+        assert reloaded.body_measurements.provider == "mock"
+        assert reloaded.body_measurements.provider_version == "1.0"
+
+
+class TestConfirmPreservesExtractionProvenance:
+    """
+    Photo measurement sends the customer back to the measurements screen to
+    review the estimates, so every scan is followed by a confirm resubmitting
+    those numbers. Provenance must only flip to manual_entry when the values
+    genuinely changed -- otherwise a real vendor's name would be erased on
+    every scan and the audit trail would claim the customer typed them.
+    """
+
+    def _scanned_session(self, orchestrator, user_id):
+        session = orchestrator.create_session(user_id=user_id)
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+        orchestrator.extract_measurements_from_upload(
+            session_id=session.session_id,
+            image_bytes=UPLOAD_JPEG,
+            content_type="image/jpeg",
+            height_cm=181.0,
+        )
+        return orchestrator.get_session(session.session_id)
+
+    def test_confirming_unchanged_values_keeps_the_scan_provider(self, orchestrator):
+        scanned = self._scanned_session(orchestrator, "prov_unchanged")
+        m = scanned.body_measurements
+
+        confirmed = orchestrator.confirm_measurements(
+            scanned.session_id,
+            manual_overrides={
+                "bust": m.bust, "waist": m.waist, "hips": m.hips, "height": m.height,
+            },
+        )
+
+        assert confirmed.body_measurements.provider == "mock"
+        assert confirmed.status == IntakeState.PREFERENCES_CAPTURE.value
+
+    def test_confidence_scores_survive_an_unchanged_confirm(self, orchestrator):
+        scanned = self._scanned_session(orchestrator, "prov_conf")
+        m = scanned.body_measurements
+        original_confidence = dict(m.confidence_scores)
+
+        confirmed = orchestrator.confirm_measurements(
+            scanned.session_id,
+            manual_overrides={
+                "bust": m.bust, "waist": m.waist, "hips": m.hips, "height": m.height,
+            },
+        )
+
+        assert confirmed.body_measurements.confidence_scores == original_confidence
+
+    def test_editing_a_value_does_flip_to_manual_entry(self, orchestrator):
+        """An actual human override should be recorded as such."""
+        scanned = self._scanned_session(orchestrator, "prov_edited")
+        m = scanned.body_measurements
+
+        confirmed = orchestrator.confirm_measurements(
+            scanned.session_id,
+            manual_overrides={
+                "bust": m.bust, "waist": m.waist - 6, "hips": m.hips, "height": m.height,
+            },
+        )
+
+        assert confirmed.body_measurements.provider == "manual_entry"
+        assert confirmed.body_measurements.waist == m.waist - 6
+
+    def test_pure_manual_entry_is_still_manual_entry(self, orchestrator):
+        """No prior extraction -> nothing to preserve, so it's manual entry."""
+        session = orchestrator.create_session(user_id="prov_pure_manual")
+        orchestrator.record_consent(
+            session.session_id, photo_consent=True, measurement_consent=True
+        )
+
+        confirmed = orchestrator.confirm_measurements(
+            session.session_id,
+            manual_overrides={"bust": 91, "waist": 76, "hips": 95, "height": 165},
+        )
+
+        assert confirmed.body_measurements.provider == "manual_entry"
+
+    def test_provenance_survives_reload_after_unchanged_confirm(self, orchestrator):
+        scanned = self._scanned_session(orchestrator, "prov_reload")
+        m = scanned.body_measurements
+        orchestrator.confirm_measurements(
+            scanned.session_id,
+            manual_overrides={
+                "bust": m.bust, "waist": m.waist, "hips": m.hips, "height": m.height,
+            },
+        )
+
+        reloaded = orchestrator.get_session(scanned.session_id)
+        assert reloaded.body_measurements.provider == "mock"
+        assert reloaded.body_measurements.height == 181.0

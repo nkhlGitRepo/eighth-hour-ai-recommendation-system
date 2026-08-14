@@ -17,7 +17,12 @@ from typing import Optional, List, Dict, Any
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.utils.sizing import infer_size_from_bust, validate_measurements, extract_physical_measurements
-from py_src.constants import NEW_RELEASES_MATCH_THRESHOLD, NEW_RELEASES_WINDOW_DAYS
+from py_src.constants import (
+    NEW_RELEASES_MATCH_THRESHOLD,
+    NEW_RELEASES_WINDOW_DAYS,
+    MIN_NEW_RELEASES_ITEMS,
+    CATEGORY_TO_SIZE_PROFILE_KEY,
+)
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.modules.m6_catalog_kb import CatalogKB, shape_affinity_score
@@ -29,6 +34,18 @@ class NewReleasesFeed:
 
     # Match score threshold for surfacing (0-1) - configurable
     MATCH_THRESHOLD = NEW_RELEASES_MATCH_THRESHOLD
+
+    # Singular form of each catalog category, for natural-sounding match
+    # reasons ("this top", not "this Tops"). Falls back to the lowercased
+    # category name for anything not listed here.
+    CATEGORY_SINGULAR = {
+        "Tops": "top",
+        "Dresses": "dress",
+        "Vests": "vest",
+        "Skirts": "skirt",
+        "Trousers": "trousers",
+        "Co-ord Sets": "co-ord set",
+    }
 
     def __init__(
         self,
@@ -115,12 +132,29 @@ class NewReleasesFeed:
         style_profile: Optional[Dict[str, Any]],
         measurements: Optional[Dict[str, float]],
         limit: int = 20,
+        min_items: int = MIN_NEW_RELEASES_ITEMS,
     ) -> List[Dict[str, Any]]:
         """
         Generate personalized new releases feed for a user.
 
-        Retrieves recent products from catalog and scores them against user profiles.
-        Only returns products above match threshold.
+        Retrieves recent products from catalog and scores them against user
+        profiles. Normally only returns products above match_threshold, but
+        guarantees at least min_items via a two-tier relaxation (never
+        disclosed to the customer -- a relaxed item renders as an ordinary
+        card, same as M6's filter relaxation for the main recommendations):
+
+          1. Relax the match_threshold first, backfilling with the best-
+             scoring items still within the recency window. These are
+             genuinely new releases, just a softer personal match than
+             usual -- the honest part of the promise (it's actually new)
+             stays intact.
+          2. Only if the recency window itself doesn't have enough items
+             (rare -- e.g. nothing launched recently at all) fall back to
+             the best-scoring items in the WHOLE catalog, regardless of
+             age. This is a last resort: it trades the "it's new" promise
+             for "the feed is never empty when the catalog has anything to
+             show at all". An empty catalog is the only case that can still
+             legitimately return fewer than min_items.
 
         Args:
             user_id: User identifier
@@ -128,6 +162,9 @@ class NewReleasesFeed:
             style_profile: User's style preferences
             measurements: User's body measurements (required if fit checking enabled)
             limit: Maximum number of items to return (default 20)
+            min_items: Guarantee at least this many items via the relaxation
+                above. Pass 0 to disable and get the exact, unrelaxed result
+                (including possibly empty).
 
         Returns:
             List of new release items with match scores, sorted by relevance
@@ -179,71 +216,115 @@ class NewReleasesFeed:
         # again under a different name.
         recent_products = [p for p in all_products if self._is_recent(p)]
 
-        if not recent_products:
-            return []
+        def score(product):
+            return self.score_product_for_profile(
+                product, body_shape_profile, style_profile, measurements
+            )
 
-        # Score each product
+        scored_recent = [(p, score(p)) for p in recent_products]
+        selected = [(p, s) for p, s in scored_recent if s >= self.match_threshold]
+
+        target = min(min_items, limit) if min_items else 0
+        relaxed = []
+
+        if len(selected) < target:
+            selected_skus = {p.get("sku") for p, _ in selected}
+            backfill = sorted(
+                (item for item in scored_recent if item[0].get("sku") not in selected_skus),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            if backfill:
+                relaxed.append("match_threshold")
+                needed = target - len(selected)
+                selected = selected + backfill[:needed]
+
+        if len(selected) < target:
+            selected_skus = {p.get("sku") for p, _ in selected}
+            catalog_candidates = sorted(
+                (
+                    (p, score(p)) for p in all_products
+                    if p.get("sku") not in selected_skus
+                ),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            if catalog_candidates:
+                relaxed.append("recency_window")
+                needed = target - len(selected)
+                selected = selected + catalog_candidates[:needed]
+
+        if relaxed:
+            logger.info(
+                "M9 relaxed to meet minimum new releases",
+                {"relaxed": relaxed, "target": target, "selected": len(selected)},
+            )
+
+        selected.sort(key=lambda item: item[1], reverse=True)
+
+        # Build full result dicts only for the final selection -- avoids
+        # wasted fit-check calls on items that didn't make the cut.
         scored_products = []
-        for product in recent_products:
-            score = self.score_product_for_profile(
+        for product, item_score in selected:
+            matched_attrs = self._identify_match_attributes(
                 product,
                 body_shape_profile,
                 style_profile,
-                measurements,
+            )
+            reason = self._generate_match_reason(
+                product,
+                body_shape_profile,
+                style_profile,
             )
 
-            # Only include if above threshold
-            if score >= self.match_threshold:
-                matched_attrs = self._identify_match_attributes(
-                    product,
-                    body_shape_profile,
-                    style_profile,
-                )
-                reason = self._generate_match_reason(
-                    product,
-                    matched_attrs,
-                    body_shape_profile,
-                )
+            # Get availability in user's size. Pass known_size the same way
+            # main.py's /fit-check endpoint does -- without it, check_fit
+            # falls back to the argmax of fit_scores, which only matches
+            # M3's Shape Profile size in the common case. Right at a size
+            # boundary, two sizes can tie on score, and the argmax's
+            # tie-break (first in STANDARD_SIZES order) can disagree with
+            # M3's own convention -- exactly the "New Releases says M, but
+            # the product page (which does pass known_size) says L" bug.
+            availability = None
+            if measurements:
+                size_profile_key = CATEGORY_TO_SIZE_PROFILE_KEY.get(product.get("category"))
+                known_size = None
+                if size_profile_key and body_shape_profile:
+                    known_size = body_shape_profile.get("size_recommendation_by_category", {}).get(size_profile_key)
+                try:
+                    fit_result = self.fit_checker.check_fit(
+                        user_id,
+                        measurements,
+                        product,
+                        known_size=known_size,
+                    )
+                    rec_size = fit_result.get("recommended_size")
+                    availability = {
+                        "recommended_size": rec_size,
+                        "available_sizes": product.get("sizes", []),
+                    }
+                except (ModuleError, GuardrailError) as err:
+                    logger.warn(
+                        f"Fit check failed for {product.get('sku')}: {str(err)}",
+                        {"product_sku": product.get("sku")}
+                    )
+                    availability = {"available_sizes": product.get("sizes", [])}
+                except Exception as err:
+                    logger.error(
+                        f"Unexpected error checking fit for {product.get('sku')}",
+                        err
+                    )
+                    availability = {"available_sizes": product.get("sizes", [])}
 
-                # Get availability in user's size
-                availability = None
-                if measurements:
-                    try:
-                        fit_result = self.fit_checker.check_fit(
-                            user_id,
-                            measurements,
-                            product,
-                        )
-                        rec_size = fit_result.get("recommended_size")
-                        availability = {
-                            "recommended_size": rec_size,
-                            "available_sizes": product.get("sizes", []),
-                        }
-                    except (ModuleError, GuardrailError) as err:
-                        logger.warn(
-                            f"Fit check failed for {product.get('sku')}: {str(err)}",
-                            {"product_sku": product.get("sku")}
-                        )
-                        availability = {"available_sizes": product.get("sizes", [])}
-                    except Exception as err:
-                        logger.error(
-                            f"Unexpected error checking fit for {product.get('sku')}",
-                            err
-                        )
-                        availability = {"available_sizes": product.get("sizes", [])}
-
-                scored_products.append({
-                    "sku": product.get("sku"),
-                    "name": product.get("name"),
-                    "category": product.get("category"),
-                    "match_score": round(score, 2),
-                    "matched_attributes": matched_attrs,
-                    "reason": reason,
-                    "availability": availability,
-                })
-
-        # Sort by score (highest first)
-        scored_products.sort(key=lambda x: x["match_score"], reverse=True)
+            scored_products.append({
+                "sku": product.get("sku"),
+                "name": product.get("name"),
+                "category": product.get("category"),
+                "match_score": round(item_score, 2),
+                "matched_attributes": matched_attrs,
+                "reason": reason,
+                "availability": availability,
+            })
 
         # Apply limit
         feed = scored_products[:limit]
@@ -256,6 +337,7 @@ class NewReleasesFeed:
                 "feed_size": len(feed),
                 "total_scored": len(scored_products),
                 "threshold": self.match_threshold,
+                "relaxed": relaxed,
             },
         )
 
@@ -383,6 +465,13 @@ class NewReleasesFeed:
             if silhouettes and product_silhouette and product_silhouette in silhouettes:
                 attrs.append("Your silhouette style")
 
+            occasions = style_profile.get("occasions", [])
+            product_occasions = product.get("occasions", [])
+            if occasions and product_occasions:
+                occasion_matches = set(occasions) & set(product_occasions)
+                if occasion_matches:
+                    attrs.append(f"Suits your {', '.join(sorted(occasion_matches)[:2])} occasions")
+
         if not attrs:
             attrs.append("Matches your profile")
 
@@ -391,20 +480,58 @@ class NewReleasesFeed:
     def _generate_match_reason(
         self,
         product: Dict[str, Any],
-        matched_attributes: List[str],
         body_shape_profile: Optional[Dict[str, Any]],
+        style_profile: Optional[Dict[str, Any]],
     ) -> str:
-        """Generate customer-facing explanation of match."""
-        reasons = []
+        """
+        Build a natural, product-specific explanation by combining
+        whichever signals actually matched -- shape, color, silhouette,
+        occasion -- instead of only ever surfacing one attribute and then
+        redundantly restating the same shape fact a second time (the old
+        version always appended "and it's selected for {shape} shapes"
+        regardless of what had already been said, which is why every
+        product a customer's shape happened to match showed the exact
+        same templated sentence: "flatters X shapes ... selected for X
+        shapes"). Two products that match on different things now read
+        differently, and two products matching on the same things still
+        differ by category ("this top" vs "this skirt").
+        """
+        category = self.CATEGORY_SINGULAR.get(
+            product.get("category"), (product.get("category") or "item").lower()
+        )
+        shape = body_shape_profile.get("shape_class") if body_shape_profile else None
 
-        if matched_attributes:
-            reasons.append(f"We think you'll like this because {matched_attributes[0].lower()}")
+        clauses = []
 
-        if body_shape_profile:
-            reasons.append(f"and it's selected for {body_shape_profile.get('shape_class')} shapes")
+        if shape and shape in product.get("flatters_shapes", []):
+            clauses.append(f"flatters your {shape} shape")
 
-        reason = " ".join(reasons) if reasons else "This item matches your style"
-        return reason + "."
+        if style_profile:
+            preferred_colors = style_profile.get("preferred_colors", [])
+            matching_colors = [c for c in product.get("colors", []) if c in preferred_colors]
+            if matching_colors:
+                clauses.append(f"comes in {matching_colors[0]}, one of your preferred colors")
+
+            preferred_silhouettes = style_profile.get("preferred_silhouettes", [])
+            product_silhouette = product.get("silhouette_class")
+            if product_silhouette and product_silhouette in preferred_silhouettes:
+                clauses.append(f"has the {product_silhouette.replace('_', ' ')} silhouette you prefer")
+
+            preferred_occasions = style_profile.get("occasions", [])
+            matching_occasions = [o for o in product.get("occasions", []) if o in preferred_occasions]
+            if matching_occasions:
+                clauses.append(f"suits {matching_occasions[0]} occasions, like you're looking for")
+
+        if clauses:
+            return f"This {category} " + " and ".join(clauses) + "."
+
+        # No specific signal matched (the item cleared the threshold via
+        # the softer category-level shape affinity, or via relaxation) --
+        # still say something true and product-specific rather than the
+        # same catch-all for every item.
+        if shape:
+            return f"A new {category} that generally suits {shape} shapes."
+        return f"A newly added {category} that matches your style profile."
 
     def _infer_size_from_measurements(self, measurements: Dict[str, float]) -> str:
         """Infer size from measurements using shared utility."""

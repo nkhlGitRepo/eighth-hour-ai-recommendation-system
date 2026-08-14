@@ -285,6 +285,21 @@
   margin: 1rem 0 0 0;
 }
 
+/* The global `a { color: inherit; text-decoration: none }` in css/style.css
+   made these read as plain body text, so "Use photo measurement" and
+   "Enter measurements manually" were effectively invisible as links. Blue
+   (#0066cc, the same link blue already used on the recommendations and new
+   releases pages) plus an underline, so the affordance doesn't rely on color
+   alone. */
+.intake-note a {
+  color: #0066cc;
+  text-decoration: underline;
+}
+
+.intake-note a:hover {
+  color: #004c99;
+}
+
 .completion-section {
   text-align: center;
 }
@@ -303,4 +318,354 @@
   color: var(--color-muted);
   padding: 2rem;
   font-size: 0.95rem;
+}
+
+/* ============================
+   Photo measurement (screen-photo)
+   ============================ */
+
+/* Legal notice shown before any upload control is usable. Styled to read as
+   information rather than a warning -- it's disclosure, not an error. */
+.photo-disclosure {
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.photo-disclosure h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+}
+
+.photo-disclosure ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.photo-disclosure li {
+  margin-bottom: 0.35rem;
+}
+
+.photo-disclosure .disclosure-processor {
+  font-weight: 600;
+}
+
+/* Highlighted variant used when the configured provider transmits the image
+   off this machine -- that fact should not read as ordinary fine print. */
+.photo-disclosure.offsite {
+  border-color: var(--color-accent);
+}
+
+.photo-disclosure a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.photo-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+  cursor: pointer;
+}
+
+.photo-ack input[type="checkbox"] {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.photo-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1.25rem;
+}
+
+.photo-field label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.4rem;
+}
+
+.photo-field input[type="file"] {
+  padding: 0.65rem;
+  border: 1px dashed var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.photo-field input[type="file"]:hover {
+  border-color: var(--color-accent);
+}
+
+.photo-field input[type="number"] {
+  padding: 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+}
+
+/* Lets the customer confirm they picked the right image before uploading. */
+.photo-preview {
+  margin-bottom: 1.25rem;
+  text-align: center;
+}
+
+.photo-preview img {
+  max-height: 260px;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  display: inline-block;
+}
+
+/* Single error panel covering every photo-measurement failure. Uses the
+   [hidden] attribute rather than a .visible class so it matches the other
+   panels on this screen. */
+.photo-error {
+  background: #fdf3f2;
+  border: 1px solid #f0c4c0;
+  border-left: 3px solid #c0392b;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #6b241d;
+}
+
+.photo-error[hidden] {
+  display: none;
+}
+
+.photo-error-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.photo-error-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #c0392b;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-error-head h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: #6b241d;
+}
+
+.photo-error p {
+  margin: 0 0 0.6rem;
+  color: #6b241d;
+}
+
+.photo-error ul {
+  margin: 0 0 0.9rem;
+  padding-left: 1.1rem;
+}
+
+.photo-error li {
+  margin-bottom: 0.25rem;
+}
+
+.photo-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.photo-error-actions .btn {
+  font-size: 0.8rem;
+  padding: 0.5rem 0.9rem;
+}
+
+.photo-scanning {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  color: var(--color-muted);
+  font-size: 0.92rem;
+  margin-bottom: 1.25rem;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-line);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* No :disabled styling existed anywhere in the site, so a disabled Continue
+   button was indistinguishable from an enabled one. */
+button:disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button:disabled:hover,
+.btn:disabled:hover {
+  opacity: 0.45;
+}
+
+/* Note on the measurements screen after a photo scan, explaining that the
+   values were estimated (and can be edited). */
+.measurement-scan-note {
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.measurement-scan-note.success {
+  background: var(--color-bg);
+  border: 1px solid var(--color-accent);
+}
+
+.measurement-scan-note.caution {
+  background: #fdf6e3;
+  border: 1px solid #e0c068;
+  color: #6b4e12;
+}
+
+/* Demo-mode warning inside the photo disclosure: shown when the configured
+   provider does not actually analyse the image, so the customer is never led
+   to believe fixed sample values were measured from their photo. */
+.photo-disclosure.placeholder {
+  border-color: #e0c068;
+  background: #fdf6e3;
+}
+
+.disclosure-demo-warning {
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e0c068;
+  color: #6b4e12;
+}
+
+/* "What size do you usually wear?" -- optional, but a stronger accuracy signal
+   than the photo itself, so it's presented as recommended rather than buried. */
+.photo-field select {
+  padding: 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.photo-field-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* Tops/bottoms size block. Grouped under one heading so the pair reads as a
+   single optional step rather than two unrelated questions. */
+.photo-size-block {
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 1rem 1.1rem 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.photo-size-heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.photo-size-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 480px) {
+  .photo-size-grid { grid-template-columns: 1fr; }
+}
+
+/*
+  Photo guidance shown before the file picker. Styled as a quiet informational
+  panel rather than a warning: it reuses .photo-size-block's surface so the
+  screen doesn't read as a wall of alerts, but the leading clause of each item
+  is bolded because the framing rule alone accounts for most failed uploads.
+*/
+.photo-tips {
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+.photo-tips-heading {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.photo-tips ul {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.photo-tips li {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+
+.photo-tips li strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.photo-tips-footnote {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--color-muted);
 }

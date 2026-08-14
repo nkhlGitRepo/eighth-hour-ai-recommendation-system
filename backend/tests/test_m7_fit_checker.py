@@ -2,6 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
+from py_src.constants import STANDARD_SIZE_CHART, SIZE_STEP_CM
 from py_src.modules.m7_fit_checker import FitChecker
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
@@ -219,12 +220,10 @@ class TestM7AlgorithmAccuracy:
 
     def test_perfect_fit_scores_exactly_1(self, fit_checker, test_product):
         """Measurements exactly matching size M should score 1.0."""
-        measurements = {
-            "bust": 96.0,  # Exactly matches size M
-            "waist": 81.0,
-            "hips": 98.0,
-            "height": 165.0,
-        }
+        # Taken from the chart rather than transcribed -- these numbers moved
+        # when the uniform-grid tables were replaced with the published chart,
+        # and a hardcoded copy silently stopped being "exactly M".
+        measurements = {**STANDARD_SIZE_CHART["M"], "height": 165.0}
         result = fit_checker.check_fit("test_user", measurements, test_product)
 
         m_score = result["fit_scores"]["M"]
@@ -325,12 +324,7 @@ class TestM7FitNotes:
 
     def test_perfect_fit_generates_perfect_note(self, fit_checker, test_product):
         """Perfect fit should generate specific 'fits perfectly' note."""
-        measurements = {
-            "bust": 96.0,  # Exact match to M
-            "waist": 81.0,
-            "hips": 98.0,
-            "height": 165.0,
-        }
+        measurements = {**STANDARD_SIZE_CHART["M"], "height": 165.0}
         result = fit_checker.check_fit("test_user", measurements, test_product)
 
         notes_text = " ".join(result["fit_notes"]).lower()
@@ -338,10 +332,11 @@ class TestM7FitNotes:
 
     def test_loose_bust_generates_specific_note(self, fit_checker, test_product):
         """Loose bust should generate specific note about bust, not other measurements."""
+        # A full size step below what M is cut for, with waist and hips left at
+        # M exactly, so the bust is unambiguously the dimension that misfits.
         measurements = {
-            "bust": 85.0,    # Smaller than size M (90), will be loose
-            "waist": 72.0,   # Exact match to M
-            "hips": 97.0,    # Exact match to M
+            **STANDARD_SIZE_CHART["M"],
+            "bust": STANDARD_SIZE_CHART["M"]["bust"] - SIZE_STEP_CM["bust"],
             "height": 165.0,
         }
         result = fit_checker.check_fit("test_user", measurements, test_product)
@@ -893,20 +888,25 @@ class TestM7ScoringFormulaMakesRationalSense:
         small_hi = SIZE_BOUNDARIES[small_size][1]
         big_hi = SIZE_BOUNDARIES[big_size][1]
 
-        product_small = {"sku": "p1", "sizes": [small_size]}
-        product_big = {"sku": "p2", "sizes": [big_size]}
+        # Scored as Vests, which weights bust at 1.0 and ignores waist and hips
+        # entirely -- so this measures the bust miss and nothing else. Blending
+        # all three cannot express the invariant: the published chart's bands
+        # have different widths, so an in-band waist sits a different distance
+        # from its edges at S than at XL and contributes its own unequal
+        # penalty. (This previously passed only because the boundary tables were
+        # a uniform grid, where that could not happen.)
+        product_small = {"sku": "p1", "category": "Vests", "sizes": [small_size]}
+        product_big = {"sku": "p2", "category": "Vests", "sizes": [big_size]}
 
         miss_past_edge_cm = 4.0
         measurements_small = {
+            **STANDARD_SIZE_CHART[small_size],
             "bust": small_hi + miss_past_edge_cm,
-            "waist": 75.0,
-            "hips": 92.0,
             "height": 165.0,
         }
         measurements_big = {
+            **STANDARD_SIZE_CHART[big_size],
             "bust": big_hi + miss_past_edge_cm,
-            "waist": 93.0,
-            "hips": 110.5,
             "height": 165.0,
         }
 
@@ -1037,31 +1037,43 @@ class TestM7ScoringFormulaMakesRationalSense:
 
     def test_confidence_strictly_decreases_moving_away_from_true_size_in_either_direction(self, fit_checker):
         """
-        For a body sitting exactly at one size's chart center (a
-        'textbook' proportioned body), confidence must decrease
-        monotonically as candidate sizes get further away in EITHER
-        direction -- not just for the immediate neighbor, but across the
-        full size range. This is the property that makes "next best size"
-        suggestions intuitive without needing to hardcode adjacency.
+        For a body sitting exactly at one size's chart values (a 'textbook'
+        proportioned body), that size must score strictly highest, and
+        confidence must fall monotonically as candidate sizes get further away
+        -- walking DOWN the size range and walking UP it. This is the property
+        that makes "next best size" suggestions intuitive without hardcoding
+        adjacency.
+
+        Deliberately NOT asserted: that the two directions interleave into one
+        ranking by size-index distance (i.e. that one size down always beats two
+        sizes up). That held only while the boundary tables were a uniform grid.
+        The published chart's gaps between adjacent sizes are genuinely uneven --
+        bust XS->S and S->M are 2cm, M->L is 4cm, L->XL is 5cm -- so from XL's
+        cut, XXL really is nearer than L, and scoring it marginally higher is the
+        honest answer rather than a defect to be normalised away.
         """
         from py_src.constants import STANDARD_SIZE_CHART, STANDARD_SIZES
 
         product = {"sku": "monotonic-check", "sizes": STANDARD_SIZES}
 
         for true_size in STANDARD_SIZES:
-            true_index = STANDARD_SIZES.index(true_size)
+            index = STANDARD_SIZES.index(true_size)
             measurements = {**STANDARD_SIZE_CHART[true_size], "height": 165.0}
-            result = fit_checker.check_fit("test_user", measurements, product)
+            scores = fit_checker.check_fit("test_user", measurements, product)["fit_scores"]
 
-            # Sort sizes by distance (in size-steps) from the true size and
-            # verify scores are non-increasing as that distance grows.
-            by_distance = sorted(STANDARD_SIZES, key=lambda s: abs(STANDARD_SIZES.index(s) - true_index))
-            scores_by_distance = [result["fit_scores"][s] for s in by_distance]
-
-            assert scores_by_distance == sorted(scores_by_distance, reverse=True), (
-                f"For a body at {true_size}'s exact center, scores ordered by size-distance "
-                f"({list(zip(by_distance, scores_by_distance))}) should be non-increasing"
+            best = max(scores, key=scores.get)
+            assert best == true_size and list(scores.values()).count(scores[true_size]) == 1, (
+                f"A body at {true_size}'s exact chart values should score "
+                f"{true_size} uniquely highest, got {scores}"
             )
+
+            downward = [scores[s] for s in STANDARD_SIZES[:index + 1]][::-1]
+            upward = [scores[s] for s in STANDARD_SIZES[index:]]
+            for direction, series in (("downward", downward), ("upward", upward)):
+                assert series == sorted(series, reverse=True), (
+                    f"For a body at {true_size}'s exact chart values, scores "
+                    f"{direction} from {true_size} ({series}) should be non-increasing"
+                )
 
     def test_pear_shaped_body_gets_no_self_contradictory_alternative(self, fit_checker):
         """
@@ -1166,7 +1178,7 @@ class TestM7CategoryAwareDimensionWeights:
         still blend all three evenly."""
         from py_src.constants import STANDARD_SIZES
 
-        measurements = {"bust": 96.0, "waist": 81.0, "hips": 98.0, "height": 165.0}
+        measurements = {**STANDARD_SIZE_CHART["M"], "height": 165.0}
         unmapped_product = {"sku": "unmapped-check", "category": "Something Else", "sizes": STANDARD_SIZES}
         no_category_product = {"sku": "no-cat-check", "sizes": STANDARD_SIZES}
 
@@ -1230,9 +1242,8 @@ class TestM7EdgeCases:
     def test_measurements_as_integers(self, fit_checker, test_product):
         """Measurements provided as integers should be accepted."""
         int_measurements = {
-            "bust": 96,  # Integer, not float
-            "waist": 81,
-            "hips": 98,
+            # Integers rather than floats, at M's chart values.
+            **{d: int(v) for d, v in STANDARD_SIZE_CHART["M"].items()},
             "height": 165,
         }
         result = fit_checker.check_fit("test_user", int_measurements, test_product)

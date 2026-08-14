@@ -203,10 +203,19 @@ class TestProfile:
         SIZE_BOUNDARIES-derived chart as the intake flow, not a
         third, independently-drifted formula.
         """
+        from py_src.utils.sizing import infer_size_from_bust
+
+        bust = 91
         r = client.post("/profile", json={
-            "bust": 91, "waist": 76, "hips": 95, "height": 165,
+            "bust": bust, "waist": 76, "hips": 95, "height": 165,
         })
-        assert r.json()["size_recommendation_by_category"]["tops"] == "S"
+        # Compared against the shared inference rather than a transcribed size,
+        # so this keeps guarding against an independently-drifted formula
+        # instead of just recording whatever the chart said when it was written.
+        assert (
+            r.json()["size_recommendation_by_category"]["tops"]
+            == infer_size_from_bust(bust)
+        )
 
 
 class TestConsentEndpoints:

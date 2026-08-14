@@ -19,68 +19,133 @@ SHAPE_CATEGORY_AFFINITY = {
 }
 
 # Standard size ordering (XS to XXL)
+#
+# There is deliberately no XXS. It previously existed in the boundary tables
+# only -- never in STANDARD_SIZES, never in the size chart, and never offered in
+# the UI -- so a body below XS could be told "XXS", a size with no defined
+# measurements that the catalog does not stock. The smallest band now opens out
+# to cover everything down to the supported minimum instead.
 STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL"]
 
-# Size boundaries for measurement-based inference (cm).
-# Single source of truth for bust/waist/hip-based sizing -- shared by M3
-# (body shape profiler, computes the size shown to the customer), M5
-# (recommendation engine), M9 (new releases), and STANDARD_SIZE_CHART below,
-# so that a customer's size is calculated the same way everywhere.
-SIZE_BOUNDARIES = {
-    "XXS": (70, 76),
-    "XS": (76, 84),
-    "S": (84, 92),
-    "M": (92, 100),
-    "L": (100, 108),
-    "XL": (108, 117),
-    "XXL": (117, 150),
+# Measurement validation ranges (cm) -- must match InputValidator's enforced
+# ranges (py_src/guardrails/input_validation.py) so size inference never
+# rejects/accepts a measurement the API itself allows. Defined this early
+# because the size boundary tables below open their smallest and largest bands
+# out to these limits.
+MEASUREMENT_RANGES = {
+    "height": (140, 210),      # cm
+    "bust": (70, 150),         # cm
+    "waist": (55, 130),        # cm
+    "hips": (80, 160),         # cm
+    "shoulder": (30, 60),      # cm (optional)
+    "inseam": (50, 120),       # cm (optional)
 }
 
-WAIST_SIZE_BOUNDARIES = {
-    "XXS": (60, 66),
-    "XS": (66, 72),
-    "S": (72, 78),
-    "M": (78, 84),
-    "L": (84, 90),
-    "XL": (90, 96),
-    "XXL": (96, 150),
+# The published women's size chart this app sizes against: the measurement
+# RANGE each size is cut for, in cm. This is the single source of truth --
+# STANDARD_SIZE_CHART and all three *_SIZE_BOUNDARIES tables below are derived
+# from it, so the measurements a size is cut for and the range of bodies that
+# maps to that size can never drift apart.
+#
+# Why this replaced the previous tables: those were uniform grids (bust stepping
+# 8/8/8/8, waist 6/6/6/6/6, hips 6/6/6/6) -- even spacing rather than any real
+# chart, despite a comment claiming "standard sizing guidelines". The waist was
+# a full size high throughout: it placed XS at 69cm against a real 61-66cm and M
+# at 81cm against 71-75cm, so every customer's waist read about 6cm larger than
+# the size they actually wear. Real charts have uneven bands that widen with
+# size, as below.
+#
+# One deliberate edit to the source: the S hip row was published as 93-94cm, a
+# 1cm band where every other row spans 5-6cm. Taken literally it left S a 2.5cm
+# sliver of the hip scale that almost nobody would land in, so it is widened to
+# sit evenly between XS and M. Its midpoint moves only 0.5cm (93.5 -> 94), so
+# this changes which bodies reach S without restating what S measures.
+SIZE_CHART_SOURCE = {
+    "XS": {"bust": (81, 84), "waist": (61, 66), "hips": (86, 92)},
+    "S":  {"bust": (86, 89), "waist": (66, 69), "hips": (92, 96)},
+    "M":  {"bust": (91, 95), "waist": (71, 75), "hips": (96, 101)},
+    "L":  {"bust": (99, 103), "waist": (79, 83), "hips": (105, 109)},
+    "XL": {"bust": (108, 114), "waist": (89, 95), "hips": (114, 120)},
 }
 
-# Hip boundaries per standard sizing guidelines:
-# XS: 83-89cm, S: 89-95cm, M: 95-101cm, L: 101-107cm, XL: 107-114cm, XXL: 114+cm
-HIP_SIZE_BOUNDARIES = {
-    "XXS": (70, 83),
-    "XS": (83, 89),
-    "S": (89, 95),
-    "M": (95, 101),
-    "L": (101, 107),
-    "XL": (107, 114),
-    "XXL": (114, 150),
-}
+_CHART_DIMENSIONS = ("bust", "waist", "hips")
 
 
-def _bucket_center(low, high, cap=10):
+def _extrapolate_top_size(source, sizes):
     """
-    Midpoint of a boundary bucket, capping how much an open-ended top
-    bucket (e.g. XXL's upper bound is an arbitrary ceiling, not a real
-    distribution) can pull the center away from its lower edge.
+    The published chart stops at XL, but the catalog sells XXL. Continue the
+    chart's own final step rather than inventing a row, so XXL stays consistent
+    with the curve the rest of the chart describes.
     """
-    return low + min(high - low, cap) / 2
+    second_last, last = sizes[-2], sizes[-1]
+    return {
+        dimension: tuple(
+            source[last][dimension][edge]
+            + (source[last][dimension][edge] - source[second_last][dimension][edge])
+            for edge in (0, 1)
+        )
+        for dimension in _CHART_DIMENSIONS
+    }
 
 
-# Standard size chart: bust, waist, hips measurements in cm, one entry per
-# size in STANDARD_SIZES. Derived from the *_SIZE_BOUNDARIES tables above
-# (each size's bucket center) rather than hardcoded, so the size M7's fit
-# checker recommends for a garment can never drift out of sync with the
-# size M3 computes and shows the customer on their Shape Profile.
+_SOURCE_SIZES = ["XS", "S", "M", "L", "XL"]
+_FULL_CHART_SOURCE = dict(SIZE_CHART_SOURCE)
+_FULL_CHART_SOURCE["XXL"] = _extrapolate_top_size(SIZE_CHART_SOURCE, _SOURCE_SIZES)
+
+# Standard size chart: the measurement each size is cut for, in cm -- the
+# midpoint of that size's published range. Used by M7's fit checker to score how
+# well a garment size suits a body, and as the anchor the photo estimator blends
+# toward when a customer states the sizes they usually wear.
+#
+# Taken from the source range's own midpoint rather than from the derived
+# boundary bands below, because the first and last bands are open-ended (they
+# have to absorb everything down to and up to the supported measurement range),
+# and their centres would therefore describe a measurement no garment is cut for.
 STANDARD_SIZE_CHART = {
     size: {
-        "bust": _bucket_center(*SIZE_BOUNDARIES[size]),
-        "waist": _bucket_center(*WAIST_SIZE_BOUNDARIES[size]),
-        "hips": _bucket_center(*HIP_SIZE_BOUNDARIES[size]),
+        dimension: (
+            _FULL_CHART_SOURCE[size][dimension][0]
+            + _FULL_CHART_SOURCE[size][dimension][1]
+        ) / 2
+        for dimension in _CHART_DIMENSIONS
     }
     for size in STANDARD_SIZES
 }
+
+
+def _boundaries_from_chart(dimension):
+    """
+    Contiguous lookup bands for one dimension, derived from the chart above.
+
+    Published charts leave gaps between sizes (bust XS ends at 84, S starts at
+    86), but a lookup has to answer for every body, so adjacent sizes meet at the
+    midpoint of the gap. The smallest and largest sizes then open out to the
+    supported measurement range so nothing falls off either end.
+    """
+    floor, ceiling = MEASUREMENT_RANGES[dimension]
+    edges = [floor]
+    for smaller, larger in zip(STANDARD_SIZES, STANDARD_SIZES[1:]):
+        edges.append(
+            (
+                _FULL_CHART_SOURCE[smaller][dimension][1]
+                + _FULL_CHART_SOURCE[larger][dimension][0]
+            ) / 2
+        )
+    edges.append(ceiling)
+    return {
+        size: (edges[index], edges[index + 1])
+        for index, size in enumerate(STANDARD_SIZES)
+    }
+
+
+# Size boundaries for measurement-based inference (cm). Shared by M3 (body shape
+# profiler, computes the size shown to the customer), M5 (recommendation engine),
+# M7 (fit checker) and M9 (new releases), so a customer's size is calculated the
+# same way everywhere -- and, being derived from the chart above, always agrees
+# with what that size is cut for.
+SIZE_BOUNDARIES = _boundaries_from_chart("bust")
+WAIST_SIZE_BOUNDARIES = _boundaries_from_chart("waist")
+HIP_SIZE_BOUNDARIES = _boundaries_from_chart("hips")
 
 # Typical measurement change (cm) between adjacent sizes, one per dimension
 # -- derived from STANDARD_SIZE_CHART's own span so it can never drift from
@@ -182,18 +247,6 @@ FIT_NOTE_RELEVANT_DIMENSIONS = {
     "Co-ord Sets": {"bust", "waist", "hips"},
     "Skirts": {"waist", "hips"},
     "Trousers": {"waist", "hips"},
-}
-
-# Measurement validation ranges (cm) -- must match InputValidator's
-# enforced ranges (py_src/guardrails/input_validation.py) so size
-# inference never rejects/accepts a measurement the API itself allows.
-MEASUREMENT_RANGES = {
-    "height": (140, 210),      # cm
-    "bust": (70, 150),         # cm
-    "waist": (55, 130),        # cm
-    "hips": (80, 160),         # cm
-    "shoulder": (30, 60),      # cm (optional)
-    "inseam": (50, 120),       # cm (optional)
 }
 
 # New releases feed configuration
