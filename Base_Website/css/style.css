@@ -1,425 +1,934 @@
-/* ============================
-   Design tokens
-   ============================ */
-:root {
-  --color-bg: #f7f4ee;
-  --color-surface: #ffffff;
-  --color-text: #1f1c18;
-  --color-muted: #6b6459;
-  --color-line: #e2ddd0;
-  --color-accent: #9c7a3c;
-  --font-serif: Georgia, "Times New Roman", serif;
-  --font-sans: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --max-width: 1200px;
+/**
+ * style.css
+ * Storefront styling, matching the design of eighth-hour.com.
+ *
+ * Typography, colour and layout are taken from the live site: Lato throughout,
+ * near-black text on white, a cream footer, square-cornered buttons and pill
+ * size selectors. Lato is self-hosted from fonts/ rather than pulled from
+ * Google, so the site renders identically with no network.
+ */
+
+/* ---------------------------------------------------------------- fonts -- */
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("../fonts/lato-300.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/lato-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("../fonts/lato-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url("../fonts/lato-900.woff2") format("woff2");
 }
 
-* { box-sizing: border-box; }
+/* --------------------------------------------------------------- tokens -- */
+:root {
+  --font-body: "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Sampled from the live site rather than guessed. */
+  --color-text: #121212;
+  --color-muted: #6b6b6b;
+  --color-bg: #ffffff;
+  --color-surface: #f6f4f0;
+  --color-cream: #f1ead7;   /* footer */
+  --color-forest: #1f2e1f;  /* feature bands */
+  --color-gold: #b1964f;    /* active nav item, section eyebrows */
+  --color-line: #e2e2e2;
+  --color-line-strong: #121212;
+
+  --header-height: 88px;
+  --page-max: 1440px;
+  --page-pad: 48px;
+  --radius: 0px;            /* the storefront's buttons are square */
+
+  /* Kept for the style-profile, recommendations and account stylesheets, which
+     reference these names throughout. --color-accent is the deep green the
+     storefront uses for emphasis; --font-sans is an alias for the body face so
+     those sheets don't have to know it changed to Lato. */
+  --color-accent: var(--color-forest);
+  --font-sans: var(--font-body);
+}
+
+/* ---------------------------------------------------------------- reset -- */
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--color-bg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
   color: var(--color-text);
-  font-family: var(--font-sans);
-  line-height: 1.5;
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3, h4 {
+  font-weight: 400;
+  line-height: 1.2;
+  margin: 0 0 0.6em;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 2.6rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1rem; }
+
 a { color: inherit; text-decoration: none; }
+a:hover { opacity: 0.7; }
 img { max-width: 100%; display: block; }
 
 .wrap {
-  max-width: var(--max-width);
+  max-width: var(--page-max);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 var(--page-pad);
 }
-
-h1, h2, h3 { font-family: var(--font-serif); font-weight: normal; margin: 0 0 12px; }
-h1 { font-size: 2.2rem; }
-h2 { font-size: 1.6rem; }
-h3 { font-size: 1.1rem; }
-p { margin: 0 0 16px; color: var(--color-text); }
 .muted { color: var(--color-muted); }
-
-button, .btn {
-  font-family: var(--font-sans);
-  font-size: 0.9rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: var(--color-text);
-  color: #fff;
-  border: 1px solid var(--color-text);
-  padding: 12px 24px;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-}
-button:hover, .btn:hover { opacity: 0.85; }
-button.btn-outline {
-  background: transparent;
-  color: var(--color-text);
-}
-
-/* ============================
-   Header
-   ============================ */
-.site-header {
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-line);
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-.header-inner {
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.logo {
-  font-family: var(--font-serif);
-  font-size: 1.4rem;
-  letter-spacing: 0.12em;
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-.menu-toggle {
-  display: none;
-  background: none;
-  border: none;
-  color: var(--color-text);
-  font-size: 1.4rem;
-  padding: 4px 8px;
-}
-.main-nav {
-  display: flex;
-  flex: 1;
-  flex-wrap: nowrap;
-  justify-content: space-evenly;
-  gap: 18px;
-  font-size: 0.85rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-.main-nav a:hover { color: var(--color-accent); }
-
-/* "More" dropdown: pages with more than 4 category links put the rest in
-   here (see the nav markup) instead of letting .main-nav wrap onto a
-   second line. Pure CSS hover -- no JS involved. */
-.nav-more {
-  position: relative;
-  flex: 0 0 auto;
-}
-.nav-more-toggle {
-  background: none;
-  border: none;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  color: var(--color-text);
-  cursor: pointer;
-  padding: 0;
-  white-space: nowrap;
-}
-.nav-more:hover .nav-more-toggle,
-.nav-more:focus-within .nav-more-toggle {
-  color: var(--color-accent);
-}
-.nav-more-menu {
-  display: none;
-  flex-direction: column;
-  position: absolute;
-  top: 100%;
-  right: 0;
-  min-width: 180px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-line);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
-  padding: 8px 0;
-  z-index: 60;
-}
-.nav-more:hover .nav-more-menu,
-.nav-more:focus-within .nav-more-menu {
-  display: flex;
-}
-.nav-more-menu a {
-  padding: 8px 18px;
-  white-space: nowrap;
-}
-.nav-more-menu a:hover { background: var(--color-bg); color: var(--color-accent); }
-
-.header-actions {
-  display: flex;
-  flex: 1;
-  justify-content: space-evenly;
-  gap: 18px;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-
-@media (max-width: 860px) {
-  .menu-toggle { display: block; order: -1; }
-  .main-nav {
-    display: none;
-    flex: none;
-    flex-direction: column;
-    justify-content: flex-start;
-    width: 100%;
-    order: 3;
-    padding-top: 12px;
-    gap: 10px;
-  }
-  .main-nav.open { display: flex; }
-  .nav-more { display: none !important; }
-  .header-actions { flex: none; justify-content: flex-start; }
-  .header-inner { flex-wrap: wrap; }
-}
-
-/* ============================
-   Hero / homepage
-   ============================ */
-.hero {
-  background: var(--color-surface);
-  text-align: center;
-  padding: 90px 24px;
-  border-bottom: 1px solid var(--color-line);
-}
-.hero h1 { font-size: 2.6rem; margin-bottom: 20px; }
-.hero p { max-width: 520px; margin: 0 auto 28px; color: var(--color-muted); }
-
-.section {
-  padding: 64px 0;
-}
+/* padding-block, not the `padding` shorthand: sections are routinely combined
+   with .wrap, and a shorthand here would silently zero out .wrap's horizontal
+   padding (equal specificity, and this rule comes later), letting grids bleed
+   to the viewport edge. */
+.section { padding-block: 72px; }
 .section-title {
   text-align: center;
-  margin-bottom: 36px;
+  font-size: 2rem;
+  font-weight: 400;
+  margin-bottom: 48px;
 }
 
+/* --------------------------------------------------------------- header -- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.header-inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 var(--page-pad);
+  height: var(--header-height);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 24px;
+}
+
+.logo img { height: 52px; width: auto; }
+
+.main-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+  font-size: 0.94rem;
+}
+.main-nav > a,
+.nav-group-label {
+  position: relative;
+  padding: 6px 0;
+  white-space: nowrap;
+}
+.main-nav a.current { color: var(--color-gold); }
+.main-nav a.current::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: var(--color-gold);
+}
+
+/* Shop dropdown */
+.nav-group { position: relative; }
+.nav-group-label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.nav-caret { display: inline-block; width: 12px; height: 12px; }
+.nav-caret svg { width: 100%; height: 100%; }
+.nav-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 190px;
+  padding: 14px 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  display: none;
+  flex-direction: column;
+}
+.nav-group:hover .nav-dropdown,
+.nav-group:focus-within .nav-dropdown { display: flex; }
+.nav-dropdown a { padding: 8px 22px; font-size: 0.9rem; white-space: nowrap; }
+
+/* Icon cluster */
+.header-icons { display: flex; align-items: center; gap: 18px; }
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.icon-btn svg { width: 21px; height: 21px; }
+.cart-btn { position: relative; }
+.cart-count[data-empty="true"] { display: none; }
+.cart-count {
+  position: absolute;
+  top: -4px; right: -8px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-text);
+  color: #fff;
+  font-size: 0.65rem;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Account dropdown behind the person icon */
+.account-menu { position: relative; display: flex; }
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  min-width: 150px;
+  padding: 8px 0;
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  display: none;
+  flex-direction: column;
+}
+.account-menu.open .account-dropdown { display: flex; }
+.account-dropdown a { padding: 9px 18px; font-size: 0.9rem; }
+
+/* Search panel */
+.header-search {
+  border-top: 1px solid var(--color-line);
+  background: var(--color-bg);
+  padding: 20px var(--page-pad);
+}
+.header-search input {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: block;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-line-strong);
+  font-family: inherit;
+  font-size: 1.05rem;
+  background: none;
+}
+.header-search input:focus { outline: none; }
+.search-results {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: grid;
+  gap: 2px;
+}
+.search-results a {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+}
+.search-results img { width: 44px; height: 56px; object-fit: cover; }
+.search-price { color: var(--color-muted); font-size: 0.88rem; }
+.search-empty { color: var(--color-muted); padding: 10px 0; }
+
+.menu-toggle { display: none; }
+
+/* --------------------------------------------------------------- footer -- */
+.site-footer {
+  background: var(--color-cream);
+  color: var(--color-text);
+  margin-top: 80px;
+  padding: 64px var(--page-pad) 28px;
+}
+.footer-inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr;
+  gap: 40px;
+}
+.footer-brand img { height: 58px; width: auto; mix-blend-mode: multiply; }
+.footer-col h4 {
+  font-size: 1.05rem;
+  font-weight: 400;
+  margin-bottom: 18px;
+}
+.footer-col a {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--color-text);
+  margin-bottom: 12px;
+}
+.footer-base {
+  max-width: var(--page-max);
+  margin: 48px auto 0;
+  padding-top: 18px;
+  border-top: 1px solid rgba(18, 18, 18, 0.18);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.82rem;
+}
+.footer-legal { display: flex; gap: 24px; flex-wrap: wrap; }
+.footer-region { letter-spacing: 0.06em; }
+
+/* --------------------------------------------------------- form controls -- */
+/* The old stylesheet left inputs at browser defaults, which read as raw grey
+   boxes against this design. Styled site-wide so the intake, auth and account
+   forms match the storefront without each carrying its own rules. */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="tel"],
+select,
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-line-strong);
+}
+input::placeholder, textarea::placeholder { color: #a5a5a5; }
+label { font-size: 0.85rem; letter-spacing: 0.04em; }
+
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23121212' stroke-width='1.6'><path d='M6 9l6 6 6-6' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 38px;
+}
+
+/* Checkboxes and radios keep their native control, just sized to the type. */
+input[type="checkbox"], input[type="radio"] { width: auto; accent-color: var(--color-text); }
+
+/* Any bare <button> in page content, so nothing renders as a browser default. */
+main button:not(.icon-btn):not(.swatch):not(.filter-toggle):not(.menu-toggle):not([class]),
+form button:not([class]) {
+  padding: 14px 30px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius);
+  background: var(--color-text);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- buttons -- */
+.btn,
+.btn-primary,
+.btn-secondary {
+  display: inline-block;
+  padding: 14px 30px;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-bg);
+  color: var(--color-text);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.btn-primary {
+  background: var(--color-text);
+  color: #fff;
+}
+.btn-primary:hover { background: #000; opacity: 1; }
+.btn-secondary:hover { background: var(--color-surface); opacity: 1; }
+.btn:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.btn-pill { border-radius: 999px; padding: 10px 22px; text-transform: none; letter-spacing: 0; }
+
+/* Button classes that predate this stylesheet and had no appearance of their
+   own, so they were rendering as raw browser buttons. Mapped onto the two
+   storefront treatments rather than given new looks. */
+.auth-submit {
+  padding: 14px 30px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius);
+  background: var(--color-text);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.auth-submit:hover { background: #000; }
+
+.btn-outline {
+  display: inline-block;
+  padding: 12px 26px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.btn-outline:hover { background: var(--color-surface); opacity: 1; }
+
+/* A button that reads as a link -- used for "enter measurements manually" and
+   similar escape hatches, where a solid button would compete with the primary
+   action next to it. */
+.btn-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 0.92rem;
+  color: var(--color-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fit-feedback-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.fit-feedback-btn:hover { border-color: var(--color-line-strong); }
+
+.modal-close {
+  width: 32px; height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+.modal-close:hover { color: var(--color-text); }
+
+/* ------------------------------------------------------- hero carousel -- */
+.hero-carousel { position: relative; overflow: hidden; }
+.hero-track {
+  display: flex;
+  transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hero-slide {
+  flex: 0 0 100%;
+  min-height: 560px;
+  display: flex;
+  align-items: center;
+  background: var(--color-surface) center/cover no-repeat;
+}
+.hero-dots {
+  position: absolute;
+  left: 0; right: 0; bottom: 22px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 2;
+}
+/* White with a dark ring, so the dots read against both the pale studio
+   backdrops and the darker furniture in the banners. */
+.hero-dot {
+  width: 9px; height: 9px;
+  padding: 0;
+  border: 1px solid rgba(18, 18, 18, 0.55);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.hero-dot.active { background: rgba(18, 18, 18, 0.9); border-color: rgba(18, 18, 18, 0.9); }
+
+/* --------------------------------------------------------- promo banner -- */
+.promo-banner {
+  min-height: 620px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Anchored high in the frame: the source image is portrait and this band is
+     landscape, so the default centre crop put the copy over the model. */
+  background: var(--color-surface) url("../images/brand/banner-2.jpg") center top / cover no-repeat;
+  text-align: center;
+}
+/* A soft panel so the headline stays readable whatever the crop lands on --
+   the same device the hero uses. */
+.promo-banner-inner {
+  padding: 34px 44px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(2px);
+}
+.promo-banner h2 {
+  font-size: 2.1rem;
+  font-weight: 400;
+  margin-bottom: 28px;
+  color: var(--color-text);
+}
+.promo-banner .btn { background: rgba(255,255,255,0.92); border-color: rgba(255,255,255,0.92); }
+
+/* ------------------------------------------------------------- journals -- */
+.journal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 34px; }
+.journal-card img { aspect-ratio: 16 / 10; object-fit: cover; width: 100%; margin-bottom: 16px; background: var(--color-surface); }
+.journal-card h3 { font-size: 1.15rem; font-weight: 400; margin-bottom: 10px; }
+.journal-card p { font-size: 0.88rem; color: var(--color-muted); margin: 0; }
+
+/* ----------------------------------------------------------------- hero -- */
+.hero {
+  position: relative;
+  min-height: 560px;
+  display: flex;
+  align-items: center;
+  background: var(--color-surface) url("../images/brand/hero.jpg") center/cover no-repeat;
+}
+.hero-content {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 0 var(--page-pad);
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+/* The banner's subject sits left of centre, so the copy goes right -- same
+   arrangement as the storefront. The panel keeps it legible over the photo
+   without darkening the whole image. */
+.hero-panel {
+  max-width: 430px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(2px);
+  padding: 36px 38px;
+}
+.hero h1 { font-size: 2.3rem; font-weight: 400; margin-bottom: 18px; }
+.hero p { margin-bottom: 26px; color: var(--color-text); font-size: 0.95rem; }
+
+/* --------------------------------------------------- category + product -- */
 .category-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
 }
-.category-tile {
-  position: relative;
-  aspect-ratio: 3 / 4;
-  overflow: hidden;
-  background: #eee;
-}
-.category-tile img { width: 100%; height: 100%; object-fit: cover; }
+.category-tile { display: block; }
+.category-tile img { aspect-ratio: 3 / 4; object-fit: cover; width: 100%; background: var(--color-surface); }
 .category-tile span {
-  position: absolute;
-  bottom: 16px;
-  left: 16px;
-  background: rgba(255,255,255,0.9);
-  padding: 6px 14px;
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
+  display: block;
+  text-align: center;
+  margin-top: 14px;
+  font-size: 0.95rem;
 }
 
-@media (max-width: 860px) {
-  .category-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-/* ============================
-   Product grid + cards
-   ============================ */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 28px 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px 28px;
 }
-@media (max-width: 1000px) { .product-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 700px) { .product-grid { grid-template-columns: repeat(2, 1fr); } }
-
 .product-card { display: block; }
 .product-card .thumb {
   aspect-ratio: 3 / 4;
   overflow: hidden;
-  background: #eee;
-  margin-bottom: 10px;
+  background: var(--color-surface);
+  margin-bottom: 14px;
 }
-.product-card .thumb img { width: 100%; height: 100%; object-fit: cover; }
-.product-card .name { font-size: 0.92rem; margin-bottom: 4px; }
-.product-card .price { font-size: 0.88rem; color: var(--color-muted); }
+.product-card .thumb img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+.product-card:hover { opacity: 1; }
+.product-card:hover .thumb img { transform: scale(1.03); }
+.product-card .swatches { display: flex; gap: 6px; margin-bottom: 10px; }
+.product-card .swatches i {
+  width: 14px; height: 14px;
+  display: block;
+  border: 1px solid rgba(0,0,0,0.15);
+}
+.product-card .name { font-size: 0.95rem; margin-bottom: 4px; }
+.product-card .price { font-size: 0.95rem; }
 .badge-best {
   display: inline-block;
-  font-size: 0.7rem;
-  letter-spacing: 0.05em;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--color-accent);
-  border: 1px solid var(--color-accent);
-  padding: 2px 8px;
+  color: var(--color-muted);
   margin-bottom: 6px;
 }
 
-/* ============================
-   Collection page layout
-   ============================ */
-.collection-layout {
-  display: grid;
-  grid-template-columns: 220px 1fr;
+/* ----------------------------------------------------------- collection -- */
+.collection-layout { max-width: var(--page-max); margin: 0 auto; padding: 40px var(--page-pad) 0; }
+.collection-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 36px; }
+.collection-head h1 { font-size: 2.6rem; font-weight: 300; margin: 0; }
+.result-count { color: var(--color-muted); font-size: 0.9rem; }
+.filter-bar { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 28px; }
+.filter-toggle {
+  padding: 11px 30px;
+  border: 1px solid var(--color-line-strong);
+  background: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.filter-panel {
+  display: none;
   gap: 40px;
+  padding: 24px 0 28px;
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+  margin-bottom: 32px;
+}
+.filter-panel.open { display: flex; flex-wrap: wrap; }
+.filter-panel h4 { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
+.filter-panel label { display: block; font-size: 0.9rem; margin-bottom: 8px; cursor: pointer; }
+.filter-panel input { margin-right: 8px; }
+
+/* ------------------------------------------------------- product detail -- */
+.product-detail {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 40px var(--page-pad) 0;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 64px;
   align-items: start;
 }
-@media (max-width: 860px) {
-  .collection-layout { grid-template-columns: 1fr; }
-}
-.filter-panel h4 {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 20px 0 10px;
-  color: var(--color-muted);
-}
-.filter-panel h4:first-child { margin-top: 0; }
-.filter-panel label {
-  display: flex;
-  align-items: center;
-  font-size: 0.9rem;
-  margin-bottom: 6px;
-  cursor: pointer;
-}
-.result-count { color: var(--color-muted); margin-bottom: 24px; }
-
-/* ============================
-   Product detail page
-   ============================ */
-.product-detail {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 48px;
-}
-@media (max-width: 800px) {
-  .product-detail { grid-template-columns: 1fr; }
-}
-.gallery-main {
-  aspect-ratio: 3 / 4;
-  background: #eee;
-  margin-bottom: 10px;
-  overflow: hidden;
-}
+.gallery-main { aspect-ratio: 3 / 4; overflow: hidden; background: var(--color-surface); }
 .gallery-main img { width: 100%; height: 100%; object-fit: cover; }
-.gallery-thumbs { display: flex; gap: 8px; }
+.gallery-thumbs { display: flex; gap: 10px; margin-top: 12px; }
 .gallery-thumbs img {
-  width: 64px; height: 84px; object-fit: cover; cursor: pointer;
-  border: 1px solid var(--color-line);
+  width: 84px; height: 108px;
+  object-fit: cover;
+  cursor: pointer;
+  border: 1px solid transparent;
 }
-.price-lg { font-size: 1.3rem; margin-bottom: 20px; }
-.option-group { margin-bottom: 22px; }
+.gallery-thumbs img.selected { border-color: var(--color-line-strong); }
+
+.product-detail h1 { font-size: 1.9rem; font-weight: 400; margin-bottom: 12px; }
+.price-lg { font-size: 1.25rem; margin-bottom: 8px; }
+.shipping-note { font-size: 0.85rem; color: var(--color-muted); margin-bottom: 28px; }
+.option-group { margin-bottom: 26px; }
 .option-group h4 {
-  font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--color-muted); margin-bottom: 10px;
+  font-size: 1rem;
+  font-weight: 400;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
 }
-.swatch-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.option-group h4 a { font-size: 0.82rem; color: var(--color-muted); text-decoration: underline; }
+.swatch-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .swatch {
+  min-width: 46px;
+  padding: 9px 16px;
   border: 1px solid var(--color-line);
-  background: var(--color-surface);
-  color: var(--color-text);
-  padding: 8px 14px;
-  font-size: 0.85rem;
+  border-radius: 999px;
+  background: none;
+  font-family: inherit;
+  font-size: 0.88rem;
   cursor: pointer;
 }
-.swatch.selected { border-color: var(--color-text); background: var(--color-text); color: #fff; }
-.detail-tabs { margin-top: 32px; border-top: 1px solid var(--color-line); }
-.detail-tab { border-bottom: 1px solid var(--color-line); padding: 16px 0; }
-.detail-tab h4 { margin: 0 0 8px; font-size: 0.95rem; }
+.swatch.selected { background: var(--color-text); color: #fff; border-color: var(--color-text); }
+.swatch-color {
+  width: 34px; height: 34px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0;
+  border: 1px solid rgba(0,0,0,0.2);
+}
+.swatch-color.selected { outline: 1px solid var(--color-text); outline-offset: 2px; background: none; }
+#addToCartBtn { width: 100%; margin-bottom: 8px; }
 
-/* ============================
-   FAQ accordion
-   ============================ */
-.faq-group h2 { margin-top: 40px; }
+.detail-tabs { margin-top: 34px; border-top: 1px solid var(--color-line); }
+.detail-tab { border-bottom: 1px solid var(--color-line); padding: 18px 0; }
+.detail-tab h4 { margin: 0 0 6px; font-size: 1.05rem; font-weight: 400; }
+.detail-tab p { margin: 0; color: var(--color-muted); font-size: 0.92rem; }
+
+/* ----------------------------------------------------------------- cart -- */
+.cart-row {
+  display: grid;
+  grid-template-columns: 90px 1fr auto auto;
+  gap: 20px;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+.cart-row img { width: 90px; height: 115px; object-fit: cover; }
+.cart-total { text-align: right; padding: 26px 0; font-size: 1.1rem; }
+
+/* ------------------------------------------------------------------ faq -- */
+.faq-group { max-width: 780px; margin: 0 auto; }
 .faq-item { border-bottom: 1px solid var(--color-line); }
 .faq-question {
   width: 100%;
-  text-align: left;
+  padding: 20px 0;
   background: none;
-  border: none;
-  color: var(--color-text);
-  text-transform: none;
-  letter-spacing: normal;
-  padding: 16px 0;
+  border: 0;
+  font-family: inherit;
   font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
   display: flex;
   justify-content: space-between;
+  gap: 20px;
 }
-.faq-answer {
-  display: none;
-  padding: 0 0 16px;
-  color: var(--color-muted);
-}
-.faq-item.open .faq-answer { display: block; }
+.faq-answer { padding: 0 0 20px; color: var(--color-muted); }
+.form-narrow { max-width: 520px; margin: 0 auto; }
+.copyright { text-align: center; color: var(--color-muted); font-size: 0.82rem; }
 
-/* ============================
-   Cart page
-   ============================ */
-.cart-row {
-  display: grid;
-  grid-template-columns: 80px 1fr auto auto;
-  gap: 16px;
-  align-items: center;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--color-line);
-}
-.cart-row img { width: 80px; height: 106px; object-fit: cover; }
-.cart-total {
-  text-align: right;
-  font-size: 1.2rem;
-  margin-top: 24px;
-}
-
-/* ============================
-   Simple form styling (contact, newsletter)
-   ============================ */
-input[type="text"], input[type="email"], input[type="password"], textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid var(--color-line);
-  background: var(--color-surface);
-  font-family: var(--font-sans);
-  margin-bottom: 14px;
-}
-input[type="checkbox"] {
-  width: auto;
-  margin-right: 8px;
-}
-.form-narrow { max-width: 480px; }
-
-/* ============================
-   Footer
-   ============================ */
-.site-footer {
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-line);
-  padding: 48px 0 24px;
-  margin-top: 64px;
-}
-.footer-inner {
-  max-width: var(--max-width);
-  margin: 0 auto;
-  padding: 0 24px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
-}
-.footer-col h4 {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-muted);
-  margin-bottom: 12px;
-}
-.footer-col a { display: block; margin-bottom: 8px; font-size: 0.9rem; }
-.footer-col form { display: flex; gap: 8px; }
-.footer-col input { margin-bottom: 0; }
-.copyright {
+/* --------------------------------------------------------- feature band -- */
+/* Dark band used to set the app's own features apart, as the storefront does. */
+.feature-band {
+  background: var(--color-forest);
+  color: #f1ead7;
+  padding: 64px var(--page-pad);
   text-align: center;
-  color: var(--color-muted);
-  font-size: 0.8rem;
-  margin: 32px 0 0;
 }
-@media (max-width: 700px) {
+.feature-band h2 { color: #f1ead7; }
+.feature-band p { max-width: 56ch; margin: 0 auto 26px; opacity: 0.85; }
+.feature-band .btn { border-color: #f1ead7; color: #f1ead7; background: none; }
+.feature-band .btn:hover { background: #f1ead7; color: var(--color-forest); }
+
+/* ----------------------------------------------------------- responsive -- */
+@media (max-width: 1180px) {
+  :root { --page-pad: 28px; }
+  .main-nav { gap: 20px; font-size: 0.88rem; }
+  .logo img { height: 44px; }
+}
+
+@media (max-width: 900px) {
+  .menu-toggle {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 30px; height: 30px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    order: -1;
+  }
+  .menu-toggle span { display: block; height: 1.5px; background: var(--color-text); }
+  .header-inner { grid-template-columns: auto 1fr auto; }
+  .main-nav {
+    display: none;
+    position: absolute;
+    top: var(--header-height);
+    left: 0; right: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    padding: 12px var(--page-pad) 20px;
+    background: var(--color-bg);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .main-nav.open { display: flex; }
+  .main-nav > a, .nav-group-label { padding: 11px 0; width: 100%; }
+  .nav-dropdown {
+    position: static;
+    transform: none;
+    border: 0;
+    padding: 0 0 6px 16px;
+    display: flex;
+  }
+  .logo { justify-self: center; }
+  .product-grid { grid-template-columns: repeat(2, 1fr); }
+  .category-grid { grid-template-columns: repeat(2, 1fr); }
+  .product-detail { grid-template-columns: 1fr; gap: 32px; }
+  .journal-grid { grid-template-columns: 1fr; }
+  .hero-slide { min-height: 420px; }
+  .promo-banner { min-height: 420px; }
+  .hero-content { justify-content: center; }
+  .hero-panel { max-width: 100%; }
+  .footer-inner { grid-template-columns: 1fr 1fr; }
+  h1 { font-size: 2rem; }
+  .collection-head h1 { font-size: 2rem; }
+}
+
+@media (max-width: 560px) {
+  .product-grid { grid-template-columns: 1fr; }
   .footer-inner { grid-template-columns: 1fr; }
+  .footer-base { flex-direction: column; gap: 12px; align-items: flex-start; }
+}
+
+/* ------------------------------------------------------------ about page -- */
+.about-hero img {
+  width: 100%;
+  height: 420px;
+  object-fit: cover;
+  object-position: center 40%;
+}
+
+/* The story card overlaps the banner above it, which is what gives the page
+   its layered look on the storefront. The negative margin is what lifts it. */
+.about-story {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+  margin-top: -170px;
+  position: relative;
+  z-index: 1;
+}
+.about-story-card {
+  background: var(--color-bg);
+  padding: 48px 52px 40px;
+}
+.eyebrow {
+  color: var(--color-gold);
+  font-size: 2rem;
+  font-weight: 400;
+  margin: 0 0 26px;
+}
+.about-story-card h1 {
+  font-size: 1.9rem;
+  font-weight: 400;
+  line-height: 1.3;
+  margin-bottom: 26px;
+}
+.about-story-card h1 strong { font-weight: 700; }
+.about-story-card p { font-size: 0.92rem; margin-bottom: 16px; }
+.about-story-card p:last-child { margin-bottom: 0; }
+/* A wide, shallow crop sitting alongside the story card -- it is a companion
+   image, not a feature, so it is capped rather than filling the column. */
+.about-story-image { margin-top: 210px; }
+.about-story-image img {
+  width: 100%;
+  max-height: 230px;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+.about-split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.55fr) minmax(0, 1fr);
+  gap: 64px;
+  align-items: start;
+  padding-block: 40px 96px;
+}
+.about-split-image img { width: 100%; max-width: 340px; object-fit: cover; }
+.about-split-text h2 { font-size: 1.9rem; font-weight: 400; margin-bottom: 24px; }
+.about-split-text p { font-size: 0.92rem; margin-bottom: 16px; }
+.about-emphasis { font-style: italic; font-weight: 700; }
+
+@media (max-width: 900px) {
+  .about-hero img { height: 260px; }
+  .about-story,
+  .about-split { grid-template-columns: 1fr; gap: 28px; }
+  .about-story { margin-top: -60px; }
+  .about-story-card { padding: 32px 26px; }
+  .about-story-image { margin-top: 0; }
+  .about-split { padding-block: 56px; }
+}
+
+/* ------------------------------------------------------- size guide page -- */
+.size-intro { text-align: center; padding: 46px var(--page-pad) 34px; }
+.size-intro h1 { font-size: 2rem; font-weight: 400; margin-bottom: 8px; }
+.size-intro p { color: var(--color-muted); margin: 0; }
+.size-banner img { width: 100%; height: 210px; object-fit: cover; }
+
+.size-accordions { max-width: 700px; margin: 0 auto; padding: 64px var(--page-pad) 0; }
+.size-accordion { border-bottom: 1px solid var(--color-line); }
+.size-accordion-head {
+  width: 100%;
+  padding: 22px 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 1.1rem;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+/* A chevron that rotates, rather than swapping glyphs, so the control reads as
+   one object opening and closing. */
+.size-accordion-head::after {
+  content: "";
+  width: 8px; height: 8px;
+  border-right: 1.5px solid var(--color-text);
+  border-bottom: 1.5px solid var(--color-text);
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+}
+.size-accordion-head[aria-expanded="true"]::after { transform: rotate(45deg); }
+.size-accordion-body { padding-bottom: 26px; }
+
+.size-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.size-table th, .size-table td {
+  padding: 11px 12px;
+  border: 1px solid var(--color-line);
+  text-align: center;
+}
+.size-table thead th { background: var(--color-surface); font-weight: 700; }
+.size-table tbody th { font-weight: 700; background: var(--color-surface); }
+.note { font-size: 0.85rem; color: var(--color-muted); margin: 14px 0 0; }
+.size-help { text-align: center; margin: 40px 0 0; font-size: 0.92rem; }
+.size-help a { text-decoration: underline; }
+
+/* Find Your Piece: label chip over the lower-left of each image. */
+.find-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+.find-card { position: relative; display: block; }
+.find-card img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: var(--color-surface); }
+.find-card span {
+  position: absolute;
+  left: 0; bottom: 22px;
+  padding: 8px 20px;
+  background: rgba(60, 60, 60, 0.72);
+  color: #fff;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 900px) {
+  .find-grid { grid-template-columns: 1fr; }
+  .size-banner img { height: 150px; }
 }

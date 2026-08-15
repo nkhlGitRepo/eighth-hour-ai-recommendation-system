@@ -29,7 +29,7 @@ function renderCart() {
     if (!product) return "";
     const lineTotal = product.price * item.qty;
     total += lineTotal;
-    const img = placeholderImage(product.name, 160, 210);
+    const img = productImage(product, 0, product.name, 160, 210);
     return `
       <div class="cart-row">
         <img src="${img}" alt="${product.name}" />

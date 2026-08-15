@@ -48,7 +48,7 @@ class HomeRecommendationsLoader {
     return `
       <a href="product.html?slug=${product.slug}" class="product-link">
         <div class="product-image" style="background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; padding: 0.5rem;">
-          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='280'%3E%3Crect fill='%23f0f0f0' width='220' height='280'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12' fill='%23999'%3E${encodeURIComponent(product.name)}%3C/text%3E%3C/svg%3E" alt="${product.name}" style="width: 100%; display: block;" />
+          <img src="${productImage(product.sku || product.slug, 0, product.name, 220, 280)}" alt="${product.name}" style="width: 100%; display: block;" />
         </div>
         <h3>${product.name}</h3>
         <p class="product-meta">${product.category}</p>

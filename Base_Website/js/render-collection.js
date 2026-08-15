@@ -17,6 +17,16 @@ document.addEventListener("DOMContentLoaded", () => {
   setHeading(state);
   buildFilterPanel(state);
   renderGrid(state);
+
+  // Filters are collapsed behind a button, as on the storefront. Opened
+  // automatically when arriving with a filter already applied via the URL,
+  // so the reason the grid is narrowed is visible.
+  const toggle = document.getElementById("filterToggle");
+  const panel = document.getElementById("filterPanel");
+  if (toggle && panel) {
+    if (state.categories.size || state.fabrics.size) panel.classList.add("open");
+    toggle.addEventListener("click", () => panel.classList.toggle("open"));
+  }
 });
 
 function setHeading(state) {
@@ -35,10 +45,11 @@ function setHeading(state) {
 function buildFilterPanel(state) {
   const panel = document.getElementById("filterPanel");
   panel.innerHTML = `
-    <h4>Category</h4>
+    <div><h4>Category</h4>
     ${CATEGORIES.map((c) => checkboxHtml("category", c, state.categories)).join("")}
-    <h4>Fabric</h4>
-    ${FABRICS.map((f) => checkboxHtml("fabric", f, state.fabrics)).join("")}
+    </div>
+    <div><h4>Fabric</h4>
+    ${FABRICS.map((f) => checkboxHtml("fabric", f, state.fabrics)).join("")}</div>
   `;
   panel.querySelectorAll("input[type=checkbox]").forEach((box) => {
     box.addEventListener("change", () => {

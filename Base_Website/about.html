@@ -4,80 +4,66 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>About — Eighth Hour</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=20260815" />
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="header-inner">
-      <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">&#9776;</button>
-      <nav class="main-nav" id="mainNav">
-        <a href="collection.html?category=tops">Tops</a>
-        <a href="collection.html?category=skirts">Skirts</a>
-        <a href="collection.html?category=dresses">Dresses</a>
-        <a href="collection.html?category=trousers">Trousers</a>
-        <div class="nav-more">
-          <button class="nav-more-toggle" type="button">More &#9662;</button>
-          <div class="nav-more-menu">
-            <a href="collection.html?category=vests">Vests</a>
-            <a href="collection.html?category=co-ord-sets">Co-ord Sets</a>
-            <a href="collection.html?fabric=handwoven-silk">Handwoven Silks</a>
-            <a href="collection.html?fabric=natural-crepe">Natural Crepe</a>
-          </div>
-        </div>
-      </nav>
-      <a class="logo" href="index.html">EIGHTH HOUR</a>
-      <div class="header-actions">
-        <a href="frontend/pages/intake-flow.html" class="style-profile-link">My Style</a>
-        <a href="frontend/pages/new-releases.html">New Releases</a>
-        <a href="frontend/pages/recommendations.html" id="myRecommendationsLink" style="display: none;">My Recommendations</a>
-        <a href="frontend/pages/login.html" id="loginLink">Log In</a>
-        <a href="frontend/pages/account.html" id="accountLink" style="display: none;">My Account</a>
-        <a href="#" id="logoutLink" style="display: none;">Log Out</a>
-        <a href="faq.html">Size Guide</a>
-        <a href="about.html">About</a>
-        <a href="cart.html">Cart (<span id="cartCount">0</span>)</a>
-      </div>
-    </div>
-  </header>
+  <header data-site-header></header>
 
-  <section class="section wrap" style="max-width: 720px;">
-    <h1>Our Story</h1>
-    <p>Eighth Hour started with a familiar problem: a founder who had spent decades building businesses kept running into the same daily snag — after every packed schedule, early flight, and late meeting, the hardest decision of the day was still what to wear.</p>
-    <p>Conversations with other working women echoed the same frustration: busy careers, changing bodies, and no patience for endless browsing. Not a desire to shop more, but a wardrobe they could simply trust.</p>
-    <p>That idea became Eighth Hour — clothing built to remove the noise. Well-cut pieces in natural fabrics, designed to be easy to reach for, easy to wear, and easy to live in, whether the day runs from a boardroom to an airport to dinner with friends.</p>
-    <p>Every piece is made with intention: fabrics that breathe, shapes that flatter without fuss, and finishes meant to hold up over years, not seasons.</p>
+  <!-- Full-bleed banner with the story card overlapping it, as on the
+       storefront: the card sits astride the image's lower edge. -->
+  <section class="about-hero">
+    <img src="images/brand/about-hero.jpg" alt="Pattern pieces being drafted by hand" />
   </section>
 
-  <footer class="site-footer">
-    <div class="footer-inner">
-      <div class="footer-col">
-        <h4>Links</h4>
-        <a href="index.html">Home</a>
-        <a href="collection.html">Shop All</a>
-        <a href="faq.html">Size Guide</a>
-        <a href="about.html">About</a>
-      </div>
-      <div class="footer-col">
-        <h4>Support</h4>
-        <a href="faq.html">FAQ</a>
-        <a href="contact.html">Contact</a>
-      </div>
-      <div class="footer-col">
-        <h4>Newsletter</h4>
-        <form onsubmit="return false;">
-          <input type="email" placeholder="Email address" required />
-          <button type="submit">Submit</button>
-        </form>
-      </div>
+  <section class="about-story wrap">
+    <div class="about-story-card">
+      <p class="eyebrow">Our Story</p>
+      <h1>Eighth Hour began with a simple question:
+        <strong>Why does getting dressed have to feel like work, too?</strong></h1>
+      <p>Our founder, an entrepreneur who spent over three decades building businesses,
+         often found herself in that familiar rush: early meetings, packed schedules, long
+         flights, and even longer days. In all of it, the hardest part was always: what to
+         wear. What to pack. What fits. What still felt like her.</p>
+      <p>Conversations with colleagues, quick chats between meetings, often circled back to
+         the same thing: busy lives, real careers, evolving bodies, and no time (or interest)
+         in endless browsing. They didn't want to shop. They wanted a wardrobe they could
+         trust. A wardrobe that felt like an extension of who they were.</p>
     </div>
-    <p class="copyright">This is a local, non-commercial demo clone built for reference purposes. Not affiliated with Eighth Hour Inc.</p>
-  </footer>
+    <div class="about-story-image">
+      <img src="images/brand/hero.jpg" alt="Two women in Eighth Hour pieces" loading="lazy" />
+    </div>
+  </section>
 
-  <script src="js/cart.js"></script>
-  <script src="js/menu.js"></script>
-  <script src="js/recommendations-nav-link.js"></script>
-  <script src="js/style-profile-link.js"></script>
-  <script src="js/auth-nav-link.js"></script>
+  <section class="about-split wrap">
+    <div class="about-split-image">
+      <img src="images/brand/about-2.jpg" alt="Model in an Eighth Hour dress" loading="lazy" />
+    </div>
+    <div class="about-split-text">
+      <h2>Eighth Hour was built with that woman in mind.</h2>
+      <p>This brand is about removing the noise. It's about well-cut clothing made from
+         beautiful fabrics, pieces that are easy to reach for, easy to wear, and easy to care
+         for. It's about reducing decision fatigue, and replacing it with clarity, confidence,
+         and comfort.</p>
+      <p>Because the women we design for don't want more options. They want the right ones.</p>
+      <p class="about-emphasis">We make clothing for the in-between moments. The quiet
+         transitions. From boardroom to airport, from workday to dinner, our pieces are
+         designed to move through all of it.</p>
+      <p>At Eighth Hour, we design a focused, well-edited wardrobe. One built on form and
+         function. Each piece is thoughtfully designed to simplify dressing, natural fabrics
+         that breathe, shapes that flatter without fuss, and finishes that age with grace.</p>
+      <p>We believe that clothing should work for you, not the other way around.</p>
+    </div>
+  </section>
+
+<footer data-site-footer></footer>
+  <script src="js/data.js?v=20260815"></script>
+  <script src="js/placeholder.js?v=20260815"></script>
+  <script src="js/site-chrome.js?v=20260815"></script>
+<script src="js/cart.js?v=20260815"></script>
+  <script src="js/menu.js?v=20260815"></script>
+  <script src="js/recommendations-nav-link.js?v=20260815"></script>
+  <script src="js/style-profile-link.js?v=20260815"></script>
+  <script src="js/auth-nav-link.js?v=20260815"></script>
 </body>
 </html>

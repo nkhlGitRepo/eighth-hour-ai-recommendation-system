@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Size Guide — Eighth Hour</title>
+  <link rel="stylesheet" href="css/style.css?v=20260815" />
+</head>
+<body>
+
+  <header data-site-header></header>
+
+  <section class="size-intro">
+    <h1>Eighth Hour Size Guide</h1>
+    <p>Our silhouettes are available in sizes XS–XXL</p>
+  </section>
+
+  <section class="size-banner">
+    <img src="images/brand/size-banner.jpg" alt="Spools of silk thread" />
+  </section>
+
+  <!--
+    Measurements come from the same chart the recommendation engine uses
+    (backend/py_src/constants.py, SIZE_CHART_SOURCE), so the size quoted here
+    can never disagree with the size a customer is recommended.
+  -->
+  <section class="size-accordions">
+    <div class="size-accordion">
+      <button class="size-accordion-head" type="button" aria-expanded="false">Tops Size Guide</button>
+      <div class="size-accordion-body" hidden>
+      <table class="size-table">
+        <thead><tr><th scope="col">Size</th><th>Bust (cm)</th><th>Waist (cm)</th></tr></thead>
+        <tbody>
+        <tr><th scope="row">XS</th><td>81–84</td><td>61–66</td></tr>
+        <tr><th scope="row">S</th><td>86–89</td><td>66–69</td></tr>
+        <tr><th scope="row">M</th><td>91–95</td><td>71–75</td></tr>
+        <tr><th scope="row">L</th><td>99–103</td><td>79–83</td></tr>
+        <tr><th scope="row">XL</th><td>108–114</td><td>89–95</td></tr>
+        <tr><th scope="row">XXL</th><td>119–123</td><td>101–105</td></tr>
+        </tbody>
+      </table>
+        <p class="note">Tops and vests are sized on the bust. Measure around the fullest part,
+           keeping the tape level and comfortably loose.</p>
+      </div>
+    </div>
+
+    <div class="size-accordion">
+      <button class="size-accordion-head" type="button" aria-expanded="false">Dresses Size Guide</button>
+      <div class="size-accordion-body" hidden>
+      <table class="size-table">
+        <thead><tr><th scope="col">Size</th><th>Bust (cm)</th><th>Waist (cm)</th><th>Hips (cm)</th></tr></thead>
+        <tbody>
+        <tr><th scope="row">XS</th><td>81–84</td><td>61–66</td><td>86–92</td></tr>
+        <tr><th scope="row">S</th><td>86–89</td><td>66–69</td><td>92–96</td></tr>
+        <tr><th scope="row">M</th><td>91–95</td><td>71–75</td><td>96–101</td></tr>
+        <tr><th scope="row">L</th><td>99–103</td><td>79–83</td><td>105–109</td></tr>
+        <tr><th scope="row">XL</th><td>108–114</td><td>89–95</td><td>114–120</td></tr>
+        <tr><th scope="row">XXL</th><td>119–123</td><td>101–105</td><td>125–129</td></tr>
+        </tbody>
+      </table>
+        <p class="note">Dresses and co-ord sets follow the bust, with waist and hips shown so you
+           can check the fit through the body.</p>
+      </div>
+    </div>
+
+    <div class="size-accordion">
+      <button class="size-accordion-head" type="button" aria-expanded="false">Bottoms Size Guide</button>
+      <div class="size-accordion-body" hidden>
+      <table class="size-table">
+        <thead><tr><th scope="col">Size</th><th>Waist (cm)</th><th>Hips (cm)</th></tr></thead>
+        <tbody>
+        <tr><th scope="row">XS</th><td>61–66</td><td>86–92</td></tr>
+        <tr><th scope="row">S</th><td>66–69</td><td>92–96</td></tr>
+        <tr><th scope="row">M</th><td>71–75</td><td>96–101</td></tr>
+        <tr><th scope="row">L</th><td>79–83</td><td>105–109</td></tr>
+        <tr><th scope="row">XL</th><td>89–95</td><td>114–120</td></tr>
+        <tr><th scope="row">XXL</th><td>101–105</td><td>125–129</td></tr>
+        </tbody>
+      </table>
+        <p class="note">Skirts and trousers are sized on the hips. Measure around the fullest part,
+           standing with your feet together.</p>
+      </div>
+    </div>
+
+    <p class="size-help">
+      Not sure where you land? <a href="frontend/pages/intake-flow.html">Build your style profile</a>
+      and we'll work out your size in every category.
+    </p>
+  </section>
+
+  <section class="section wrap">
+    <h2 class="section-title">Find Your Piece</h2>
+    <div class="find-grid">
+      <a class="find-card" href="collection.html?category=tops">
+        <img src="images/brand/size-tops.jpg" alt="" loading="lazy" /><span>Tops</span>
+      </a>
+      <a class="find-card" href="collection.html?category=trousers">
+        <img src="images/brand/size-trousers.webp" alt="" loading="lazy" /><span>Trousers</span>
+      </a>
+      <a class="find-card" href="collection.html?category=dresses">
+        <img src="images/brand/size-dresses.jpg" alt="" loading="lazy" /><span>Dresses</span>
+      </a>
+    </div>
+  </section>
+
+  <footer data-site-footer></footer>
+
+  <script src="js/site-chrome.js?v=20260815"></script>
+  <script src="js/data.js?v=20260815"></script>
+  <script src="js/placeholder.js?v=20260815"></script>
+  <script src="js/cart.js?v=20260815"></script>
+  <script src="js/menu.js?v=20260815"></script>
+  <script src="js/recommendations-nav-link.js?v=20260815"></script>
+  <script src="js/style-profile-link.js?v=20260815"></script>
+  <script src="js/auth-nav-link.js?v=20260815"></script>
+  <script src="js/size-guide.js?v=20260815"></script>
+</body>
+</html>

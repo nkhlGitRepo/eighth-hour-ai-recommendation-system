@@ -13,10 +13,36 @@ document.addEventListener("DOMContentLoaded", () => {
   const logoutLink = document.getElementById("logoutLink");
   if (!loginLink || !accountLink || !logoutLink) return;
 
+  // The header shows a single person icon, as the storefront does. Logged out
+  // it links straight to the login page; logged in it becomes a menu trigger
+  // holding My Account and Log Out, so the icon never changes position.
+  const trigger = document.getElementById("accountTrigger");
+  const menu = document.querySelector(".account-menu");
   const isAuthed = !!localStorage.getItem("authToken");
+
   loginLink.style.display = isAuthed ? "none" : "";
-  accountLink.style.display = isAuthed ? "" : "none";
-  logoutLink.style.display = isAuthed ? "" : "none";
+  if (trigger) trigger.style.display = isAuthed ? "" : "none";
+
+  if (trigger && menu) {
+    trigger.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = menu.classList.toggle("open");
+      trigger.setAttribute("aria-expanded", String(open));
+    });
+    // Clicking anywhere else, or pressing Escape, closes it.
+    document.addEventListener("click", () => {
+      menu.classList.remove("open");
+      trigger.setAttribute("aria-expanded", "false");
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        menu.classList.remove("open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+    menu.querySelector(".account-dropdown")
+      .addEventListener("click", (event) => event.stopPropagation());
+  }
 
   logoutLink.addEventListener("click", async (event) => {
     event.preventDefault();

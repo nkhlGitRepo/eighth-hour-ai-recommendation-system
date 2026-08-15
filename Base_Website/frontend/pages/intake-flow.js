@@ -348,6 +348,15 @@ class IntakeFlow {
   // =======================================================================
 
   showPhotoScreen() {
+    // Without a session there is nothing to attach a scan to, and the failure
+    // would otherwise surface at the very end as "we couldn't measure that
+    // photo" -- blaming a photo that was never sent. Catch it before the
+    // customer picks a file and does the work of framing a shot.
+    if (!this.sessionId) {
+      this.handleMissingSession();
+      return;
+    }
+
     document.querySelectorAll('.intake-screen').forEach(screen => {
       screen.classList.remove('active');
     });
@@ -540,6 +549,18 @@ class IntakeFlow {
     box.scrollIntoView?.({ block: 'nearest' });
   }
 
+  /**
+   * Recover from having no session: say so plainly and return to step 1, which
+   * is where a session (and the consent it records) is created. Deliberately
+   * does NOT quietly create a session and re-record consent on the customer's
+   * behalf -- consent is the one thing that must stay an explicit action.
+   */
+  handleMissingSession() {
+    this.clearPhotoError();
+    alert('Your style profile session has ended, so there was nothing to attach the scan to. Your photo was fine — please confirm consent again and we\'ll pick up from there.');
+    this.goToStep(1);
+  }
+
   clearPhotoError() {
     const box = document.getElementById('photoError');
     if (box) box.hidden = true;
@@ -590,9 +611,13 @@ class IntakeFlow {
 
     try {
       // The session is created by the consent step; if the customer deep-linked
-      // straight to ?step=2 there may not be one yet.
+      // straight to ?step=2, used Start Fresh, or the saved state was cleared,
+      // there may not be one. This is NOT a problem with their photo, so it
+      // must not be reported through the photo error panel.
       if (!this.sessionId) {
-        throw new Error('Your session has expired. Please start the profile again.');
+        this.setPhotoScanning(false);
+        this.handleMissingSession();
+        return;
       }
 
       const formData = new FormData();

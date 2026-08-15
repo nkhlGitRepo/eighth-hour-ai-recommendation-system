@@ -183,3 +183,13 @@
 .wrap {
   position: relative;
 }
+
+/* --- Storefront alignment -------------------------------------------------
+   These grids reuse the storefront's .product-grid and .product-card, so the
+   only thing left to style is the element the storefront cards don't have:
+   the line explaining WHY an item was recommended. */
+.card-reason {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+}

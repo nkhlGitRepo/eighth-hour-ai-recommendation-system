@@ -97,9 +97,9 @@ class NewReleasesPage {
   buildPreviewCard(product) {
     return `
       <a href="../../product.html?slug=${product.slug}" class="product-link">
-        <div class="product-image" style="background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
-          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='280'%3E%3Crect fill='%23f0f0f0' width='220' height='280'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12' fill='%23999'%3E${encodeURIComponent(product.name)}%3C/text%3E%3C/svg%3E" alt="${product.name}" style="width: 100%; display: block;" />
-        </div>
+        <div class="thumb">
+            <img src="${productImage(product.sku || product.slug, 0, product.name, 450, 600)}" alt="${product.name}" loading="lazy" />
+          </div>
         <span class="badge-best">New</span>
         <h3 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">${product.name}</h3>
         <p style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.85rem;">${product.category}</p>
@@ -118,9 +118,9 @@ class NewReleasesPage {
 
     return `
       <a href="../../product.html?slug=${item.sku}" class="product-link">
-        <div class="product-image" style="background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
-          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='280'%3E%3Crect fill='%23f0f0f0' width='220' height='280'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12' fill='%23999'%3E${encodeURIComponent(item.name)}%3C/text%3E%3C/svg%3E" alt="${item.name}" style="width: 100%; display: block;" />
-        </div>
+        <div class="thumb">
+            <img src="${productImage(item.sku || item.slug, 0, item.name, 450, 600)}" alt="${item.name}" loading="lazy" />
+          </div>
         <span class="badge-best">${matchPercent}% Match</span>
         <h3 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">${item.name}</h3>
         <p style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.85rem;">${item.category}</p>

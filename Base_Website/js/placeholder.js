@@ -1,11 +1,51 @@
 /**
  * placeholder.js
- * Generates a simple inline SVG "image" for a product, standing in for
- * real product photography (which we intentionally don't scrape/host here).
+ * Resolves the image to show for a product: the real photograph from
+ * images/products/ when we have one, otherwise a generated inline SVG.
+ *
+ * The photographs are the studio shots from eighth-hour.com, stored locally
+ * rather than hot-linked so the site renders offline and doesn't depend on
+ * Shopify CDN URLs that carry version parameters.
  */
 
 // A small neutral palette so cards don't all look identical.
 const PLACEHOLDER_PALETTE = ["#e7e1d6", "#ddd6c8", "#d7cbb8", "#e3ddd0", "#cfc3ae"];
+
+/**
+ * Where the site root sits relative to the current page.
+ *
+ * Product image paths are stored root-relative in data.js ("images/..."), but
+ * pages live at two depths -- index.html at the root and the intake/
+ * recommendations pages under frontend/pages/ -- so a bare relative path would
+ * 404 on one of them. Derived from this script's own src, which is the one
+ * thing that reliably points back at the root from either depth.
+ */
+const SITE_ROOT = (function () {
+  const self = document.currentScript && document.currentScript.getAttribute("src");
+  if (!self) return "";
+  return self.replace(/js\/placeholder\.js.*$/, "");
+})();
+
+/**
+ * Image URL for a product, by index into its gallery.
+ *
+ * Falls back to the generated placeholder when the product has no photograph
+ * at that index, so a product added to data.js without images still renders a
+ * card rather than a broken image icon.
+ *
+ * @param product  a PRODUCTS entry, or a slug string to look one up by
+ * @param index    which gallery image (0 = primary)
+ * @param label    alt/placeholder text when falling back
+ */
+function productImage(product, index = 0, label = "", width = 600, height = 800) {
+  const item =
+    typeof product === "string"
+      ? (typeof PRODUCTS !== "undefined" && PRODUCTS.find((p) => p.slug === product))
+      : product;
+  const src = item && item.images && item.images[index];
+  if (src) return SITE_ROOT + src;
+  return placeholderImage(label || (item && item.name) || String(product), width, height);
+}
 
 function placeholderImage(label, width = 600, height = 800) {
   const bg = PLACEHOLDER_PALETTE[Math.abs(hashCode(label)) % PLACEHOLDER_PALETTE.length];

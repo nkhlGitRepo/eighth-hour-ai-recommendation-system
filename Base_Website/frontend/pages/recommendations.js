@@ -168,14 +168,13 @@ class RecommendationsPage {
 
     container.innerHTML = this.filteredRecommendations
       .map(rec => `
-        <a href="../../product.html?slug=${rec.slug}" class="product-link">
-          <div class="product-image" style="background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; padding: 0.5rem; margin-bottom: 1rem;">
-            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='280'%3E%3Crect fill='%23f0f0f0' width='220' height='280'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12' fill='%23999'%3E${encodeURIComponent(rec.name)}%3C/text%3E%3C/svg%3E" alt="${rec.name}" style="width: 100%; display: block;" />
+        <a href="../../product.html?slug=${rec.slug}" class="product-card">
+          <div class="thumb">
+            <img src="${productImage(rec.sku || rec.slug, 0, rec.name, 450, 600)}" alt="${rec.name}" loading="lazy" />
           </div>
-          <h3 style="margin: 0 0 0.5rem 0; font-size: 0.95rem;">${rec.name}</h3>
-          <p style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.85rem;">${rec.category}</p>
-          <p style="margin: 0 0 0.75rem 0; color: #333; font-weight: 600;">$${rec.price.toFixed(2)}</p>
-          <p style="margin: 0; font-size: 0.85rem; color: #0066cc;">Perfect for your ${this.sessionData?.shapeProfile?.shape_class || 'body'} shape →</p>
+          <div class="name">${rec.name}</div>
+          <div class="price">$${rec.price.toFixed(2)}</div>
+          <p class="card-reason">Suits your ${this.sessionData?.shapeProfile?.shape_class || 'body'} shape</p>
         </a>
       `)
       .join('');

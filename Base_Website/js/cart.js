@@ -39,7 +39,11 @@ function cartItemCount() {
 
 function updateCartCount() {
   const el = document.getElementById("cartCount");
-  if (el) el.textContent = cartItemCount();
+  if (!el) return;
+  const count = cartItemCount();
+  el.textContent = count;
+  // The header shows a bag icon; an empty bag shouldn't carry a "0" badge.
+  el.setAttribute("data-empty", String(count === 0));
 }
 
 // Keep the header cart count correct on every page load.

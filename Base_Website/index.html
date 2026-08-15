@@ -4,47 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Eighth Hour — Local Demo</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=20260815" />
 </head>
 <body>
 
-  <header class="site-header">
-    <div class="header-inner">
-      <button class="menu-toggle" id="menuToggle" aria-label="Toggle menu">&#9776;</button>
-      <nav class="main-nav" id="mainNav">
-        <a href="collection.html?category=tops">Tops</a>
-        <a href="collection.html?category=skirts">Skirts</a>
-        <a href="collection.html?category=dresses">Dresses</a>
-        <a href="collection.html?category=trousers">Trousers</a>
-        <div class="nav-more">
-          <button class="nav-more-toggle" type="button">More &#9662;</button>
-          <div class="nav-more-menu">
-            <a href="collection.html?category=vests">Vests</a>
-            <a href="collection.html?category=co-ord-sets">Co-ord Sets</a>
-            <a href="collection.html?fabric=handwoven-silk">Handwoven Silks</a>
-            <a href="collection.html?fabric=natural-crepe">Natural Crepe</a>
+  <header data-site-header></header>
+
+<!-- Hero carousel: three slides, as on the storefront. -->
+  <section class="hero-carousel" id="heroCarousel" aria-roledescription="carousel" aria-label="Featured">
+    <div class="hero-track" id="heroTrack">
+      <div class="hero-slide" style="background-image: url('images/brand/hero.jpg')"></div>
+      <div class="hero-slide" style="background-image: url('images/brand/hero-2.jpg')">
+        <div class="hero-content">
+          <div class="hero-panel">
+            <h1>For the hours that matter.</h1>
+            <a class="btn btn-primary" href="collection.html">Shop Now</a>
           </div>
         </div>
-      </nav>
-      <a class="logo" href="index.html">EIGHTH HOUR</a>
-      <div class="header-actions">
-        <a href="frontend/pages/intake-flow.html" class="style-profile-link">My Style</a>
-        <a href="frontend/pages/new-releases.html">New Releases</a>
-        <a href="frontend/pages/recommendations.html" id="myRecommendationsLink" style="display: none;">My Recommendations</a>
-        <a href="frontend/pages/login.html" id="loginLink">Log In</a>
-        <a href="frontend/pages/account.html" id="accountLink" style="display: none;">My Account</a>
-        <a href="#" id="logoutLink" style="display: none;">Log Out</a>
-        <a href="faq.html">Size Guide</a>
-        <a href="about.html">About</a>
-        <a href="cart.html">Cart (<span id="cartCount">0</span>)</a>
       </div>
+      <div class="hero-slide" style="background-image: url('images/brand/hero-3.jpg')"></div>
     </div>
-  </header>
-
-  <section class="hero">
-    <h1>For the hours that matter.</h1>
-    <p>A focused, well-edited wardrobe in natural fabrics — built to move from boardroom to airport to dinner without a second thought.</p>
-    <a class="btn" href="collection.html">Shop Now</a>
+    <div class="hero-dots" id="heroDots" role="tablist" aria-label="Choose slide"></div>
   </section>
 
   <section class="section wrap">
@@ -57,44 +37,64 @@
     <div class="product-grid" id="recommendedGrid"></div>
   </section>
 
+  <!-- Full-width banner, matching the storefront's second promotional block. -->
+  <section class="promo-banner">
+    <div class="promo-banner-inner">
+      <h2>Clothing for the rhythm of real life.</h2>
+      <a class="btn" href="collection.html">Shop Now</a>
+    </div>
+  </section>
+
+  <section class="feature-band">
+    <h2>Find your size before you buy.</h2>
+    <p>Answer a few questions — or upload a photo — and we'll work out your measurements,
+       your shape, and the size to order in every category.</p>
+    <a class="btn" href="frontend/pages/intake-flow.html">Build my style profile</a>
+  </section>
+
   <section class="section wrap">
     <h2 class="section-title">Best Sellers</h2>
     <div class="product-grid" id="bestSellerGrid"></div>
   </section>
 
-  <footer class="site-footer">
-    <div class="footer-inner">
-      <div class="footer-col">
-        <h4>Links</h4>
-        <a href="index.html">Home</a>
-        <a href="collection.html">Shop All</a>
-        <a href="faq.html">Size Guide</a>
-        <a href="about.html">About</a>
-      </div>
-      <div class="footer-col">
-        <h4>Support</h4>
-        <a href="faq.html">FAQ</a>
-        <a href="contact.html">Contact</a>
-      </div>
-      <div class="footer-col">
-        <h4>Newsletter</h4>
-        <form onsubmit="return false;">
-          <input type="email" placeholder="Email address" required />
-          <button type="submit">Submit</button>
-        </form>
-      </div>
+  <section class="section wrap">
+    <h2 class="section-title">Journals &amp; Stories</h2>
+    <div class="journal-grid">
+      <a class="journal-card" href="about.html">
+        <img src="images/brand/journal-1.jpg" alt="" loading="lazy" />
+        <h3>What We Carry: The Invisible Labor of Getting Dressed</h3>
+        <p>Getting dressed takes approximately 15 minutes for most people. That's the visible
+           time — the physical act of putting clothes on, checking the mirror, making final
+           adjustments. What doesn't show up in…</p>
+      </a>
+      <a class="journal-card" href="about.html">
+        <img src="images/brand/journal-2.jpg" alt="" loading="lazy" />
+        <h3>The Quiet Power of Restraint: Why Minimalism Is…</h3>
+        <p>Minimalism has a perception problem. It's often framed as deprivation — owning less,
+           doing without, cutting back. The language around it suggests sacrifice: pare down,
+           strip away, eliminate excess. But that's not…</p>
+      </a>
+      <a class="journal-card" href="about.html">
+        <img src="images/brand/journal-3.jpg" alt="" loading="lazy" />
+        <h3>The Eighth Hour: Navigating the In-Between</h3>
+        <p>There's a moment in every working woman's day when the structure shifts but the day
+           doesn't stop. The client meeting that turns into drinks. The work trip that extends
+           into…</p>
+      </a>
     </div>
-    <p class="copyright">This is a local, non-commercial demo clone built for reference purposes. Not affiliated with Eighth Hour Inc.</p>
-  </footer>
+  </section>
 
-  <script src="js/data.js"></script>
-  <script src="js/placeholder.js"></script>
-  <script src="js/cart.js"></script>
-  <script src="js/menu.js"></script>
-  <script src="js/recommendations-nav-link.js"></script>
-  <script src="js/style-profile-link.js"></script>
-  <script src="js/auth-nav-link.js"></script>
-  <script src="js/render-home.js"></script>
-  <script src="frontend/js/recommendations-loader.js"></script>
+  <footer data-site-footer></footer>
+  <script src="js/site-chrome.js?v=20260815"></script>
+<script src="js/data.js?v=20260815"></script>
+  <script src="js/placeholder.js?v=20260815"></script>
+  <script src="js/cart.js?v=20260815"></script>
+  <script src="js/menu.js?v=20260815"></script>
+  <script src="js/recommendations-nav-link.js?v=20260815"></script>
+  <script src="js/style-profile-link.js?v=20260815"></script>
+  <script src="js/auth-nav-link.js?v=20260815"></script>
+  <script src="js/carousel.js?v=20260815"></script>
+  <script src="js/render-home.js?v=20260815"></script>
+  <script src="frontend/js/recommendations-loader.js?v=20260815"></script>
 </body>
 </html>
