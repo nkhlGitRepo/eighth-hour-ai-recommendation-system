@@ -11,13 +11,43 @@ from main import app
 from py_src.guardrails.image_validation import MAX_IMAGE_BYTES
 
 
+@pytest.fixture(scope="module", autouse=True)
+def demo_estimator():
+    """
+    Pin the demo estimator for this module.
+
+    These tests cover the HTTP surface of the upload endpoints -- auth, consent,
+    size limits, magic bytes, what comes back in the JSON -- not the quality of
+    any measurement. Their payloads are a few valid header bytes followed by
+    zeros, which is enough for ImageValidator and meaningless to a real pose
+    model.
+
+    Pinning is now required rather than incidental: the default provider is real
+    photo analysis, so without this the suite would be asking MediaPipe to find
+    a human in 512 zero bytes. The estimator itself is covered by
+    test_mediapipe_provider.py (synthetic landmarks) and scripts/
+    verify_pose_provider.py (real photographs).
+    """
+    import main
+    from py_src.modules.m2_sizing_integration import MockSizingProvider, SizingIntegration
+
+    demo = SizingIntegration(provider=MockSizingProvider())
+    original_module = main.sizing_integration          # read by /intake/photo-disclosure
+    original_orchestrator = main.intake_orchestrator.sizing   # used by the upload path
+    main.sizing_integration = demo
+    main.intake_orchestrator.sizing = demo
+    yield demo
+    main.sizing_integration = original_module
+    main.intake_orchestrator.sizing = original_orchestrator
+
+
 @pytest.fixture(scope="module")
-def client():
+def client(demo_estimator):
     with TestClient(app) as c:
         yield c
 
 
-# Minimal valid image payloads. The mock provider never inspects content, so
+# Minimal valid image payloads. The demo provider never inspects content, so
 # these only need to satisfy ImageValidator's magic-byte check.
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 512
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 512

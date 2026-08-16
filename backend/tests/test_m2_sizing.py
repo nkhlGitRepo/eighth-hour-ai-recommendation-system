@@ -412,12 +412,65 @@ class TestExtractFromImage:
 class TestProviderRegistry:
     """Test the swap surface for a real vendor integration."""
 
-    def test_defaults_to_mock(self, monkeypatch):
+    def test_defaults_to_real_photo_analysis(self, monkeypatch):
+        """
+        With no configuration at all, photos must be genuinely analysed.
+
+        This used to default to the mock, which meant every way of starting the
+        server except run.sh -- `python main.py`, `uvicorn main:app`, a systemd
+        unit, a container missing the env var -- served the same fixed fake
+        measurements to real customers.
+        """
         from py_src.modules.m2_sizing_integration import build_sizing_provider
+        from py_src.providers.mediapipe_sizing_provider import MediaPipeSizingProvider
 
         monkeypatch.delenv("SIZING_PROVIDER", raising=False)
-        provider = build_sizing_provider()
-        assert isinstance(provider, MockSizingProvider)
+        assert isinstance(build_sizing_provider(), MediaPipeSizingProvider)
+
+    def test_mock_requires_asking_for_it(self, monkeypatch):
+        """The demo estimator must never be reachable by omission."""
+        from py_src.modules.m2_sizing_integration import (
+            DEFAULT_SIZING_PROVIDER, build_sizing_provider,
+        )
+
+        assert DEFAULT_SIZING_PROVIDER != "mock"
+        monkeypatch.delenv("SIZING_PROVIDER", raising=False)
+        assert not isinstance(build_sizing_provider(), MockSizingProvider)
+
+    def test_missing_mediapipe_fails_at_startup_not_on_first_photo(self, monkeypatch):
+        """
+        The provider loads its model lazily, so an absent dependency would
+        otherwise let the server start and fail on the first customer upload.
+
+        sys.modules is poisoned with None rather than patching __import__:
+        Python treats a None entry as "this module is known to be unimportable"
+        and raises ImportError on the spot, which is precisely the condition
+        being simulated, and it survives mediapipe already being imported by an
+        earlier test in the same process.
+        """
+        import sys
+
+        from py_src.modules.m2_sizing_integration import build_sizing_provider
+
+        monkeypatch.setenv("SIZING_PROVIDER", "mediapipe")
+        monkeypatch.setitem(sys.modules, "mediapipe", None)
+        with pytest.raises(ModuleError, match="mediapipe is not installed"):
+            build_sizing_provider()
+
+    def test_that_failure_names_both_ways_out(self, monkeypatch):
+        """An error telling you what broke but not what to do is half an error."""
+        import sys
+
+        from py_src.modules.m2_sizing_integration import build_sizing_provider
+
+        monkeypatch.setenv("SIZING_PROVIDER", "mediapipe")
+        monkeypatch.setitem(sys.modules, "mediapipe", None)
+        try:
+            build_sizing_provider()
+            pytest.fail("expected ModuleError")
+        except ModuleError as err:
+            assert "pip install" in str(err)
+            assert "SIZING_PROVIDER=mock" in str(err)
 
     def test_honors_env_var(self, monkeypatch):
         from py_src.modules.m2_sizing_integration import build_sizing_provider

@@ -456,7 +456,16 @@ SIZING_PROVIDERS = {
     "mediapipe": _mediapipe_provider,
 }
 
-DEFAULT_SIZING_PROVIDER = "mock"
+# Real photo analysis is the default. The mock returns the SAME fixed
+# measurements for every image, so defaulting to it meant any way of starting
+# the server other than run.sh -- `python main.py`, `uvicorn main:app`, a
+# systemd unit, a container without the env var -- silently served fake
+# measurements to real customers. The UI does disclose it, but a customer
+# should never be in a position to read that disclosure in production.
+#
+# Mock is now an explicit opt-in (SIZING_PROVIDER=mock) for running without the
+# ~200 MB mediapipe dependency installed.
+DEFAULT_SIZING_PROVIDER = "mediapipe"
 
 
 def build_sizing_provider(name: str = None) -> SizingProvider:
@@ -464,10 +473,17 @@ def build_sizing_provider(name: str = None) -> SizingProvider:
     Construct the configured sizing provider.
 
     Reads SIZING_PROVIDER from the environment when `name` isn't given,
-    defaulting to the mock so a machine with no configuration behaves
-    exactly as it always has. An unrecognized name raises immediately at
-    startup rather than silently falling back -- a typo that quietly served
-    mock measurements in production would be far worse than a hard failure.
+    defaulting to real photo analysis (see DEFAULT_SIZING_PROVIDER). An
+    unrecognized name raises immediately at startup rather than silently
+    falling back -- a typo that quietly served mock measurements in production
+    would be far worse than a hard failure.
+
+    When mediapipe is selected, its availability is verified HERE rather than
+    left to the first photo. The provider loads its model lazily (~200 MB
+    resident), so without this check a machine missing the dependency starts
+    perfectly happily and then fails on the first customer who uploads a photo.
+    Importing the module is cheap next to loading the model, which stays
+    deferred.
     """
     import os
 
@@ -478,6 +494,18 @@ def build_sizing_provider(name: str = None) -> SizingProvider:
             f"Unknown SIZING_PROVIDER '{key}'. Available: {sorted(SIZING_PROVIDERS)}",
             "M2",
         )
+
+    if key == "mediapipe":
+        try:
+            import mediapipe  # noqa: F401
+        except ImportError as err:
+            raise ModuleError(
+                f"SIZING_PROVIDER=mediapipe but mediapipe is not installed ({err}). "
+                f"Install it with: pip install -r requirements.txt -- or run without "
+                f"it using SIZING_PROVIDER=mock, the demo estimator, which returns "
+                f"the same fixed measurements for every photo and says so on screen.",
+                "M2",
+            )
 
     logger.info("Sizing provider selected", {"provider": key})
     return SIZING_PROVIDERS[key]()

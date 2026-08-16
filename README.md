@@ -52,17 +52,25 @@ pip install -r requirements.txt
 ```
 
 `mediapipe` is the largest dependency (~200 MB installed) and is only needed for photo measurement.
-If you don't want it, remove that line from `requirements.txt` before installing — everything else
-works, and the app falls back to the mock sizing provider.
+You can skip it — remove that line from `requirements.txt` before installing, and start with
+`SIZING_PROVIDER=mock`. Everything else works. The app will **not** fall back on its own: selecting
+photo analysis without the dependency is a startup error, not a silent downgrade, because the
+alternative is customers receiving invented measurements.
 
 Start the API:
 
 ```bash
 # From backend/, with the venv active:
-python -m uvicorn main:app --port 8000
+./run.sh                                  # or: python -m uvicorn main:app --port 8000
+```
 
-# With real photo measurement enabled:
-SIZING_PROVIDER=mediapipe python -m uvicorn main:app --port 8000
+Either way you get real photo analysis — that is the default, and there is no
+configuration in which a customer's photo is silently faked. Running without the
+MediaPipe dependency is an explicit choice:
+
+```bash
+SIZING_PROVIDER=mock ./run.sh             # demo estimator: identical measurements
+                                          # for every photo, disclosed on screen
 ```
 
 The API is now on `http://localhost:8000`. FastAPI serves interactive docs at
@@ -116,9 +124,19 @@ sizing provider: MockSizingProvider  <-- demo estimator: every photo returns the
 fixed numbers. Start with SIZING_PROVIDER=mediapipe for real analysis.
 ```
 
-`./run.sh` now defaults to `SIZING_PROVIDER=mediapipe` for that reason; pass
-`SIZING_PROVIDER=mock ./run.sh` if you want the demo estimator (and no MediaPipe
-install).
+The default is now `mediapipe` in the code itself, not just in `run.sh` — so
+`python main.py`, `uvicorn main:app`, a systemd unit or a container missing the
+variable all analyse photos properly. Reaching the demo estimator requires
+asking for it by name. And because the provider loads its model lazily, a
+machine selecting `mediapipe` without the dependency installed is caught at
+startup rather than on the first customer's upload:
+
+```
+M2: SIZING_PROVIDER=mediapipe but mediapipe is not installed. Install it with:
+pip install -r requirements.txt -- or run without it using SIZING_PROVIDER=mock,
+the demo estimator, which returns the same fixed measurements for every photo
+and says so on screen.
+```
 
 `run.sh` also refuses to start on top of a server that already holds the port,
 naming the process instead of failing silently:
@@ -173,7 +191,7 @@ logging in on one does not log you in on the other. Pick one and stay on it.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SIZING_PROVIDER` | `mock` (but `run.sh` sets `mediapipe`) | Which sizing backend to use. `mediapipe` analyses the photo; `mock` returns the same fixed measurements for every image and tells the customer so. An unknown name fails loudly at startup rather than silently falling back. |
+| `SIZING_PROVIDER` | `mediapipe` | Which sizing backend to use. `mediapipe` analyses the photo; `mock` returns the same fixed measurements for every image and tells the customer so. Both an unknown name and a selected-but-uninstalled `mediapipe` fail at startup rather than silently falling back. |
 | `MEDIAPIPE_POSE_MODEL` | auto-downloaded | Path to a `.task` pose model, if you'd rather supply your own than let it fetch one. |
 
 ---
