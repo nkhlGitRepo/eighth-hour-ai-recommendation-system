@@ -18,7 +18,8 @@ Trade-offs, stated plainly:
     guess and genuinely responsive to the customer's proportions, but it is
     not a tape measure or a 3D scan. A paid vendor doing real 3D
     reconstruction would be materially more accurate -- swapping one in is a
-    single registry entry (see README_PYTHON.md).
+    single registry entry (see the README's "Plugging in a
+    photo-measurement API" section).
 """
 
 import math

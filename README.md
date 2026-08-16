@@ -996,5 +996,4 @@ Base_Website/
   frontend/pages/             intake flow, recommendations, new releases, account, auth
   images/products/            203 photographs, keyed by product and colourway
   images/brand/               logo, hero and banner assets
-planning_documents/           design notes
 ```

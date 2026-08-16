@@ -433,7 +433,8 @@ class SizingIntegration:
 #      UI can tell customers truthfully how their photo is handled).
 #   2. Add one entry to SIZING_PROVIDERS below.
 #   3. Set SIZING_PROVIDER=<your key> in the environment.
-# Nothing else in the app changes -- see README_PYTHON.md for the full
+# Nothing else in the app changes -- see the README's "Plugging in a
+# photo-measurement API" section for the full
 # walkthrough, and tests/test_sizing_provider_contract.py to verify your
 # implementation satisfies the invariants this codebase relies on
 # (centimetres, valid ranges, populated provenance, declared disclosure).

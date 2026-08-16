@@ -86,3 +86,26 @@ Thumbs.db
 
 # MediaPipe pose model (build artifact, auto-downloaded on first use)
 backend/models/
+
+# ---------------------------------------------------------------------------
+# Local-only: present in the working copy, deliberately not in the repo.
+# A clone should contain what's needed to run the project and nothing else.
+# ---------------------------------------------------------------------------
+
+# Runtime database. Created automatically on first run, and it holds real
+# password hashes and auth tokens plus whatever the test suite writes -- none of
+# which belongs in version control. Tracking it also made `git checkout --` on
+# this path capable of wiping the auth tables, which has happened once.
+backend/intake_sessions.db
+backend/*.db
+backend/*.db-journal
+backend/*.db-wal
+backend/*.db-shm
+
+# Working notes and phase write-ups. The README is the documentation.
+AI_Styling_Engine_Plan.md
+planning_documents/
+backend/PHASE_3_FIXES.md
+backend/README_PYTHON.md
+Base_Website/README.md
+Base_Website/frontend/README.md

@@ -147,7 +147,8 @@ user_repository = UserRepository(db_path=session_repo.db_path)
 auth_manager = AuthManager(user_repository)
 # Sizing provider comes from the SIZING_PROVIDER env var (defaults to the
 # mock estimator). This is the only wiring a real vendor integration needs --
-# see py_src/modules/m2_sizing_integration.py's registry and README_PYTHON.md.
+# see py_src/modules/m2_sizing_integration.py's registry, and the README's
+# "Plugging in a photo-measurement API" section.
 sizing_integration = SizingIntegration(provider=build_sizing_provider())
 intake_orchestrator = IntakeOrchestrator(
     session_repo=session_repo,
