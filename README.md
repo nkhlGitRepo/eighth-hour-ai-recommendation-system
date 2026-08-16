@@ -120,6 +120,30 @@ fixed numbers. Start with SIZING_PROVIDER=mediapipe for real analysis.
 `SIZING_PROVIDER=mock ./run.sh` if you want the demo estimator (and no MediaPipe
 install).
 
+`run.sh` also refuses to start on top of a server that already holds the port,
+naming the process instead of failing silently:
+
+```
+Port 8000 is already in use by pid 4879:
+    ... -m uvicorn main:app --host 127.0.0.1 --port 8000
+
+  That process will keep answering requests, running whatever code it
+  started with. Check whether it is current:
+
+      python3 scripts/check_running_server.py
+
+  Then either leave it, or replace it:
+
+      ./run.sh --force
+```
+
+This matters most when the server is started in the background with its output
+redirected: uvicorn exits with "address already in use", but nothing reads the
+log, the old process keeps answering `/health`, and every check downstream then
+passes against whatever code that process was started with. `PORT` is honoured
+by both the guard and the server, so they can never disagree about which port is
+being checked.
+
 ```
 STALE: http://127.0.0.1:8000 is not running the current source. Restart it.
    * source         serving 'a41c9e02bb7d'  source says '7913f0fe01b3'

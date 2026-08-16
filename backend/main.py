@@ -1614,4 +1614,9 @@ async def get_feedback_summary(user_id: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # PORT is read here as well as by run.sh's already-in-use guard. If only the
+    # guard honoured it, run.sh would check one port and the server would bind
+    # another -- reintroducing the silent "started on top of an old process"
+    # failure that guard exists to prevent.
+    uvicorn.run(app, host=os.environ.get("HOST", "0.0.0.0"),
+                port=int(os.environ.get("PORT", "8000")))
