@@ -14,7 +14,8 @@ from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
-from py_src.constants import SIZE_BOUNDARIES, WAIST_SIZE_BOUNDARIES, HIP_SIZE_BOUNDARIES
+from py_src.constants import (SIZE_BOUNDARIES, WAIST_SIZE_BOUNDARIES,
+                              HIP_SIZE_BOUNDARIES, STANDARD_SIZES)
 
 
 class BodyShapeProfiler:
@@ -178,7 +179,15 @@ class BodyShapeProfiler:
             for size, (min_val, max_val) in chart.items():
                 if min_val <= measurement < max_val:
                     return size
-            return "XXL" if measurement >= 115 else "XS"
+            # Unreachable while the bands span the whole validated range, which
+            # test_size_chart_integrity asserts -- but the fallback has to be
+            # right anyway, because it is the thing that runs if that invariant
+            # ever breaks. Fall off whichever end the measurement went past,
+            # read off this chart rather than a fixed number: a literal
+            # threshold means the wrong thing the moment the chart moves, and
+            # a single one can't be right for bust, waist and hips at once.
+            below_smallest = next(iter(chart.values()))[0]
+            return STANDARD_SIZES[0] if measurement < below_smallest else STANDARD_SIZES[-1]
 
         bust_size = find_size(bust, size_by_bust)
         waist_size = find_size(waist, size_by_waist)

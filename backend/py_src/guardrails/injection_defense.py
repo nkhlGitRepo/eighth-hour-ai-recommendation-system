@@ -28,6 +28,7 @@ class InjectionDefense:
         occasions = params.get("occasions", [])
         fabrics = params.get("fabrics", [])
         size = params.get("size")
+        sizes_by_category = params.get("sizes_by_category")
         k = params.get("k", 10)
 
         # Validate and normalize each parameter
@@ -65,6 +66,20 @@ class InjectionDefense:
 
         safe_size = size if isinstance(size, str) else None
 
+        # Per-category sizes, for customers whose top and bottom sizes differ.
+        # Allowlisted here like everything else: this dict reaches a filter, so
+        # it gets the same treatment as the single `size` it supplements rather
+        # than being trusted because M3 happens to be the current caller.
+        safe_sizes_by_category = (
+            {
+                category: value
+                for category, value in list(sizes_by_category.items())[:20]
+                if isinstance(category, str) and isinstance(value, str)
+            }
+            if isinstance(sizes_by_category, dict)
+            else {}
+        )
+
         safe_k = max(1, min(int(k) if isinstance(k, (int, str)) else 10, 100))
 
         return {
@@ -75,6 +90,7 @@ class InjectionDefense:
             "occasions": safe_occasions,
             "fabrics": safe_fabrics,
             "size": safe_size,
+            "sizes_by_category": safe_sizes_by_category,
             "k": safe_k,
         }
 

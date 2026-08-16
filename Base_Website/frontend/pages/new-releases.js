@@ -46,7 +46,21 @@ class NewReleasesPage {
 
   async loadPersonalizedFeed() {
     try {
-      const response = await fetch(`${API_BASE}/new-releases/${this.sessionId}?limit=20`);
+      let response = await fetch(`${API_BASE}/new-releases/${this.sessionId}?limit=20`);
+
+      // A rejection here usually means the stored session id is stale -- from an
+      // earlier, abandoned attempt. It looks valid, so nothing upstream
+      // complains, and this page would otherwise tell a customer who has a
+      // complete profile to go and complete their profile. Ask the server which
+      // session is current and retry once before giving up.
+      if (!response.ok && typeof window.ehResolveSession === 'function') {
+        const current = await window.ehResolveSession();
+        if (current && current !== this.sessionId) {
+          this.sessionId = current;
+          response = await fetch(`${API_BASE}/new-releases/${current}?limit=20`);
+        }
+      }
+
       if (!response.ok) return null;
       return await response.json();
     } catch (error) {

@@ -45,14 +45,18 @@ class HomeRecommendationsLoader {
   }
 
   buildProductCard(product) {
+    // Uses the storefront's own .product-card, so a recommended item on the
+    // homepage is visually identical to any other product. The grey gradient
+    // wrapper this replaced was a stand-in from before the catalog had
+    // photography, and it stayed sitting behind the real image once one existed.
+    const slug = product.slug || product.sku;
     return `
-      <a href="product.html?slug=${product.slug}" class="product-link">
-        <div class="product-image" style="background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; padding: 0.5rem;">
-          <img src="${productImage(product.sku || product.slug, 0, product.name, 220, 280)}" alt="${product.name}" style="width: 100%; display: block;" />
+      <a href="product.html?slug=${slug}" class="product-card">
+        <div class="thumb">
+          <img src="${productImage(slug, 0, product.name, 450, 600)}" alt="${product.name}" loading="lazy" />
         </div>
-        <h3>${product.name}</h3>
-        <p class="product-meta">${product.category}</p>
-        <p class="product-price">$${product.price.toFixed(2)}</p>
+        <div class="name">${product.name}</div>
+        <div class="price">$${product.price.toFixed(2)}</div>
       </a>
     `;
   }

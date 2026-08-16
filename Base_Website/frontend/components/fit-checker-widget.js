@@ -35,9 +35,24 @@ class FitCheckerWidget {
   }
 
   async checkFit() {
-    const response = await fetch(`${API_BASE}/fit-check/${this.sessionId}/${this.productSku}`, {
+    let response = await fetch(`${API_BASE}/fit-check/${this.sessionId}/${this.productSku}`, {
       method: 'POST',
     });
+
+    // Same repair as the New Releases feed: a rejection here is usually a stale
+    // session id from an earlier attempt rather than a missing profile. This
+    // widget fails silently by design, so without the retry the sizing advice
+    // just never appears and there is nothing on screen to explain why.
+    if (!response.ok && typeof window.ehResolveSession === 'function') {
+      const current = await window.ehResolveSession();
+      if (current && current !== this.sessionId) {
+        this.sessionId = current;
+        response = await fetch(`${API_BASE}/fit-check/${current}/${this.productSku}`, {
+          method: 'POST',
+        });
+      }
+    }
+
     if (!response.ok) throw new Error('Fit check failed');
     this.fitResult = await response.json();
   }

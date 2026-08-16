@@ -108,15 +108,17 @@ class TestChartShape:
         for size in STANDARD_SIZES:
             assert set(STANDARD_SIZE_CHART[size]) == set(DIMENSIONS)
 
-    def test_xxs_is_not_reachable(self):
+    def test_every_size_has_published_measurements(self):
         """
-        It used to exist in the boundary tables only -- absent from the size
-        chart and never offered in the UI -- so a small body could be told to
-        buy a size with no defined measurements. The smallest band now absorbs
-        that range instead.
+        The failure this guards against: XXS once existed in the boundary tables
+        with no chart row, so a small body could be told to buy a size that was
+        never defined. Every size the lookup can return must be a size the chart
+        describes.
         """
+        for size in STANDARD_SIZES:
+            assert size in SIZE_CHART_SOURCE, f"{size} has no published measurements"
         for dimension in DIMENSIONS:
-            assert "XXS" not in BOUNDARIES[dimension]
+            assert set(BOUNDARIES[dimension]) == set(STANDARD_SIZES)
             floor = MEASUREMENT_RANGES[dimension][0]
             assert find_size(floor, BOUNDARIES[dimension]) == STANDARD_SIZES[0]
 
@@ -126,18 +128,20 @@ class TestChartShape:
         value would quietly distort every fit score."""
         assert 3.0 < SIZE_STEP_CM[dimension] < 15.0
 
-    def test_source_chart_bands_widen_or_hold_with_size(self):
+    def test_no_source_band_is_implausibly_narrow(self):
         """
-        A sanity check on hand-entered data: real charts do not get tighter as
-        sizes grow. This is what flagged the published S hip row (93-94cm, a 1cm
-        band) as an outlier worth widening.
+        A sanity check on hand-entered data, aimed at transcription slips like a
+        1cm band where the row should span several. The official chart's tightest
+        real band is 2.5cm (XL bust, 109.2-111.7), so the floor sits just below
+        that -- tight enough to catch a typo, loose enough not to reject the
+        published data.
         """
         for dimension in DIMENSIONS:
             widths = [
-                row[dimension][1] - row[dimension][0]
+                round(row[dimension][1] - row[dimension][0], 2)
                 for row in SIZE_CHART_SOURCE.values()
             ]
-            assert min(widths) >= 3.0, (
+            assert min(widths) >= 2.0, (
                 f"{dimension} has a {min(widths)}cm band -- too narrow to be a "
                 f"real size range; check the source data"
             )

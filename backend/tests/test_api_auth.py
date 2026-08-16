@@ -98,7 +98,17 @@ class TestLogin:
         assert r.status_code == 401
 
     def test_unknown_username_rejected_with_generic_message(self, client):
-        r = client.post("/auth/login", json={"username": "no_such_user_at_all", "password": "whatever123"})
+        # A fresh name each run, like every other test here. The lockout counter
+        # is keyed by username and lives in the same on-disk database the dev
+        # server uses, so a hardcoded name accumulated one failed attempt per
+        # suite run until it tripped the limit permanently -- after which this
+        # test failed with "Too many failed login attempts" instead of the
+        # message it asserts, intermittently and for a reason that had nothing
+        # to do with the behaviour under test. A random name is also more
+        # certainly unknown than a fixed one.
+        r = client.post("/auth/login", json={
+            "username": unique_username(), "password": "whatever123",
+        })
         assert r.status_code == 401
         assert r.json()["detail"] == "Invalid username or password"
 

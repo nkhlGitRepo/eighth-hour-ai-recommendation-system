@@ -18,14 +18,14 @@ SHAPE_CATEGORY_AFFINITY = {
     "balanced": {"Tops": 0.75, "Dresses": 0.75, "Skirts": 0.75, "Trousers": 0.75, "Vests": 0.75, "Co-ord Sets": 0.75},
 }
 
-# Standard size ordering (XS to XXL)
+# Standard size ordering (XXS to XXL), matching the published size guide.
 #
-# There is deliberately no XXS. It previously existed in the boundary tables
-# only -- never in STANDARD_SIZES, never in the size chart, and never offered in
-# the UI -- so a body below XS could be told "XXS", a size with no defined
-# measurements that the catalog does not stock. The smallest band now opens out
-# to cover everything down to the supported minimum instead.
-STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL"]
+# XXS was briefly removed because an older version of this file carried it in
+# the boundary tables ONLY -- no chart row, no measurements -- so a small body
+# could be told to buy a size that was never defined. The official guide does
+# define it, and the storefront already offered it, so it is a real size here
+# with real measurements rather than a gap in a lookup table.
+STANDARD_SIZES = ["XXS", "XS", "S", "M", "L", "XL", "XXL"]
 
 # Measurement validation ranges (cm) -- must match InputValidator's enforced
 # ranges (py_src/guardrails/input_validation.py) so size inference never
@@ -55,42 +55,27 @@ MEASUREMENT_RANGES = {
 # the size they actually wear. Real charts have uneven bands that widen with
 # size, as below.
 #
-# One deliberate edit to the source: the S hip row was published as 93-94cm, a
-# 1cm band where every other row spans 5-6cm. Taken literally it left S a 2.5cm
-# sliver of the hip scale that almost nobody would land in, so it is widened to
-# sit evenly between XS and M. Its midpoint moves only 0.5cm (93.5 -> 94), so
-# this changes which bodies reach S without restating what S measures.
+# Transcribed from the official Eighth Hour size guide, which publishes XXS
+# through XXL. Bust and hips leave a gap between adjacent rows; waist M and L
+# meet exactly at 80cm, so 80.0 resolves to L and 79.99 to M -- deterministic
+# either way, and preserved as published rather than nudged apart.
 SIZE_CHART_SOURCE = {
-    "XS": {"bust": (81, 84), "waist": (61, 66), "hips": (86, 92)},
-    "S":  {"bust": (86, 89), "waist": (66, 69), "hips": (92, 96)},
-    "M":  {"bust": (91, 95), "waist": (71, 75), "hips": (96, 101)},
-    "L":  {"bust": (99, 103), "waist": (79, 83), "hips": (105, 109)},
-    "XL": {"bust": (108, 114), "waist": (89, 95), "hips": (114, 120)},
+    "XXS": {"bust": (81.2, 83.8),   "waist": (61, 63.5),    "hips": (86.3, 89)},
+    "XS":  {"bust": (86.3, 89),     "waist": (66, 68.5),    "hips": (91.5, 94)},
+    "S":   {"bust": (91.5, 94),     "waist": (71, 73.5),    "hips": (96.5, 99)},
+    "M":   {"bust": (96.5, 99),     "waist": (76.2, 80),    "hips": (101.6, 105.4)},
+    "L":   {"bust": (102.8, 106.6), "waist": (80, 87.6),    "hips": (109.2, 114.3)},
+    "XL":  {"bust": (109.2, 111.7), "waist": (89, 94),      "hips": (115.5, 118)},
+    "XXL": {"bust": (115.5, 118),   "waist": (95.2, 100.3), "hips": (122, 124.5)},
 }
 
 _CHART_DIMENSIONS = ("bust", "waist", "hips")
 
-
-def _extrapolate_top_size(source, sizes):
-    """
-    The published chart stops at XL, but the catalog sells XXL. Continue the
-    chart's own final step rather than inventing a row, so XXL stays consistent
-    with the curve the rest of the chart describes.
-    """
-    second_last, last = sizes[-2], sizes[-1]
-    return {
-        dimension: tuple(
-            source[last][dimension][edge]
-            + (source[last][dimension][edge] - source[second_last][dimension][edge])
-            for edge in (0, 1)
-        )
-        for dimension in _CHART_DIMENSIONS
-    }
-
-
-_SOURCE_SIZES = ["XS", "S", "M", "L", "XL"]
+# Every size in STANDARD_SIZES is published, so the chart is used as-is. The
+# outermost LOOKUP bands still open out to the supported measurement range (see
+# _boundaries_from_chart) -- a body smaller than XS or larger than XXL must
+# still map to a size rather than falling off the end.
 _FULL_CHART_SOURCE = dict(SIZE_CHART_SOURCE)
-_FULL_CHART_SOURCE["XXL"] = _extrapolate_top_size(SIZE_CHART_SOURCE, _SOURCE_SIZES)
 
 # Standard size chart: the measurement each size is cut for, in cm -- the
 # midpoint of that size's published range. Used by M7's fit checker to score how
@@ -240,6 +225,91 @@ FIT_SCORE_DEFAULT_WEIGHTS = {"bust": 1 / 3, "waist": 1 / 3, "hips": 1 / 3}
 # a waist/hips note there would describe fit for a part of the body the
 # garment doesn't touch; Skirts/Trousers are the mirror case for the lower
 # body. Categories not listed here fall back to all three (see check_fit).
+# --- Garment length ------------------------------------------------------
+#
+# Eighth Hour's published length guide, transcribed per category. Each entry is
+# the garment's own length in INCHES for that length class -- not a body
+# measurement -- and the class name says where that length lands *on the fit
+# model*: a 21-23" skirt is the "Knee" class because it reaches her knee.
+#
+# That is what makes height advice possible without inventing anything. The
+# chart states the model's own waist-to-knee, waist-to-calf and waist-to-floor
+# distances directly, so scaling them by (customer height / model height) gives
+# the same landmarks on the customer, while the garment stays the length it was
+# cut. See m7_fit_checker._generate_length_note.
+#
+# Measured from the natural waist for Skirts and Trousers, and from the high
+# point of the shoulder for Tops, Vests and Dresses -- which is why the same
+# class name spans very different numbers across categories ("Knee" is 21-23"
+# on a skirt and 38-40" on a dress).
+#
+# Each category's chart is used ONLY within that category, never compared
+# across them. The dress and skirt charts imply a shoulder-to-waist distance of
+# 17" at the knee but 12" at full length, so they are not mutually consistent --
+# they were shot on different models (see MODEL_HEIGHTS_CM). Kept apart, each is
+# internally sound: the classes ascend and the landmarks are that chart's own.
+GARMENT_LENGTH_CHART_IN = {
+    "Skirts": {          # from the natural waist
+        "Mini": (15, 17), "Short": (15, 17),
+        "Knee": (21, 23),
+        "Midi": (28, 32), "Calf": (28, 32),
+        "Maxi": (38, 42), "Full": (38, 42),
+    },
+    "Trousers": {        # from the natural waist
+        "Short": (12, 16),
+        "Capri": (33, 36),
+        "Cropped": (36, 38),
+        "Ankle": (38, 41),
+        "Full": (42, 45),
+    },
+    "Dresses": {         # from the high point of the shoulder
+        "Mini": (32, 35), "Short": (32, 35),
+        "Knee": (38, 40),
+        "Midi": (44, 48), "Calf": (44, 48),
+        "Maxi": (50, 54), "Full": (50, 54),
+    },
+    "Tops": {            # from the high point of the shoulder
+        "Cropped": (18, 21.5),
+        "Short": (22, 23),
+        "Regular": (24, 26.5),
+        "Long": (27, 31.5),
+        "Thigh": (31, 34.5),
+        "Knee Length": (36, 41), "Knee": (36, 41),
+        "Calf Length": (42, 44), "Calf": (42, 44),
+        "Full Length": (48, 50), "Full": (48, 50),
+    },
+}
+# Vests are cut and measured like tops, and the catalog tags them from the same
+# vocabulary ("Short", "Regular"), so they share that chart rather than
+# duplicating it.
+GARMENT_LENGTH_CHART_IN["Vests"] = GARMENT_LENGTH_CHART_IN["Tops"]
+
+# A co-ord set is tagged with one length, describing whichever half carries it
+# ("Calf" for the skirt of a vest-and-skirt set, "Cropped" for the trousers).
+# Resolved by trying these charts in order and taking the first that defines the
+# class -- the vocabularies barely overlap, so this is unambiguous in practice.
+COORD_LENGTH_CHART_ORDER = ("Skirts", "Trousers")
+
+# The models the length guide was shot on, from each product's own description
+# ("Model: Lori is 5.6 ft and wears a size XXS.").
+#
+# "5.6 ft" is read as 5 feet 6 inches, not 5.6 decimal feet -- the convention
+# this label writes heights in. Both readings are within ~3cm and the advice
+# below is a coarse "sits higher / lower" judgement, so the choice is not
+# load-bearing; it is isolated here so it takes one edit if that is ever wrong.
+MODEL_HEIGHTS_CM = {"Lori": 167.6, "Beatriz": 172.7}   # 5'6", 5'8"
+
+# Height at which a garment lands exactly where the guide says it does. Every
+# product but four is shot on Lori, and the length guide's own numbers are
+# consistent with her, so she is the reference the chart describes.
+LENGTH_CHART_REFERENCE_HEIGHT_CM = MODEL_HEIGHTS_CM["Lori"]
+
+# How far a hem has to shift, as a fraction of the distance between the two
+# named landmarks it sits between, before it is worth telling the customer.
+# Below this the difference is smaller than the length class's own range and
+# saying anything would be false precision.
+LENGTH_NOTE_MIN_SHIFT = 0.5
+
 FIT_NOTE_RELEVANT_DIMENSIONS = {
     "Tops": {"bust"},
     "Vests": {"bust"},

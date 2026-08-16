@@ -52,12 +52,23 @@ if [ "$1" == "test" ] || [ "$1" == "tests" ]; then
     exit 0
 fi
 
+# Sizing provider. Defaults to real photo analysis, because starting without
+# it silently swaps in the demo estimator -- which returns the SAME fixed
+# measurements for every photo and puts a "Demo mode" warning in front of the
+# customer. That is a confusing thing to rediscover, and it has happened by
+# simply restarting the server without the variable set.
+#
+#   ./run.sh              -> real photo analysis (MediaPipe)
+#   SIZING_PROVIDER=mock ./run.sh   -> demo estimator, no MediaPipe needed
+export SIZING_PROVIDER="${SIZING_PROVIDER:-mediapipe}"
+
 # Run server
 echo -e "${BLUE}Starting FastAPI server...${NC}"
 echo ""
 echo "    🚀 Server running on http://localhost:8000"
 echo "    📚 API docs: http://localhost:8000/docs"
 echo "    🏥 Health: http://localhost:8000/health"
+echo "    📷 Sizing provider: ${SIZING_PROVIDER}"
 echo ""
 echo "Press Ctrl+C to stop"
 echo ""

@@ -420,6 +420,46 @@ class TestRealModelRejectsNonPeople:
         assert "couldn't read" in exc.value.message.lower()
 
 
+class TestEveryStoredFieldIsWithinTheSupportedRange:
+    """
+    Regression: `shoulder` was computed and stored but never clamped, so a photo
+    could persist a value outside MEASUREMENT_RANGES. Nothing sizes on shoulder,
+    so the scan looked fine -- and then M9 (new releases) and M7 (fit check),
+    which validate every field they are given, refused that customer's session
+    with a 400 while M5 (recommendations), which does not validate shoulder,
+    carried on working. The customer saw "complete your style profile" on a
+    profile they had plainly completed.
+    """
+
+    @pytest.mark.parametrize("height", [140.0, 150.0, 170.0, 190.0, 210.0])
+    def test_no_field_is_ever_stored_outside_its_supported_range(self, height):
+        provider = provider_with_landmarks(STANDING)
+        m = provider.extract_from_image(b"x", "image/jpeg", height)
+        for field in ("bust", "waist", "hips", "shoulder"):
+            value = getattr(m, field)
+            if value is None:
+                continue
+            low, high = MEASUREMENT_RANGES[field]
+            assert low <= value <= high, (
+                f"{field}={value} is outside {low}-{high}; every module that "
+                f"validates its input will reject this session"
+            )
+
+    def test_a_short_subject_still_yields_a_valid_shoulder(self):
+        """The case that broke in production: a small frame put the shoulder
+        estimate under the 30cm floor."""
+        provider = provider_with_landmarks(STANDING)
+        m = provider.extract_from_image(b"x", "image/jpeg", 140.0)
+        low, high = MEASUREMENT_RANGES["shoulder"]
+        assert low <= m.shoulder <= high
+
+    def test_a_poor_shoulder_estimate_does_not_reject_the_whole_photo(self):
+        """Shoulder is optional and nothing sizes on it, so it is clamped rather
+        than being grounds for refusing an otherwise usable photo."""
+        provider = provider_with_landmarks(STANDING)
+        assert provider.extract_from_image(b"x", "image/jpeg", 140.0) is not None
+
+
 class TestStatedSizesSteadyTheEstimate:
     """
     The customer's usual sizes are a much stronger signal than the photo.

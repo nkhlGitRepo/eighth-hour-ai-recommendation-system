@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Session diagnostics — Eighth Hour</title>
+  <link rel="stylesheet" href="css/style.css?v=20260815" />
+  <style>
+    body { padding: 40px; font-size: 15px; }
+    .box { max-width: 760px; margin: 0 auto; }
+    .row { display: grid; grid-template-columns: 260px 1fr; gap: 12px;
+           padding: 10px 0; border-bottom: 1px solid var(--color-line); }
+    .k { color: var(--color-muted); }
+    .ok { color: #1f7a3d; font-weight: 700; }
+    .bad { color: #a3241f; font-weight: 700; }
+    .verdict { margin-top: 28px; padding: 20px 22px; background: var(--color-surface);
+               border-left: 3px solid var(--color-text); }
+    h1 { font-size: 1.6rem; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Session diagnostics</h1>
+    <p class="muted">This page reports why profile-dependent features (New Releases, the
+       fit-check widget) can or can't find your style profile. It changes nothing.</p>
+    <div id="report">Checking…</div>
+    <div class="verdict" id="verdict"></div>
+  </div>
+
+  <script>
+    // Standalone on purpose: no shared scripts, so it still reports accurately
+    // even if something in the normal page chrome is broken.
+    const API = "http://localhost:8000";
+    const rows = [];
+    const add = (k, v, good) =>
+      rows.push(`<div class="row"><span class="k">${k}</span>
+                 <span class="${good === undefined ? "" : good ? "ok" : "bad"}">${v}</span></div>`);
+
+    const token = localStorage.getItem("authToken");
+    const sessionId = localStorage.getItem("currentSessionId");
+    const intake = localStorage.getItem("intakeSession");
+
+    add("Page origin", location.origin);
+    add("localStorage keys", Object.keys(localStorage).join(", ") || "(none)");
+    add("authToken (logged in?)", token ? "present" : "MISSING", !!token);
+    add("currentSessionId", sessionId ? sessionId.slice(0, 8) + "…" : "MISSING", !!sessionId);
+    add("intakeSession", intake ? "present" : "MISSING", !!intake);
+    if (intake) {
+      try {
+        const j = JSON.parse(intake);
+        add("  └ sessionId inside it", j.sessionId ? j.sessionId.slice(0, 8) + "…" : "MISSING", !!j.sessionId);
+        add("  └ styleProfile inside it", j.styleProfile ? "present" : "MISSING", !!j.styleProfile);
+      } catch (e) { add("  └ parse", "CORRUPT", false); }
+    }
+
+    function wireFix(p) {
+      document.getElementById("fix").onclick = () => {
+        localStorage.setItem("currentSessionId", p.session_id);
+        localStorage.setItem("intakeSession", JSON.stringify({
+          userId: localStorage.getItem("userId"), sessionId: p.session_id, step: 5,
+          measurements: p.measurements || {}, shapeProfile: p.shape_profile || null,
+          styleProfile: p.style_profile || null, recommendations: [] }));
+        location.href = "frontend/pages/new-releases.html";
+      };
+    }
+
+    function render(verdict) {
+      document.getElementById("report").innerHTML = rows.join("");
+      document.getElementById("verdict").innerHTML = verdict;
+    }
+
+    if (!token) {
+      render(`<strong>You are not logged in on this origin (${location.origin}).</strong>
+              Profile features cannot find a profile without a login, and automatic
+              recovery has no token to authenticate with.<br><br>
+              Note that <code>localhost:8080</code> and <code>127.0.0.1:8080</code> are
+              separate origins with separate storage — logging in on one does not log you
+              in on the other. Log in here, or use whichever address you signed in on.`);
+    } else {
+      fetch(API + "/account/profile", { headers: { Authorization: "Bearer " + token } })
+        .then((r) => { add("GET /account/profile", "HTTP " + r.status, r.ok);
+                       return r.ok ? r.json() : null; })
+        .then((p) => {
+          if (!p) {
+            render(`<strong>Your login token is not valid any more.</strong>
+                    Log out and back in; that will re-issue a token and restore the profile.`);
+            return;
+          }
+          add("Server has session_id", p.session_id ? p.session_id.slice(0, 8) + "…" : "NONE", !!p.session_id);
+          add("Server has shape_profile", p.shape_profile ? "yes" : "no", !!p.shape_profile);
+          add("Server has style_profile", p.style_profile ? "yes" : "no", !!p.style_profile);
+
+          // The case that hid the real fault: both ids present, so the old
+          // verdict said "everything looks correct" -- while they pointed at
+          // DIFFERENT sessions, and every profile endpoint 400s on the stale one.
+          if (p.session_id && sessionId && p.session_id !== sessionId) {
+            add("Stored id matches server", "NO — STALE", false);
+            render(`<strong>Your browser is holding a session id from an earlier,
+                    abandoned attempt.</strong> It looks valid, so nothing complains, but
+                    every profile endpoint rejects it — which is why New Releases and the
+                    fit-check widget say you have no profile.<br><br>
+                    stored <code>${sessionId.slice(0, 8)}…</code> &nbsp;vs&nbsp;
+                    server <code>${p.session_id.slice(0, 8)}…</code><br><br>
+                    <button class="btn btn-primary" id="fix">Point my browser at the right session</button>`);
+            wireFix(p);
+            return;
+          }
+          if (p.session_id && sessionId) add("Stored id matches server", "yes", true);
+
+          if (p.session_id && !sessionId) {
+            render(`<strong>The profile exists on the server but wasn't in this browser.</strong>
+                    Recovery should have restored it. Press the button to restore it now.<br><br>
+                    <button class="btn btn-primary" id="fix">Restore my profile</button>`);
+            wireFix(p);
+          } else if (!p.session_id) {
+            render(`<strong>This account has no completed style profile on the server.</strong>
+                    Whatever was completed earlier was under a different account. Build the
+                    profile while logged in as this account.`);
+          } else {
+            render(`<strong>Everything looks correct.</strong> Session and profile are present
+                    both locally and on the server, so New Releases and the fit-check widget
+                    should be personalised. If they are not, the problem is elsewhere — tell me
+                    what this page shows.`);
+          }
+        })
+        .catch((e) => {
+          add("GET /account/profile", "request failed: " + e.message, false);
+          render(`<strong>The page could not reach the API at ${API}.</strong>
+                  Check the backend is running on port 8000.`);
+        });
+    }
+  </script>
+</body>
+</html>

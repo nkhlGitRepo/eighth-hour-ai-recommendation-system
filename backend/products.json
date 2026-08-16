@@ -9,6 +9,7 @@
       "Pageant Blue"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -17,9 +18,13 @@
       "XXL"
     ],
     "description": "Crepe Silk Pintuck Straight Skirt from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "straight",
-    "launched_at": "2024-11-02"
+    "launched_at": "2024-11-02",
+    "fit": "Slim",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "crepe-silk-pleated-dress",
@@ -33,6 +38,7 @@
       "Purple Potion"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -41,9 +47,13 @@
       "XXL"
     ],
     "description": "Crepe Silk Pleated Dress from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "flowing",
-    "launched_at": "2024-11-18"
+    "launched_at": "2024-11-18",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "crepe-silk-textured-long-top",
@@ -56,6 +66,7 @@
       "Kombu Green"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -64,9 +75,13 @@
       "XXL"
     ],
     "description": "Crepe Silk Textured Long Top from our collection",
-    "length": "Regular",
+    "length": "Calf Length",
     "silhouette": "fitted",
-    "launched_at": "2024-12-05"
+    "launched_at": "2024-12-05",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "crepe-silk-vest",
@@ -78,6 +93,7 @@
       "Pageant Blue"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -86,9 +102,13 @@
       "XXL"
     ],
     "description": "Crepe Silk Vest from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2024-12-20"
+    "launched_at": "2024-12-20",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "crepe-silk-vest-and-skirt-set",
@@ -100,6 +120,7 @@
       "Pageant Blue"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -108,9 +129,13 @@
       "XXL"
     ],
     "description": "Crepe Silk Vest and Skirt Set from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "fitted",
-    "launched_at": "2025-01-10"
+    "launched_at": "2025-01-10",
+    "fit": "Snug",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-overlap-vest-and-pintuck-trouser-set",
@@ -125,6 +150,7 @@
       "Fudge"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -133,9 +159,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Overlap Vest and Pintuck Trouser Set from our collection",
-    "length": "Regular",
+    "length": "Cropped",
     "silhouette": "fitted",
-    "launched_at": "2025-01-28"
+    "launched_at": "2025-01-28",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-asymmetrical-wrap-skirt",
@@ -150,6 +180,7 @@
       "Fig"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -158,9 +189,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Asymmetrical Wrap Skirt from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "flowing",
-    "launched_at": "2025-02-14"
+    "launched_at": "2025-02-14",
+    "fit": "Slim",
+    "model_name": "Beatriz",
+    "model_height_cm": 172.7,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-wide-neck-vest-and-pant-set",
@@ -174,6 +209,7 @@
       "Ebony"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -182,9 +218,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Wide Neck Vest and Pant Set from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "flowing",
-    "launched_at": "2025-03-01"
+    "launched_at": "2025-03-01",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-vest-and-skirt-set",
@@ -197,6 +237,7 @@
       "Nomad"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -205,9 +246,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Vest and Skirt Set from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "fitted",
-    "launched_at": "2025-03-19"
+    "launched_at": "2025-03-19",
+    "fit": "Snug",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-vest",
@@ -221,6 +266,7 @@
       "Nomad"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -229,9 +275,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Vest from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2025-04-07"
+    "launched_at": "2025-04-07",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-v-neck-top-with-kantha-embroidery",
@@ -243,6 +293,7 @@
       "Pure Cashmere"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -251,9 +302,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk V-Neck Top with Kantha Embroidery from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2025-04-22"
+    "launched_at": "2025-04-22",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-pintuck-cap-sleeve-top",
@@ -265,6 +320,7 @@
       "Chocolate Truffle"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -273,9 +329,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Cap Sleeve Top from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2025-05-09"
+    "launched_at": "2025-05-09",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-pintuck-wrap-skirt",
@@ -289,6 +349,7 @@
       "Ebony"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -297,9 +358,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Wrap Skirt from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "flowing",
-    "launched_at": "2025-05-27"
+    "launched_at": "2025-05-27",
+    "fit": "Snug",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-pintuck-wide-neck-vest",
@@ -314,6 +379,7 @@
       "Ebony"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -322,9 +388,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Wide Neck Vest from our collection",
-    "length": "Regular",
+    "length": null,
     "silhouette": "fitted",
-    "launched_at": "2025-06-12"
+    "launched_at": "2025-06-12",
+    "fit": null,
+    "model_name": null,
+    "model_height_cm": null,
+    "model_size": null
   },
   {
     "slug": "mulberry-silk-pintuck-vest",
@@ -336,6 +406,7 @@
       "Sky Captain"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -344,9 +415,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Vest from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2025-06-30"
+    "launched_at": "2025-06-30",
+    "fit": "Relaxed",
+    "model_name": "Beatriz",
+    "model_height_cm": 172.7,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-pintuck-trousers",
@@ -367,6 +442,7 @@
       "Sky Captain"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -375,9 +451,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Trousers from our collection",
-    "length": "Regular",
+    "length": "Cropped",
     "silhouette": "fitted",
-    "launched_at": "2025-07-15"
+    "launched_at": "2025-07-15",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-pintuck-straight-skirt",
@@ -391,6 +471,7 @@
       "Nomad"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -399,9 +480,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Straight Skirt from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "straight",
-    "launched_at": "2025-08-03"
+    "launched_at": "2025-08-03",
+    "fit": "Slim",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-pintuck-overlap-vest",
@@ -415,6 +500,7 @@
       "Pure Cashmere"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -423,9 +509,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Overlap Vest from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2025-09-01"
+    "launched_at": "2025-09-01",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-pintuck-vest-and-skirt-set",
@@ -437,6 +527,7 @@
       "Sky Captain"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -445,9 +536,13 @@
       "XXL"
     ],
     "description": "Mulberry Pintuck Vest and Skirt Set from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "fitted",
-    "launched_at": "2025-10-05"
+    "launched_at": "2025-10-05",
+    "fit": "Snug",
+    "model_name": "Beatriz",
+    "model_height_cm": 172.7,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-overlap-vest",
@@ -462,6 +557,7 @@
       "Fig"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -470,9 +566,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Overlap Vest from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2025-11-12"
+    "launched_at": "2025-11-12",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-overlap-pintuck-vest-and-trouser-set",
@@ -486,6 +586,7 @@
       "Pure Cashmere"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -494,9 +595,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Overlap Pintuck Vest and Trouser Set from our collection",
-    "length": "Regular",
+    "length": "Cropped",
     "silhouette": "fitted",
-    "launched_at": "2025-12-08"
+    "launched_at": "2025-12-08",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-wrap-skirt-set",
@@ -509,6 +614,7 @@
       "Chocolate Truffle"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -517,9 +623,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Wrap Skirt Set from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "flowing",
-    "launched_at": "2026-01-15"
+    "launched_at": "2026-01-15",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-v-neck-top",
@@ -532,6 +642,7 @@
       "Fudge"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -540,9 +651,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered V-Neck Top from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2026-02-20"
+    "launched_at": "2026-02-20",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-raglan-cut-top",
@@ -554,6 +669,7 @@
       "White Alyssum"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -562,9 +678,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Raglan Cut Top from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2026-07-14"
+    "launched_at": "2026-07-14",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-long-top",
@@ -576,6 +696,7 @@
       "White Alyssum"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -584,9 +705,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Long Top from our collection",
-    "length": "Regular",
+    "length": null,
     "silhouette": "fitted",
-    "launched_at": "2026-07-22"
+    "launched_at": "2026-07-22",
+    "fit": null,
+    "model_name": null,
+    "model_height_cm": null,
+    "model_size": null
   },
   {
     "slug": "mulberry-silk-embroidered-dress",
@@ -600,6 +725,7 @@
       "Chocolate Truffle"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -608,9 +734,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Dress from our collection",
-    "length": "Regular",
+    "length": "Knee",
     "silhouette": "fitted",
-    "launched_at": "2026-07-29"
+    "launched_at": "2026-07-29",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-cap-sleeve-top",
@@ -623,6 +753,7 @@
       "White Alyssum"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -631,9 +762,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Cap Sleeve Top from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2026-08-02"
+    "launched_at": "2026-08-02",
+    "fit": "Relaxed",
+    "model_name": "Beatriz",
+    "model_height_cm": 172.7,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-boat-wrap-skirt-set",
@@ -647,6 +782,7 @@
       "Duffel Bag"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -655,9 +791,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Boat Wrap Skirt Set from our collection",
-    "length": "Regular",
+    "length": "Calf",
     "silhouette": "flowing",
-    "launched_at": "2026-08-05"
+    "launched_at": "2026-08-05",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-boat-neck-top",
@@ -672,6 +812,7 @@
       "Fig"
     ],
     "sizes": [
+      "XXS",
       "XS",
       "S",
       "M",
@@ -680,8 +821,12 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Boat Neck Top from our collection",
-    "length": "Regular",
+    "length": "Short",
     "silhouette": "fitted",
-    "launched_at": "2026-08-09"
+    "launched_at": "2026-08-09",
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   }
 ]

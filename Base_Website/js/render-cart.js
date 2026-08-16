@@ -29,7 +29,11 @@ function renderCart() {
     if (!product) return "";
     const lineTotal = product.price * item.qty;
     total += lineTotal;
-    const img = productImage(product, 0, product.name, 160, 210);
+    // Explicit colour: the cart shows what the customer actually put in it.
+    // Everywhere else productImage() defaults to their preferred colourway,
+    // which would be wrong here -- this is a record of a decision, not a
+    // suggestion.
+    const img = productImage(product, 0, product.name, 160, 210, item.color);
     return `
       <div class="cart-row">
         <img src="${img}" alt="${product.name}" />

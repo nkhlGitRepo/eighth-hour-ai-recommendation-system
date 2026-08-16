@@ -17,6 +17,7 @@ from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
+from py_src.constants import CATEGORY_TO_SIZE_PROFILE_KEY
 
 
 class RecommendationEngine:
@@ -171,17 +172,34 @@ class RecommendationEngine:
         shape_profile = session.shape_profile
         style_profile = session.style_profile
 
-        # Colors are stored by M4 exactly as the catalog spells them
-        # (e.g. "Pageant Blue", "Ebony") -- title-case them defensively in
-        # case of stray casing, without mangling multi-word names the way
-        # str.capitalize() does ("Pageant Blue".capitalize() == "Pageant blue").
-        raw_colors = style_profile.preferred_colors or []
-        preferred_colors = [color.title() for color in raw_colors]
+        # Colours come out of M4 already canonicalised to the catalog's own
+        # spelling, so they are passed through untouched. The previous
+        # title-casing here was dead defence -- M4 rejects an unrecognised
+        # spelling before this code ever sees it -- and actively wrong for the
+        # generic buckets, turning "earth_tones" into "Earth_Tones".
+        preferred_colors = list(style_profile.preferred_colors or [])
 
-        # Size: use the SAME size M3 already computed and showed the customer
+        # Size: use the SAME sizes M3 already computed and showed the customer
         # on the Shape Profile screen, so what's displayed and what's filtered
         # never disagree.
-        size = shape_profile.get("size_recommendation_by_category", {}).get("tops")
+        #
+        # Per category, not one size for the whole catalog. This used to send
+        # only the *tops* size and apply it to everything, which for anyone
+        # whose top and bottom sizes differ filtered bottoms by a size they
+        # don't wear -- getting it exactly backwards. A customer who is M on top
+        # and S below had an S-only skirt excluded as unavailable and an M-only
+        # skirt recommended to her. It never surfaced because every product in
+        # the live catalog stocks every size, so the filter had nothing to
+        # exclude; it would have appeared the first time anything sold out.
+        sizes_by_category = {}
+        by_category = shape_profile.get("size_recommendation_by_category", {}) or {}
+        for category, profile_key in CATEGORY_TO_SIZE_PROFILE_KEY.items():
+            category_size = by_category.get(profile_key)
+            if category_size:
+                sizes_by_category[category] = category_size
+        # Retained for the fallback in M6 (items in a category M3 has no size
+        # for) and for callers that still read a single size off the query.
+        size = by_category.get("tops")
 
         # Build base query
         query = {
@@ -198,6 +216,8 @@ class RecommendationEngine:
         # Add size if available
         if size:
             query["size"] = size
+        if sizes_by_category:
+            query["sizes_by_category"] = sizes_by_category
 
         # Occasions: explicit single-occasion override takes precedence,
         # otherwise pass through everything the customer selected.

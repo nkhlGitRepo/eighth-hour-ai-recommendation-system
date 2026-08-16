@@ -21,7 +21,10 @@ const PRODUCTS = [
   // ---- Natural Crepe collection (best sellers) ----
   {
     slug: "crepe-silk-pintuck-straight-skirt",
-    images: ["images/products/crepe-silk-pintuck-straight-skirt-1.jpg", "images/products/crepe-silk-pintuck-straight-skirt-2.jpg", "images/products/crepe-silk-pintuck-straight-skirt-3.jpg"],
+    images: ["images/products/crepe-silk-pintuck-straight-skirt__pageant-blue-1.jpg", "images/products/crepe-silk-pintuck-straight-skirt__pageant-blue-2.jpg", "images/products/crepe-silk-pintuck-straight-skirt__pageant-blue-3.jpg"],
+    imagesByColor: {
+      "Pageant Blue": ["images/products/crepe-silk-pintuck-straight-skirt__pageant-blue-1.jpg", "images/products/crepe-silk-pintuck-straight-skirt__pageant-blue-2.jpg", "images/products/crepe-silk-pintuck-straight-skirt__pageant-blue-3.jpg"],
+    },
     launchedAt: "2024-11-02",
     name: "Crepe Silk Pintuck Straight Skirt",
     category: "Skirts",
@@ -34,7 +37,12 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-pleated-dress",
-    images: ["images/products/crepe-silk-pleated-dress-1.jpg", "images/products/crepe-silk-pleated-dress-2.jpg", "images/products/crepe-silk-pleated-dress-3.jpg"],
+    images: ["images/products/crepe-silk-pleated-dress__pageant-blue-1.jpg", "images/products/crepe-silk-pleated-dress__pageant-blue-2.jpg", "images/products/crepe-silk-pleated-dress__pageant-blue-3.jpg"],
+    imagesByColor: {
+      "Pageant Blue": ["images/products/crepe-silk-pleated-dress__pageant-blue-1.jpg", "images/products/crepe-silk-pleated-dress__pageant-blue-2.jpg", "images/products/crepe-silk-pleated-dress__pageant-blue-3.jpg"],
+      "Potent Purple": ["images/products/crepe-silk-pleated-dress__potent-purple-1.jpg"],
+      "Purple Potion": ["images/products/crepe-silk-pleated-dress__purple-potion-1.jpg", "images/products/crepe-silk-pleated-dress__purple-potion-2.jpg", "images/products/crepe-silk-pleated-dress__purple-potion-3.jpg"],
+    },
     launchedAt: "2024-11-18",
     name: "Crepe Silk Pleated Dress",
     category: "Dresses",
@@ -47,7 +55,11 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-textured-long-top",
-    images: ["images/products/crepe-silk-textured-long-top-1.jpg", "images/products/crepe-silk-textured-long-top-2.jpg", "images/products/crepe-silk-textured-long-top-3.jpg"],
+    images: ["images/products/crepe-silk-textured-long-top__pageant-blue-1.jpg", "images/products/crepe-silk-textured-long-top__pageant-blue-2.jpg", "images/products/crepe-silk-textured-long-top__pageant-blue-3.jpg"],
+    imagesByColor: {
+      "Pageant Blue": ["images/products/crepe-silk-textured-long-top__pageant-blue-1.jpg", "images/products/crepe-silk-textured-long-top__pageant-blue-2.jpg", "images/products/crepe-silk-textured-long-top__pageant-blue-3.jpg"],
+      "Kombu Green": ["images/products/crepe-silk-textured-long-top__kombu-green-1.jpg"],
+    },
     launchedAt: "2024-12-05",
     name: "Crepe Silk Textured Long Top",
     category: "Tops",
@@ -60,7 +72,10 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-vest",
-    images: ["images/products/crepe-silk-vest-1.jpg", "images/products/crepe-silk-vest-2.jpg", "images/products/crepe-silk-vest-3.jpg"],
+    images: ["images/products/crepe-silk-vest__pageant-blue-1.jpg", "images/products/crepe-silk-vest__pageant-blue-2.jpg", "images/products/crepe-silk-vest__pageant-blue-3.jpg"],
+    imagesByColor: {
+      "Pageant Blue": ["images/products/crepe-silk-vest__pageant-blue-1.jpg", "images/products/crepe-silk-vest__pageant-blue-2.jpg", "images/products/crepe-silk-vest__pageant-blue-3.jpg"],
+    },
     launchedAt: "2024-12-20",
     name: "Crepe Silk Vest",
     category: "Vests",
@@ -73,7 +88,10 @@ const PRODUCTS = [
   },
   {
     slug: "crepe-silk-vest-and-skirt-set",
-    images: ["images/products/crepe-silk-vest-and-skirt-set-1.jpg", "images/products/crepe-silk-vest-and-skirt-set-2.jpg", "images/products/crepe-silk-vest-and-skirt-set-3.jpg"],
+    images: ["images/products/crepe-silk-vest-and-skirt-set__pageant-blue-1.jpg", "images/products/crepe-silk-vest-and-skirt-set__pageant-blue-2.jpg", "images/products/crepe-silk-vest-and-skirt-set__pageant-blue-3.jpg"],
+    imagesByColor: {
+      "Pageant Blue": ["images/products/crepe-silk-vest-and-skirt-set__pageant-blue-1.jpg", "images/products/crepe-silk-vest-and-skirt-set__pageant-blue-2.jpg", "images/products/crepe-silk-vest-and-skirt-set__pageant-blue-3.jpg"],
+    },
     launchedAt: "2025-01-10",
     name: "Crepe Silk Vest and Skirt Set",
     category: "Co-ord Sets",
@@ -88,7 +106,13 @@ const PRODUCTS = [
   // ---- Handwoven Silk collection ----
   {
     slug: "mulberry-silk-overlap-vest-and-pintuck-trouser-set",
-    images: ["images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set-1.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set-2.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set-3.jpg"],
+    images: ["images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__chocolate-truffle-1.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__chocolate-truffle-2.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__chocolate-truffle-3.jpg"],
+    imagesByColor: {
+      "Chocolate Truffle": ["images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__chocolate-truffle-1.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__chocolate-truffle-2.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__chocolate-truffle-3.jpg"],
+      "Sky Captain": ["images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__sky-captain-1.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__sky-captain-2.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__sky-captain-3.jpg"],
+      "Fig": ["images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__fig-1.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__fig-2.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__fig-3.jpg"],
+      "Fudge": ["images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__fudge-1.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__fudge-2.jpg", "images/products/mulberry-silk-overlap-vest-and-pintuck-trouser-set__fudge-3.jpg"],
+    },
     launchedAt: "2025-01-28",
     name: "Mulberry Silk Overlap Vest and Pintuck Trouser Set",
     category: "Co-ord Sets",
@@ -101,7 +125,13 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-asymmetrical-wrap-skirt",
-    images: ["images/products/mulberry-silk-asymmetrical-wrap-skirt-1.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt-2.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt-3.jpg"],
+    images: ["images/products/mulberry-silk-asymmetrical-wrap-skirt__forest-night-1.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__forest-night-2.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__forest-night-3.jpg"],
+    imagesByColor: {
+      "Forest Night": ["images/products/mulberry-silk-asymmetrical-wrap-skirt__forest-night-1.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__forest-night-2.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__forest-night-3.jpg"],
+      "Nomad": ["images/products/mulberry-silk-asymmetrical-wrap-skirt__nomad-1.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__nomad-2.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__nomad-3.jpg"],
+      "Duffel Bag": ["images/products/mulberry-silk-asymmetrical-wrap-skirt__duffel-bag-1.jpg"],
+      "Fig": ["images/products/mulberry-silk-asymmetrical-wrap-skirt__fig-1.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__fig-2.jpg", "images/products/mulberry-silk-asymmetrical-wrap-skirt__fig-3.jpg"],
+    },
     launchedAt: "2025-02-14",
     name: "Mulberry Silk Asymmetrical Wrap Skirt",
     category: "Skirts",
@@ -114,7 +144,12 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-wide-neck-vest-and-pant-set",
-    images: ["images/products/mulberry-silk-wide-neck-vest-and-pant-set-1.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set-2.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set-3.jpg"],
+    images: ["images/products/mulberry-silk-wide-neck-vest-and-pant-set__pure-cashmere-1.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set__pure-cashmere-2.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set__pure-cashmere-3.jpg"],
+    imagesByColor: {
+      "Pure Cashmere": ["images/products/mulberry-silk-wide-neck-vest-and-pant-set__pure-cashmere-1.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set__pure-cashmere-2.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set__pure-cashmere-3.jpg"],
+      "Duffel Bag": ["images/products/mulberry-silk-wide-neck-vest-and-pant-set__duffel-bag-1.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set__duffel-bag-2.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set__duffel-bag-3.jpg"],
+      "Ebony": ["images/products/mulberry-silk-wide-neck-vest-and-pant-set__ebony-1.jpg", "images/products/mulberry-silk-wide-neck-vest-and-pant-set__ebony-2.jpg"],
+    },
     launchedAt: "2025-03-01",
     name: "Mulberry Silk Wide Neck Vest and Pant Set",
     category: "Co-ord Sets",
@@ -127,7 +162,11 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-vest-and-skirt-set",
-    images: ["images/products/mulberry-silk-vest-and-skirt-set-1.jpg", "images/products/mulberry-silk-vest-and-skirt-set-2.jpg", "images/products/mulberry-silk-vest-and-skirt-set-3.jpg"],
+    images: ["images/products/mulberry-silk-vest-and-skirt-set__burnt-russet-1.jpg", "images/products/mulberry-silk-vest-and-skirt-set__burnt-russet-2.jpg", "images/products/mulberry-silk-vest-and-skirt-set__burnt-russet-3.jpg"],
+    imagesByColor: {
+      "Burnt Russet": ["images/products/mulberry-silk-vest-and-skirt-set__burnt-russet-1.jpg", "images/products/mulberry-silk-vest-and-skirt-set__burnt-russet-2.jpg", "images/products/mulberry-silk-vest-and-skirt-set__burnt-russet-3.jpg"],
+      "Nomad": ["images/products/mulberry-silk-vest-and-skirt-set__nomad-1.jpg", "images/products/mulberry-silk-vest-and-skirt-set__nomad-2.jpg", "images/products/mulberry-silk-vest-and-skirt-set__nomad-3.jpg"],
+    },
     launchedAt: "2025-03-19",
     name: "Mulberry Silk Vest and Skirt Set",
     category: "Co-ord Sets",
@@ -140,7 +179,11 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-vest",
-    images: ["images/products/mulberry-silk-vest-1.jpg", "images/products/mulberry-silk-vest-2.jpg", "images/products/mulberry-silk-vest-3.jpg"],
+    images: ["images/products/mulberry-silk-vest__burnt-russet-1.jpg", "images/products/mulberry-silk-vest__burnt-russet-2.jpg", "images/products/mulberry-silk-vest__burnt-russet-3.jpg"],
+    imagesByColor: {
+      "Burnt Russet": ["images/products/mulberry-silk-vest__burnt-russet-1.jpg", "images/products/mulberry-silk-vest__burnt-russet-2.jpg", "images/products/mulberry-silk-vest__burnt-russet-3.jpg"],
+      "Nomad": ["images/products/mulberry-silk-vest__nomad-1.jpg"],
+    },
     launchedAt: "2025-04-07",
     name: "Mulberry Silk Vest",
     category: "Vests",
@@ -153,7 +196,10 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-v-neck-top-with-kantha-embroidery",
-    images: ["images/products/mulberry-silk-v-neck-top-with-kantha-embroidery-1.jpg", "images/products/mulberry-silk-v-neck-top-with-kantha-embroidery-2.jpg", "images/products/mulberry-silk-v-neck-top-with-kantha-embroidery-3.jpg"],
+    images: ["images/products/mulberry-silk-v-neck-top-with-kantha-embroidery__pure-cashmere-1.jpg", "images/products/mulberry-silk-v-neck-top-with-kantha-embroidery__pure-cashmere-2.jpg", "images/products/mulberry-silk-v-neck-top-with-kantha-embroidery__pure-cashmere-3.jpg"],
+    imagesByColor: {
+      "Pure Cashmere": ["images/products/mulberry-silk-v-neck-top-with-kantha-embroidery__pure-cashmere-1.jpg", "images/products/mulberry-silk-v-neck-top-with-kantha-embroidery__pure-cashmere-2.jpg", "images/products/mulberry-silk-v-neck-top-with-kantha-embroidery__pure-cashmere-3.jpg"],
+    },
     launchedAt: "2025-04-22",
     name: "Mulberry Silk V-Neck Top with Kantha Embroidery",
     category: "Tops",
@@ -166,7 +212,10 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-cap-sleeve-top",
-    images: ["images/products/mulberry-silk-pintuck-cap-sleeve-top-1.jpg", "images/products/mulberry-silk-pintuck-cap-sleeve-top-2.jpg", "images/products/mulberry-silk-pintuck-cap-sleeve-top-3.jpg"],
+    images: ["images/products/mulberry-silk-pintuck-cap-sleeve-top__chocolate-truffle-1.jpg", "images/products/mulberry-silk-pintuck-cap-sleeve-top__chocolate-truffle-2.jpg", "images/products/mulberry-silk-pintuck-cap-sleeve-top__chocolate-truffle-3.jpg"],
+    imagesByColor: {
+      "Chocolate Truffle": ["images/products/mulberry-silk-pintuck-cap-sleeve-top__chocolate-truffle-1.jpg", "images/products/mulberry-silk-pintuck-cap-sleeve-top__chocolate-truffle-2.jpg", "images/products/mulberry-silk-pintuck-cap-sleeve-top__chocolate-truffle-3.jpg"],
+    },
     launchedAt: "2025-05-09",
     name: "Mulberry Silk Pintuck Cap Sleeve Top",
     category: "Tops",
@@ -179,7 +228,12 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-wrap-skirt",
-    images: ["images/products/mulberry-silk-pintuck-wrap-skirt-1.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt-2.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt-3.jpg"],
+    images: ["images/products/mulberry-silk-pintuck-wrap-skirt__fudge-1.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__fudge-2.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__fudge-3.jpg"],
+    imagesByColor: {
+      "Fudge": ["images/products/mulberry-silk-pintuck-wrap-skirt__fudge-1.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__fudge-2.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__fudge-3.jpg"],
+      "Chocolate Truffle": ["images/products/mulberry-silk-pintuck-wrap-skirt__chocolate-truffle-1.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__chocolate-truffle-2.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__chocolate-truffle-3.jpg"],
+      "Ebony": ["images/products/mulberry-silk-pintuck-wrap-skirt__ebony-1.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__ebony-2.jpg", "images/products/mulberry-silk-pintuck-wrap-skirt__ebony-3.jpg"],
+    },
     launchedAt: "2025-05-27",
     name: "Mulberry Silk Pintuck Wrap Skirt",
     category: "Skirts",
@@ -192,7 +246,13 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-wide-neck-vest",
-    images: ["images/products/mulberry-silk-pintuck-wide-neck-vest-1.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest-2.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest-3.jpg"],
+    images: ["images/products/mulberry-silk-pintuck-wide-neck-vest__forest-night-1.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest__forest-night-2.jpg"],
+    imagesByColor: {
+      "Forest Night": ["images/products/mulberry-silk-pintuck-wide-neck-vest__forest-night-1.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest__forest-night-2.jpg"],
+      "Pure Cashmere": ["images/products/mulberry-silk-pintuck-wide-neck-vest__pure-cashmere-1.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest__pure-cashmere-2.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest__pure-cashmere-3.jpg"],
+      "Duffel Bag": ["images/products/mulberry-silk-pintuck-wide-neck-vest__duffel-bag-1.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest__duffel-bag-2.jpg"],
+      "Ebony": ["images/products/mulberry-silk-pintuck-wide-neck-vest__ebony-1.jpg", "images/products/mulberry-silk-pintuck-wide-neck-vest__ebony-2.jpg"],
+    },
     launchedAt: "2025-06-12",
     name: "Mulberry Silk Pintuck Wide Neck Vest",
     category: "Vests",
@@ -205,7 +265,10 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-vest",
-    images: ["images/products/mulberry-silk-pintuck-vest-1.jpg", "images/products/mulberry-silk-pintuck-vest-2.jpg", "images/products/mulberry-silk-pintuck-vest-3.jpg"],
+    images: ["images/products/mulberry-silk-pintuck-vest__sky-captain-1.jpg", "images/products/mulberry-silk-pintuck-vest__sky-captain-2.jpg", "images/products/mulberry-silk-pintuck-vest__sky-captain-3.jpg"],
+    imagesByColor: {
+      "Sky Captain": ["images/products/mulberry-silk-pintuck-vest__sky-captain-1.jpg", "images/products/mulberry-silk-pintuck-vest__sky-captain-2.jpg", "images/products/mulberry-silk-pintuck-vest__sky-captain-3.jpg"],
+    },
     launchedAt: "2025-06-30",
     name: "Mulberry Silk Pintuck Vest",
     category: "Vests",
@@ -218,7 +281,19 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-trousers",
-    images: ["images/products/mulberry-silk-pintuck-trousers-1.jpg", "images/products/mulberry-silk-pintuck-trousers-2.jpg", "images/products/mulberry-silk-pintuck-trousers-3.jpg"],
+    images: ["images/products/mulberry-silk-pintuck-trousers__chocolate-truffle-1.jpg", "images/products/mulberry-silk-pintuck-trousers__chocolate-truffle-2.jpg", "images/products/mulberry-silk-pintuck-trousers__chocolate-truffle-3.jpg"],
+    imagesByColor: {
+      "Chocolate Truffle": ["images/products/mulberry-silk-pintuck-trousers__chocolate-truffle-1.jpg", "images/products/mulberry-silk-pintuck-trousers__chocolate-truffle-2.jpg", "images/products/mulberry-silk-pintuck-trousers__chocolate-truffle-3.jpg"],
+      "Ebony": ["images/products/mulberry-silk-pintuck-trousers__ebony-1.jpg", "images/products/mulberry-silk-pintuck-trousers__ebony-2.jpg", "images/products/mulberry-silk-pintuck-trousers__ebony-3.jpg"],
+      "Forest Night": ["images/products/mulberry-silk-pintuck-trousers__forest-night-1.jpg", "images/products/mulberry-silk-pintuck-trousers__forest-night-2.jpg", "images/products/mulberry-silk-pintuck-trousers__forest-night-3.jpg"],
+      "Pure Cashmere": ["images/products/mulberry-silk-pintuck-trousers__pure-cashmere-1.jpg", "images/products/mulberry-silk-pintuck-trousers__pure-cashmere-2.jpg", "images/products/mulberry-silk-pintuck-trousers__pure-cashmere-3.jpg"],
+      "Moonless Night": ["images/products/mulberry-silk-pintuck-trousers__moonless-night-1.jpg"],
+      "Nomad": ["images/products/mulberry-silk-pintuck-trousers__nomad-1.jpg", "images/products/mulberry-silk-pintuck-trousers__nomad-2.jpg", "images/products/mulberry-silk-pintuck-trousers__nomad-3.jpg"],
+      "Fig": ["images/products/mulberry-silk-pintuck-trousers__fig-1.jpg", "images/products/mulberry-silk-pintuck-trousers__fig-2.jpg", "images/products/mulberry-silk-pintuck-trousers__fig-3.jpg"],
+      "Fudge": ["images/products/mulberry-silk-pintuck-trousers__fudge-1.jpg", "images/products/mulberry-silk-pintuck-trousers__fudge-2.jpg", "images/products/mulberry-silk-pintuck-trousers__fudge-3.jpg"],
+      "Duffel Bag": ["images/products/mulberry-silk-pintuck-trousers__duffel-bag-1.jpg", "images/products/mulberry-silk-pintuck-trousers__duffel-bag-2.jpg", "images/products/mulberry-silk-pintuck-trousers__duffel-bag-3.jpg"],
+      "Sky Captain": ["images/products/mulberry-silk-pintuck-trousers__sky-captain-1.jpg", "images/products/mulberry-silk-pintuck-trousers__sky-captain-2.jpg"],
+    },
     launchedAt: "2025-07-15",
     name: "Mulberry Silk Pintuck Trousers",
     category: "Trousers",
@@ -234,7 +309,12 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-straight-skirt",
-    images: ["images/products/mulberry-silk-pintuck-straight-skirt-1.jpg", "images/products/mulberry-silk-pintuck-straight-skirt-2.jpg", "images/products/mulberry-silk-pintuck-straight-skirt-3.jpg"],
+    images: ["images/products/mulberry-silk-pintuck-straight-skirt__burnt-russet-1.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__burnt-russet-2.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__burnt-russet-3.jpg"],
+    imagesByColor: {
+      "Burnt Russet": ["images/products/mulberry-silk-pintuck-straight-skirt__burnt-russet-1.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__burnt-russet-2.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__burnt-russet-3.jpg"],
+      "Sky Captain": ["images/products/mulberry-silk-pintuck-straight-skirt__sky-captain-1.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__sky-captain-2.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__sky-captain-3.jpg"],
+      "Nomad": ["images/products/mulberry-silk-pintuck-straight-skirt__nomad-1.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__nomad-2.jpg", "images/products/mulberry-silk-pintuck-straight-skirt__nomad-3.jpg"],
+    },
     launchedAt: "2025-08-03",
     name: "Mulberry Silk Pintuck Straight Skirt",
     category: "Skirts",
@@ -247,7 +327,12 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-pintuck-overlap-vest",
-    images: ["images/products/mulberry-silk-pintuck-overlap-vest-1.jpg", "images/products/mulberry-silk-pintuck-overlap-vest-2.jpg", "images/products/mulberry-silk-pintuck-overlap-vest-3.jpg"],
+    images: ["images/products/mulberry-silk-pintuck-overlap-vest__ebony-1.jpg", "images/products/mulberry-silk-pintuck-overlap-vest__ebony-2.jpg", "images/products/mulberry-silk-pintuck-overlap-vest__ebony-3.jpg"],
+    imagesByColor: {
+      "Ebony": ["images/products/mulberry-silk-pintuck-overlap-vest__ebony-1.jpg", "images/products/mulberry-silk-pintuck-overlap-vest__ebony-2.jpg", "images/products/mulberry-silk-pintuck-overlap-vest__ebony-3.jpg"],
+      "Moonless Night": ["images/products/mulberry-silk-pintuck-overlap-vest__moonless-night-1.jpg", "images/products/mulberry-silk-pintuck-overlap-vest__moonless-night-2.jpg", "images/products/mulberry-silk-pintuck-overlap-vest__moonless-night-3.jpg"],
+      "Pure Cashmere": ["images/products/mulberry-silk-pintuck-overlap-vest__pure-cashmere-1.jpg", "images/products/mulberry-silk-pintuck-overlap-vest__pure-cashmere-2.jpg"],
+    },
     launchedAt: "2025-09-01",
     name: "Mulberry Silk Pintuck Overlap Vest",
     category: "Vests",
@@ -260,7 +345,10 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-pintuck-vest-and-skirt-set",
-    images: ["images/products/mulberry-pintuck-vest-and-skirt-set-1.jpg", "images/products/mulberry-pintuck-vest-and-skirt-set-2.jpg", "images/products/mulberry-pintuck-vest-and-skirt-set-3.jpg"],
+    images: ["images/products/mulberry-pintuck-vest-and-skirt-set__sky-captain-1.jpg", "images/products/mulberry-pintuck-vest-and-skirt-set__sky-captain-2.jpg", "images/products/mulberry-pintuck-vest-and-skirt-set__sky-captain-3.jpg"],
+    imagesByColor: {
+      "Sky Captain": ["images/products/mulberry-pintuck-vest-and-skirt-set__sky-captain-1.jpg", "images/products/mulberry-pintuck-vest-and-skirt-set__sky-captain-2.jpg", "images/products/mulberry-pintuck-vest-and-skirt-set__sky-captain-3.jpg"],
+    },
     launchedAt: "2025-10-05",
     name: "Mulberry Pintuck Vest and Skirt Set",
     category: "Co-ord Sets",
@@ -273,7 +361,13 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-overlap-vest",
-    images: ["images/products/mulberry-silk-overlap-vest-1.jpg", "images/products/mulberry-silk-overlap-vest-2.jpg", "images/products/mulberry-silk-overlap-vest-3.jpg"],
+    images: ["images/products/mulberry-silk-overlap-vest__chocolate-truffle-1.jpg", "images/products/mulberry-silk-overlap-vest__chocolate-truffle-2.jpg", "images/products/mulberry-silk-overlap-vest__chocolate-truffle-3.jpg"],
+    imagesByColor: {
+      "Chocolate Truffle": ["images/products/mulberry-silk-overlap-vest__chocolate-truffle-1.jpg", "images/products/mulberry-silk-overlap-vest__chocolate-truffle-2.jpg", "images/products/mulberry-silk-overlap-vest__chocolate-truffle-3.jpg"],
+      "Sky Captain": ["images/products/mulberry-silk-overlap-vest__sky-captain-1.jpg"],
+      "Fudge": ["images/products/mulberry-silk-overlap-vest__fudge-1.jpg", "images/products/mulberry-silk-overlap-vest__fudge-2.jpg", "images/products/mulberry-silk-overlap-vest__fudge-3.jpg"],
+      "Fig": ["images/products/mulberry-silk-overlap-vest__fig-1.jpg"],
+    },
     launchedAt: "2025-11-12",
     name: "Mulberry Silk Overlap Vest",
     category: "Vests",
@@ -286,7 +380,12 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-overlap-pintuck-vest-and-trouser-set",
-    images: ["images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set-1.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set-2.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set-3.jpg"],
+    images: ["images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__ebony-1.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__ebony-2.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__ebony-3.jpg"],
+    imagesByColor: {
+      "Ebony": ["images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__ebony-1.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__ebony-2.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__ebony-3.jpg"],
+      "Moonless Night": ["images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__moonless-night-1.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__moonless-night-2.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__moonless-night-3.jpg"],
+      "Pure Cashmere": ["images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__pure-cashmere-1.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__pure-cashmere-2.jpg", "images/products/mulberry-silk-overlap-pintuck-vest-and-trouser-set__pure-cashmere-3.jpg"],
+    },
     launchedAt: "2025-12-08",
     name: "Mulberry Silk Overlap Pintuck Vest and Trouser Set",
     category: "Co-ord Sets",
@@ -299,7 +398,11 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-wrap-skirt-set",
-    images: ["images/products/mulberry-silk-embroidered-wrap-skirt-set-1.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set-2.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set-3.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-wrap-skirt-set__fudge-1.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set__fudge-2.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set__fudge-3.jpg"],
+    imagesByColor: {
+      "Fudge": ["images/products/mulberry-silk-embroidered-wrap-skirt-set__fudge-1.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set__fudge-2.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set__fudge-3.jpg"],
+      "Chocolate Truffle": ["images/products/mulberry-silk-embroidered-wrap-skirt-set__chocolate-truffle-1.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set__chocolate-truffle-2.jpg", "images/products/mulberry-silk-embroidered-wrap-skirt-set__chocolate-truffle-3.jpg"],
+    },
     launchedAt: "2026-01-15",
     name: "Mulberry Silk Embroidered Wrap Skirt Set",
     category: "Co-ord Sets",
@@ -312,7 +415,11 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-v-neck-top",
-    images: ["images/products/mulberry-silk-embroidered-v-neck-top-1.jpg", "images/products/mulberry-silk-embroidered-v-neck-top-2.jpg", "images/products/mulberry-silk-embroidered-v-neck-top-3.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-v-neck-top__chocolate-truffle-1.jpg", "images/products/mulberry-silk-embroidered-v-neck-top__chocolate-truffle-2.jpg", "images/products/mulberry-silk-embroidered-v-neck-top__chocolate-truffle-3.jpg"],
+    imagesByColor: {
+      "Chocolate Truffle": ["images/products/mulberry-silk-embroidered-v-neck-top__chocolate-truffle-1.jpg", "images/products/mulberry-silk-embroidered-v-neck-top__chocolate-truffle-2.jpg", "images/products/mulberry-silk-embroidered-v-neck-top__chocolate-truffle-3.jpg"],
+      "Fudge": ["images/products/mulberry-silk-embroidered-v-neck-top__fudge-1.jpg", "images/products/mulberry-silk-embroidered-v-neck-top__fudge-2.jpg", "images/products/mulberry-silk-embroidered-v-neck-top__fudge-3.jpg"],
+    },
     launchedAt: "2026-02-20",
     name: "Mulberry Silk Embroidered V-Neck Top",
     category: "Tops",
@@ -325,7 +432,10 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-raglan-cut-top",
-    images: ["images/products/mulberry-silk-embroidered-raglan-cut-top-1.jpg", "images/products/mulberry-silk-embroidered-raglan-cut-top-2.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-raglan-cut-top__white-alyssum-1.jpg", "images/products/mulberry-silk-embroidered-raglan-cut-top__white-alyssum-2.jpg"],
+    imagesByColor: {
+      "White Alyssum": ["images/products/mulberry-silk-embroidered-raglan-cut-top__white-alyssum-1.jpg", "images/products/mulberry-silk-embroidered-raglan-cut-top__white-alyssum-2.jpg"],
+    },
     launchedAt: "2026-07-14",
     name: "Mulberry Silk Embroidered Raglan Cut Top",
     category: "Tops",
@@ -338,7 +448,10 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-long-top",
-    images: ["images/products/mulberry-silk-embroidered-long-top-1.jpg", "images/products/mulberry-silk-embroidered-long-top-2.jpg", "images/products/mulberry-silk-embroidered-long-top-3.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-long-top__white-alyssum-1.jpg", "images/products/mulberry-silk-embroidered-long-top__white-alyssum-2.jpg", "images/products/mulberry-silk-embroidered-long-top__white-alyssum-3.jpg"],
+    imagesByColor: {
+      "White Alyssum": ["images/products/mulberry-silk-embroidered-long-top__white-alyssum-1.jpg", "images/products/mulberry-silk-embroidered-long-top__white-alyssum-2.jpg", "images/products/mulberry-silk-embroidered-long-top__white-alyssum-3.jpg"],
+    },
     launchedAt: "2026-07-22",
     name: "Mulberry Silk Embroidered Long Top",
     category: "Tops",
@@ -351,7 +464,12 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-dress",
-    images: ["images/products/mulberry-silk-embroidered-dress-1.jpg", "images/products/mulberry-silk-embroidered-dress-2.jpg", "images/products/mulberry-silk-embroidered-dress-3.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-dress__forest-night-1.jpg", "images/products/mulberry-silk-embroidered-dress__forest-night-2.jpg", "images/products/mulberry-silk-embroidered-dress__forest-night-3.jpg"],
+    imagesByColor: {
+      "Forest Night": ["images/products/mulberry-silk-embroidered-dress__forest-night-1.jpg", "images/products/mulberry-silk-embroidered-dress__forest-night-2.jpg", "images/products/mulberry-silk-embroidered-dress__forest-night-3.jpg"],
+      "Duffel Bag": ["images/products/mulberry-silk-embroidered-dress__duffel-bag-1.jpg", "images/products/mulberry-silk-embroidered-dress__duffel-bag-2.jpg", "images/products/mulberry-silk-embroidered-dress__duffel-bag-3.jpg"],
+      "Chocolate Truffle": ["images/products/mulberry-silk-embroidered-dress__chocolate-truffle-1.jpg", "images/products/mulberry-silk-embroidered-dress__chocolate-truffle-2.jpg", "images/products/mulberry-silk-embroidered-dress__chocolate-truffle-3.jpg"],
+    },
     launchedAt: "2026-07-29",
     name: "Mulberry Silk Embroidered Dress",
     category: "Dresses",
@@ -364,7 +482,11 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-cap-sleeve-top",
-    images: ["images/products/mulberry-silk-embroidered-cap-sleeve-top-1.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top-2.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top-3.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-cap-sleeve-top__sky-captain-1.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top__sky-captain-2.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top__sky-captain-3.jpg"],
+    imagesByColor: {
+      "Sky Captain": ["images/products/mulberry-silk-embroidered-cap-sleeve-top__sky-captain-1.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top__sky-captain-2.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top__sky-captain-3.jpg"],
+      "White Alyssum": ["images/products/mulberry-silk-embroidered-cap-sleeve-top__white-alyssum-1.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top__white-alyssum-2.jpg", "images/products/mulberry-silk-embroidered-cap-sleeve-top__white-alyssum-3.jpg"],
+    },
     launchedAt: "2026-08-02",
     name: "Mulberry Silk Embroidered Cap Sleeve Top",
     category: "Tops",
@@ -377,7 +499,12 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-boat-wrap-skirt-set",
-    images: ["images/products/mulberry-silk-embroidered-boat-wrap-skirt-set-1.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set-2.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set-3.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__forest-night-1.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__forest-night-2.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__forest-night-3.jpg"],
+    imagesByColor: {
+      "Forest Night": ["images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__forest-night-1.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__forest-night-2.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__forest-night-3.jpg"],
+      "Fig": ["images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__fig-1.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__fig-2.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__fig-3.jpg"],
+      "Duffel Bag": ["images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__duffel-bag-1.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__duffel-bag-2.jpg", "images/products/mulberry-silk-embroidered-boat-wrap-skirt-set__duffel-bag-3.jpg"],
+    },
     launchedAt: "2026-08-05",
     name: "Mulberry Silk Embroidered Boat Wrap Skirt Set",
     category: "Co-ord Sets",
@@ -390,7 +517,13 @@ const PRODUCTS = [
   },
   {
     slug: "mulberry-silk-embroidered-boat-neck-top",
-    images: ["images/products/mulberry-silk-embroidered-boat-neck-top-1.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top-2.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top-3.jpg"],
+    images: ["images/products/mulberry-silk-embroidered-boat-neck-top__forest-night-1.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__forest-night-2.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__forest-night-3.jpg"],
+    imagesByColor: {
+      "Forest Night": ["images/products/mulberry-silk-embroidered-boat-neck-top__forest-night-1.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__forest-night-2.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__forest-night-3.jpg"],
+      "Pure Cashmere": ["images/products/mulberry-silk-embroidered-boat-neck-top__pure-cashmere-1.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__pure-cashmere-2.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__pure-cashmere-3.jpg"],
+      "Duffel Bag": ["images/products/mulberry-silk-embroidered-boat-neck-top__duffel-bag-1.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__duffel-bag-2.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__duffel-bag-3.jpg"],
+      "Fig": ["images/products/mulberry-silk-embroidered-boat-neck-top__fig-1.jpg", "images/products/mulberry-silk-embroidered-boat-neck-top__fig-2.jpg"],
+    },
     launchedAt: "2026-08-09",
     name: "Mulberry Silk Embroidered Boat Neck Top",
     category: "Tops",
@@ -411,24 +544,48 @@ PRODUCTS.forEach((product) => {
 });
 
 /**
- * Approximate hex for a colour name so the swatch shows the actual shade.
- * The catalog stores colours as marketing names ("Pageant Blue"), which is what
- * the customer sees, so the mapping lives here rather than polluting data.js.
- * Anything unmapped falls back to a neutral rather than rendering nothing.
+ * Swatch colour for each colour name in the catalog.
+ *
+ * These are the brand's own values, read from the swatches on eighth-hour.com,
+ * not approximations -- the names are Pantone-style marketing names ("Fudge",
+ * "Sky Captain") that cannot be guessed from the words. An earlier hand-written
+ * map covered 3 of the 17 colours actually in the catalog and invented eight
+ * that do not exist in it, so every real product rendered its variants as the
+ * same fallback grey and the swatches told the customer nothing.
+ *
+ * Keyed lowercase so lookups are case- and whitespace-insensitive.
  */
 const COLOR_HEXES = {
-  "pageant blue": "#1f2a44",
-  "potent purple": "#3f2438",
-  "purple potion": "#6b2545",
-  "deep olive": "#3b402b",
-  "forest": "#1f2e1f",
-  "black": "#141414",
-  "ivory": "#efe9dd",
-  "sand": "#cdbfa7",
-  "taupe": "#a2937f",
-  "wine": "#5d2231",
-  "charcoal": "#3a3a3a",
+  "burnt russet": "#7e3940",
+  "chocolate truffle": "#612e35",
+  "duffel bag": "#394034",
+  "ebony": "#2f3136",
+  "fig": "#532d3b",
+  "forest night": "#29291f",
+  "fudge": "#493338",
+  "kombu green": "#3a4032",
+  "moonless night": "#000000",
+  "nomad": "#b49f89",
+  "pageant blue": "#171e2e",
+  "potent purple": "#462639",
+  "pure cashmere": "#b1a699",
+  "purple potion": "#692746",
+  "sepia tint": "#8e7a66",
+  "sky captain": "#393c47",
+  "white alyssum": "#ece8e4",
 };
+
+/**
+ * Hex for a colour name. Falls back to a neutral so an unmapped colour still
+ * renders a swatch rather than nothing -- but warns, because a silent fallback
+ * is exactly how every product ended up showing identical grey squares.
+ */
 function colorHex(name) {
-  return COLOR_HEXES[String(name).trim().toLowerCase()] || "#b9b2a6";
+  const key = String(name).trim().toLowerCase();
+  const hex = COLOR_HEXES[key];
+  if (!hex) {
+    console.warn(`No swatch colour defined for "${name}" — add it to COLOR_HEXES in js/data.js`);
+    return "#b9b2a6";
+  }
+  return hex;
 }

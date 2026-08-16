@@ -14,10 +14,10 @@ Everything runs locally. There are no paid APIs, no external calls at runtime, a
 leaves the machine. Photo measurement uses a pose model that runs on your own CPU, and the uploaded
 image is held in memory and discarded — never written to disk.
 
-**Status:** 966 tests — 962 passing, 4 skipped by design (they need the real pose model, which
+**Status:** 1,062 tests — 1,058 passing, 4 skipped by design (they need the real pose model, which
 deadlocks under pytest; see [Testing](#testing)). The recommendation, sizing, fit-checking and
 history modules are complete. Photo measurement works but is deliberately weighted low — see
-[Photo-based measurement](#4-photo-based-measurement-m2--providers) for the honest accuracy numbers.
+[Photo-based measurement](#5-photo-based-measurement-m2--providers) for the honest accuracy numbers.
 
 ---
 
@@ -86,11 +86,70 @@ that look like application bugs.
 
 Open **http://localhost:8080**. Create an account, then follow **My Style** in the header.
 
+### Is the server running your code?
+
+**Restart the API after editing anything under `backend/`.** Python reads
+`constants.py` and `products.json` once at import, so a process started before a
+change keeps serving the old size chart, the old catalog and the old logic
+indefinitely — with a completely healthy `/health`. This has caused two separate
+false diagnoses during development, including half an hour spent investigating a
+browser that showed six sizes and the wrong recommended size, against a backend
+nobody had restarted.
+
+`/health` now reports a fingerprint of what the process actually loaded — a hash
+of every Python source file, plus the size chart and catalog — and one command
+compares it against the working copy:
+
+```bash
+python scripts/check_running_server.py                        # exit 0 current, 1 stale, 2 nothing listening
+python scripts/check_running_server.py --url http://127.0.0.1:8199
+```
+
+It also reports which sizing provider the process started with. That setting
+comes from an env var rather than the source, so it can't be checked — but it is
+the easiest thing to lose across a restart, and losing it silently swaps real
+photo analysis for the demo estimator, which returns the **same fixed
+measurements for every photo** and shows the customer a "Demo mode" warning:
+
+```
+sizing provider: MockSizingProvider  <-- demo estimator: every photo returns the same
+fixed numbers. Start with SIZING_PROVIDER=mediapipe for real analysis.
+```
+
+`./run.sh` now defaults to `SIZING_PROVIDER=mediapipe` for that reason; pass
+`SIZING_PROVIDER=mock ./run.sh` if you want the demo estimator (and no MediaPipe
+install).
+
+```
+STALE: http://127.0.0.1:8000 is not running the current source. Restart it.
+   * source         serving 'a41c9e02bb7d'  source says '7913f0fe01b3'
+     size_chart     serving '1b4fc0868e97'  source says '1b4fc0868e97'
+```
+
+The exit status is meaningful, so it can gate a verification run rather than
+being read by eye. Running `uvicorn` with `--reload` avoids the problem during
+active development; the check is what catches it when you forget.
+
+The front end has the same failure mode for a different reason, which `serve.py`
+already handles — see [Front end](#2-front-end).
+
+### Troubleshooting a profile that seems to have vanished
+
+If New Releases or the product page's fit-check widget insist you have no style profile when you
+plainly do, open **http://localhost:8080/diagnose.html**. It reports which keys are in local storage,
+whether the token is valid, what the server thinks your session is, and — the case that is easy to
+miss — whether the stored session id actually *matches* the server's. A stale id from an abandoned
+earlier attempt looks entirely valid and passes every presence check, while every profile endpoint
+rejects it. The page changes nothing unless you press its repair button.
+
+Note that `localhost:8080` and `127.0.0.1:8080` are separate origins with separate local storage:
+logging in on one does not log you in on the other. Pick one and stay on it.
+
 ### Environment variables
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SIZING_PROVIDER` | `mock` | Which sizing backend to use: `mock` or `mediapipe`. An unknown name fails loudly at startup rather than silently falling back. |
+| `SIZING_PROVIDER` | `mock` (but `run.sh` sets `mediapipe`) | Which sizing backend to use. `mediapipe` analyses the photo; `mock` returns the same fixed measurements for every image and tells the customer so. An unknown name fails loudly at startup rather than silently falling back. |
 | `MEDIAPIPE_POSE_MODEL` | auto-downloaded | Path to a `.task` pose model, if you'd rather supply your own than let it fetch one. |
 
 ---
@@ -114,8 +173,8 @@ curl -X POST http://localhost:8000/intake/confirm \
     "shape_class": "hourglass",
     "ratios": { "bust_waist": 1.27, "waist_hip": 0.74, "shoulder_hip": 1.0 },
     "size_recommendation_by_category": {
-      "tops": "M", "skirts": "M", "dresses": "M",
-      "trousers": "M", "vests": "M", "coOrds": "M/M"
+      "tops": "S", "skirts": "S", "dresses": "S",
+      "trousers": "S", "vests": "S", "coOrds": "S/S"
     },
     "fit_notes": [
       "Fitted styles will emphasize your balanced proportions.",
@@ -155,7 +214,9 @@ curl -X POST http://localhost:8000/fit-check/<session_id>/crepe-silk-pleated-dre
 {
   "recommended_size": "M",
   "confidence": 1.0,
-  "fit_scores": { "XS": 0.56, "S": 0.74, "M": 1.0, "L": 0.7, "XL": 0.39, "XXL": 0.02 },
+  "fit_scores": {
+    "XXS": 0.22, "XS": 0.48, "S": 0.73, "M": 1.0, "L": 0.69, "XL": 0.35, "XXL": 0.06
+  },
   "fit_notes": ["Size M fits perfectly."]
 }
 ```
@@ -174,9 +235,13 @@ curl -X POST http://localhost:8000/intake/photo-measure \
 ```
 
 ```json
-{ "measurements": { "bust": 89.3, "waist": 65.8, "hips": 91.8, "height": 180 },
+{ "measurements": { "bust": 93.8, "waist": 69.4, "hips": 95.1, "height": 180 },
   "low_confidence_fields": [] }
 ```
+
+Note where those numbers land: bust 93.8 is inside S's band and hips 95.1 inside XS's, matching the
+two sizes that were stated. The photo moved the estimate within each band — it did not choose the
+band.
 
 A photo with no person in it is refused rather than measured:
 
@@ -230,21 +295,123 @@ that determines whether a top fits them.
 part of the system consults, so the size you're told on your profile is the same size used to filter
 your recommendations and to score how a garment will fit.
 
-**How it works.** `SIZE_CHART_SOURCE` holds the published chart — the measurement *range* each size
-is cut for — and everything else is derived from it. `STANDARD_SIZE_CHART` takes each row's midpoint;
-the three `*_SIZE_BOUNDARIES` tables build contiguous lookup bands by meeting adjacent sizes at the
-midpoint of the gap between them, opening the outermost bands out to the supported measurement range
-so every body maps somewhere.
+**How it works.** `SIZE_CHART_SOURCE` holds Eighth Hour's official published chart — the measurement
+*range* each size is cut for, XXS through XXL — and everything else is derived from it.
+`STANDARD_SIZE_CHART` takes each row's midpoint; the three `*_SIZE_BOUNDARIES` tables build contiguous
+lookup bands by meeting adjacent sizes at the midpoint of the gap between them, opening the outermost
+bands out to the supported measurement range so every body maps somewhere. Nothing else in the
+codebase writes a size range down.
 
-This replaced tables that were uniform grids — bust stepping 8/8/8/8, waist 6/6/6/6 — which was even
-spacing rather than any real chart, and which put the waist a full size high throughout (XS read
-69 cm against a real 61–66 cm). `tests/test_size_chart_integrity.py` locks in the structural
-invariants: bands are contiguous with no gaps or overlaps, every published range maps entirely to its
-own size, and — the one the photo estimator depends on — **every chart value looks up to its own
-size**. If that last one broke, a customer stating "M" could be recommended S even with the photo
-contributing nothing.
+The published rows are narrow — the bust steps about 5.7 cm per size, against the 8 cm of the uniform
+grid this replaced — so the derived bands are correspondingly tight:
 
-### 4. Photo-based measurement (M2 + providers)
+| | XXS | XS | S | M | L | XL | XXL |
+|---|---|---|---|---|---|---|---|
+| **bust** | 70–85.05 | 85.05–90.25 | 90.25–95.25 | 95.25–100.9 | 100.9–107.9 | 107.9–113.6 | 113.6–150 |
+| **waist** | 55–64.75 | 64.75–69.75 | 69.75–74.85 | 74.85–80 | 80–88.3 | 88.3–94.6 | 94.6–130 |
+| **hips** | 80–90.25 | 90.25–95.25 | 95.25–100.3 | 100.3–107.3 | 107.3–114.9 | 114.9–120 | 120–160 |
+
+XXS and XXL open out to the validator's limits rather than stopping where the chart does, so a body
+outside the published range still maps to the nearest size the shop actually stocks instead of failing
+to map at all.
+
+`tests/test_size_chart_integrity.py` locks in the structural invariants: bands are contiguous with no
+gaps or overlaps, every published range maps entirely to its own size, and — the one the photo
+estimator depends on — **every chart value looks up to its own size**. If that last one broke, a
+customer stating "M" could be recommended S even with the photo contributing nothing.
+
+**The Size Guide page is generated, not transcribed.** `Base_Website/size-guide.html` used to carry
+the same numbers typed out by hand under a comment promising they matched the engine. They stopped
+matching the first time the chart was revised and nothing noticed. The three tables are now written by
+`backend/scripts/render_size_guide.py` from `SIZE_CHART_SOURCE`, and `tests/test_size_guide_page.py`
+fails if the page and the chart ever disagree:
+
+```bash
+python scripts/render_size_guide.py            # rewrite the page from the chart
+python scripts/render_size_guide.py --check     # exit 1 if it is stale
+```
+
+**Revising the chart also means migrating saved profiles.** `size_recommendation_by_category` is
+computed once at the end of intake and then read back verbatim — `/account/profile` displays it, and
+`/fit-check` passes it to M7 as `known_size`, which *forces* it as the recommended size. So a chart
+revision leaves returning customers holding the old chart's answer scored against the new one: the
+panel recommends S, shows XS scoring higher, and then reports that its own recommendation "runs large
+in the bust". Their body hasn't changed; only the stored label is wrong. After any edit to
+`SIZE_CHART_SOURCE`, run:
+
+```bash
+python scripts/migrate_stored_size_profiles.py --dry-run   # report what would change
+python scripts/migrate_stored_size_profiles.py             # apply
+```
+
+It recomputes each saved profile by calling M3, rather than reimplementing the mapping — a migration
+whose answer differs from the engine's only replaces one wrong stored size with another.
+`tests/test_stored_profile_migration.py` pins both halves of that: the result matches M3 exactly
+(including apple shapes being sized on the waist, and co-ord sets staying a `"M/L"` pair), and every
+other column — measurements, consent, credentials — comes out byte-identical.
+
+**On the trade-off of a finer chart.** Narrower bands mean the size you are told is a more precise
+claim, but they also leave less room for measurement error. A stated size still pins the result
+exactly — see [Photo-based measurement](#5-photo-based-measurement-m2--providers) — but an unanchored
+photo estimate now has roughly 5.7 cm of bust to land in rather than 8, so the same cm of error is
+about a third more likely to cross a boundary. That is the chart being more precise than the
+measurement, not a regression in the measurement; it is also why the photo screen recommends stating
+your usual sizes.
+
+### 4. Garment length and height advice
+
+**What it does.** Tells you where a hem will actually fall on *you*. The
+photograph shows a midi skirt at mid-calf on a 5′6″ model; at 6′2″ the same skirt
+lands just below the knee, and the product page now says so.
+
+**How it works.** The garment is a fixed number of inches; the body it hangs on
+isn't. Eighth Hour's published length guide states, per class, the inches at
+which a hem reaches a named landmark on their fit model — which means those
+numbers *are* that model's own waist-to-knee, waist-to-calf and waist-to-floor
+distances. Scaling them by (customer height ÷ model height) puts the same
+landmarks on the customer while the garment stays the length it was cut, and
+whichever band it now falls in is where it will sit. No new body ratios are
+introduced: every distance used is one the chart already states.
+
+`GARMENT_LENGTH_CHART_IN` holds the guide, per category, because the same class
+name means different things across them — "Knee" is 21–23″ on a skirt and 38–40″
+on a dress, and "Cropped" is a midriff-length top but an above-the-ankle trouser.
+Each chart is used only within its own category and never compared across them:
+the dress and skirt charts imply a shoulder-to-waist distance of 17″ at the knee
+but 12″ at full length, so they aren't mutually consistent (different models),
+though each is internally sound.
+
+The catalog data came from the live store, which publishes it in two places
+nobody would look. Length and fit are Shopify **tags**, mixed among colour and
+collection tags — `"Calf"`, `"Cropped"` next to `"Fig"`, `"Best Sellers"`. The
+model's height and size are prose in the description: *"Model: Lori is 5.6 ft and
+wears a size XXS."* All 31 live products carry exactly one length tag, so the
+coverage is complete rather than best-effort.
+`scripts/enrich_catalog_from_source.py` reads both out of a cached copy of the
+store response and writes `length`, `fit`, `model_name`, `model_height_cm` and
+`model_size` into `products.json`. Note that adding fields to the catalog means
+adding them in **two** other places, both of which drop unlisted fields
+silently: `CatalogKB._normalize_product`, which builds an explicit dict, and
+`CatalogProduct` in `main.py`, which is the shape `/catalog/sync` replaces the
+catalog with. `model_height_cm` was missed in the first, so the per-product fit
+model looked wired up while every garment fell back to the default reference:
+
+```bash
+python scripts/enrich_catalog_from_source.py            # from the cache
+python scripts/enrich_catalog_from_source.py --fetch    # refresh the cache first
+```
+
+It never touches the network without `--fetch`. Two catalog products have since
+been delisted upstream, so their length is set to `null` rather than left at the
+old `"Regular"` placeholder — `"Regular"` is a real class on the tops chart, so
+leaving it would look like verified data and generate confident advice from a
+value nobody set. The note stays silent instead, which is the only honest output.
+
+Silence is in fact the common case: the note only appears when the hem moves
+further than the length class's own range, so a 3cm height difference says
+nothing rather than manufacturing precision the chart doesn't have.
+
+### 5. Photo-based measurement (M2 + providers)
 
 **What it does.** Upload a full-body photo, give your height, and it estimates your bust, waist and
 hips. Optionally tell it the sizes you usually wear in tops and bottoms, which improves the result
@@ -266,6 +433,10 @@ for exactly the customers whose photo reads worst — several photos of one subj
 identical value. tanh is monotonic, so distinct photos stay distinct, and it saturates asymptotically
 so the band is approached but never crossed.
 
+Every field the provider returns is clamped into the supported range before being stored, including
+the optional ones. `shoulder` originally wasn't, which is how an out-of-range value reached the
+database (see the invariant note under [Guardrails](#10-guardrails)).
+
 **Measured honestly** against 8 people who were not used in any calibration (65 Wikimedia Commons
 photos):
 
@@ -282,7 +453,7 @@ noise. The weight is kept at 25% by explicit decision, so the on-screen claim th
 estimated from your photo stays true. Treat this as a plausibility and engagement feature, not an
 accuracy one.
 
-### 5. Recommendation engine (M5 + M6)
+### 6. Recommendation engine (M5 + M6)
 
 **What it does.** Produces a ranked list of pieces suited to your shape and stated taste, and never
 recommends something that isn't in stock in your size.
@@ -295,7 +466,21 @@ exclusions) before any scoring, then ranks what survives by shape affinity, silh
 match. Hard filters run first on purpose: a beautifully-ranked item nobody can buy is worse than no
 recommendation. A `min_results` floor relaxes soft preferences rather than returning an empty page.
 
-### 6. Fit checker (M7)
+**Size is filtered per category**, using the same size M3 already showed the customer for that
+category — skirts against her skirt size, tops against her top size. This is worth stating because it
+used to send only the *tops* size and apply it to the whole catalog, which for anyone whose top and
+bottom sizes differ was exactly backwards: a customer who is M on top and S below had S-only skirts
+excluded as unavailable and M-only skirts recommended instead. It was invisible in production because
+every product in the live catalog stocks every size, so the filter had nothing to exclude; it would
+have appeared the first time something sold out.
+
+**Colour preferences are canonicalised once, by M4**, to the catalog's own spelling. M6 filters with
+an exact string comparison against `"Ebony"`, `"Sky Captain"`, so a stored `"ebony"` matches nothing —
+the colour filter would then exclude the whole catalog, get relaxed away, and the customer's colour
+choice would silently stop affecting anything with no error raised. M4 matches case-insensitively and
+stores the catalog spelling; everything downstream uses it verbatim.
+
+### 7. Fit checker (M7)
 
 **What it does.** For any single garment, tells you which size to order, how confident that is, and
 what to expect — "runs small in the bust" — scoring every available size rather than just naming one.
@@ -313,7 +498,7 @@ Dimensions are weighted per category, which fixed a real complaint: a skirt was 
 in the bust". Skirts and trousers score on hips, tops and vests on bust, dresses and co-ord sets on
 bust with waist and hips still reported as guidance.
 
-### 7. New releases feed (M9)
+### 8. New releases feed (M9)
 
 **What it does.** Shows newly launched pieces filtered to the customer's stored profile, so a launch
 email isn't a catalog dump.
@@ -323,7 +508,7 @@ item against the saved profile, keeping only those above a match threshold. Size
 same shared boundary tables as everything else, so the feed can't disagree with the profile page
 about what size someone is.
 
-### 8. History and the learning loop (M8 + M10)
+### 9. History and the learning loop (M8 + M10)
 
 **What it does.** Remembers every fit check and lets customers say whether a garment actually fitted,
 building a picture of where the sizing advice is right and where it drifts.
@@ -333,7 +518,7 @@ feedback into per-user and per-product trends — systematic "runs small" signal
 rather than one-off complaints. Feedback is stored, aggregated and exposed via `/trends/{user_id}`
 and `/feedback/summary/{user_id}`; it does not silently mutate the sizing tables.
 
-### 9. Guardrails
+### 10. Guardrails
 
 **What it does.** Authentication, consent enforcement, input validation and audit logging — applied
 consistently rather than per-endpoint.
@@ -353,7 +538,18 @@ consistently rather than per-endpoint.
 - **`audit_logger`** — structured audit events. Photo scans log byte size and content type only,
   never image data.
 
-### 10. Persistence
+**One invariant worth calling out**, because breaking it produced a genuinely confusing bug: the
+write-side validator (`InputValidator`) and the read-side one (`utils.sizing.validate_measurements`,
+used by M7 and M9) must agree. They didn't. `shoulder` was unchecked on write but required to be
+30–60 cm on read, so a session could be stored happily and then be permanently unreadable by the fit
+checker and the new-releases feed — which answered 400 while the recommendation engine, which
+doesn't validate shoulder, carried on working. The asymmetry made it look like a bug in those two
+features rather than in the data. Both validators now derive their ranges from
+`constants.MEASUREMENT_RANGES`, so anything accepted on write is by construction readable afterwards,
+and `tests/test_validator_agreement.py` asserts that as a general property across every field rather
+than testing shoulder specifically.
+
+### 11. Persistence
 
 **What it does.** Keeps accounts, sessions, consent records and history across restarts.
 
@@ -434,9 +630,48 @@ product pages show a size recommendation drawn from your profile.
 **How it works.** All three read from the API and reuse the storefront's own `.product-card` markup,
 so a recommended item looks like any other product rather than a bolted-on widget. Each card carries
 one extra line explaining *why* it was picked. The fit-checker widget on the product page calls
-`/fit-check/{session}/{sku}` and pre-selects the recommended size. Product images are matched to
-catalog slugs and stored locally in `Base_Website/images/products/` — nothing is fetched from the
-live site at runtime.
+`/fit-check/{session}/{sku}` and pre-selects the recommended size.
+
+Both pages repair a stale session rather than reporting it as an absent profile. If the API rejects
+the stored session id, they re-resolve it from `/account/profile` and retry once. This matters
+because the failure is silent and misleading: an id left over from an abandoned attempt looks
+perfectly valid, so every "do we have a session?" check passes, and then the profile endpoints answer
+400 — leaving New Releases telling a customer with a complete profile to go and complete one, and the
+fit-check widget (which fails silently by design) simply never appearing.
+
+### 6. Colour-aware product imagery
+
+**What it does.** Every colour a garment comes in has its own photographs, so clicking a swatch shows
+the garment in that colour. And if you picked colour preferences in your style profile, you see the
+garment in one of those colours *throughout* — on the recommendation and new-release thumbnails, on
+the style profile's completion screen, in the collection grid, and on the product page you open from
+them. The card and the page it leads to always agree.
+
+**How it works.** Shopify associates each product photo with the colour variant it depicts: an image
+tagged with variant ids opens a colour group, and untagged images following it belong to that group.
+`data.js` stores the result as `imagesByColor`, 203 photographs covering 75 of the catalog's 76
+colourways (one variant has no photography on the real site either, and falls back to the default
+set). `productImage()` takes an optional colour, and the product page rebuilds its gallery whenever
+the selection changes — sizing the thumbnail strip to however many photographs that colour actually
+has, rather than a fixed count.
+
+The swatch colours themselves are the brand's own values, read from eighth-hour.com. They are
+Pantone-style marketing names ("Fudge", "Sky Captain") that can't be inferred from the words; an
+earlier hand-written map covered 3 of the 17 and invented eight that don't exist, so every product
+rendered its variants as the same fallback grey. `colorHex()` now warns on an unmapped name instead
+of silently returning that grey.
+
+**Choosing which colour to show.** `preferredColorFor()` intersects the customer's `preferred_colors`
+with the product's colours; where several match, the product's own first matching colour wins. That is
+deliberately independent of the order the preference checkboxes were ticked in — they are a set, not a
+ranking — so a given product always resolves the same way. No preferences, or no overlap, falls back
+to the product's first colour, exactly as it does for a visitor with no profile.
+
+`productImage()` applies that rule **by default** when no colour is passed, which is what keeps every
+thumbnail across the site consistent with the product page without each of the eight call sites
+needing to know preferences exist — threading a colour through each of them by hand is exactly how
+they would drift apart. The single deliberate exception is the cart, which passes the colour that was
+actually added: that is a record of a decision, not a suggestion.
 
 ---
 
@@ -444,7 +679,7 @@ live site at runtime.
 
 The bundled MediaPipe provider is free and runs locally, but it is not accurate enough to be the
 basis of a size guarantee (see the numbers in
-[Photo-based measurement](#4-photo-based-measurement-m2--providers)). The system was built so a
+[Photo-based measurement](#5-photo-based-measurement-m2--providers)). The system was built so a
 commercial vendor can replace it without touching the intake flow, the shape profiler, the fit
 checker or the UI.
 
@@ -696,7 +931,7 @@ statements attached to it:
 ```bash
 cd backend
 source venv/bin/activate
-python -m pytest tests/ -q                    # all 966
+python -m pytest tests/ -q                    # all 1,062
 python -m pytest tests/test_m7_fit_checker.py -q
 ```
 
@@ -709,7 +944,15 @@ python scripts/verify_pose_provider.py photo.jpg 172          # measure a real p
 python scripts/verify_pose_provider.py --diagnose photo.jpg 172   # landmark-level diagnostics
 ```
 
-Notable suites: `test_size_chart_integrity.py` (structural invariants of the size chart),
+Notable suites: `test_validator_agreement.py` (the write-side and read-side measurement validators
+must agree — see the invariant note under [Guardrails](#10-guardrails)),
+`test_size_chart_integrity.py` (structural invariants of the size chart),
+`test_size_guide_page.py` (the published Size Guide page must still match the chart the engine sizes
+on — a cross-boundary check nothing else would catch),
+`test_stored_profile_migration.py` (the saved-profile migration agrees with M3 and touches nothing
+else),
+`test_per_category_size_filter.py` (recommendations are filtered by the size the customer wears in
+*that* category, and colour preferences survive any casing),
 `test_sizing_provider_contract.py` (a reusable suite any new sizing vendor must pass, including
 declaring how it handles images), `test_image_validation.py` (the upload surface, including the
 HEIC-vs-MP4 container case), and `test_mediapipe_provider.py` (pose validation and the stated-size
@@ -723,20 +966,35 @@ round-trip, driven by synthetic landmarks so it needs no model or photograph).
 backend/
   main.py                     FastAPI app; all HTTP endpoints
   products.json               Catalog, loaded at startup
+  catalog_source.json         Cached copy of the live store's products.json.
+                              Source for garment length, fit and fit-model
+                              height -- refreshed only on demand, never per run.
+  run.sh                      Start the API (defaults to real photo analysis)
   py_src/
-    constants.py              Size chart, boundary tables, tunables
-    modules/                  M1–M10
+    constants.py              Size chart, boundary tables, garment length
+                              chart, tunables
+    modules/                  M1-M10
     guardrails/               auth, consent, validation, audit, image checks
     providers/                sizing providers + anthropometry math
     persistence/              SQLite repositories
     utils/                    shared sizing, math, errors, logging
-  scripts/verify_pose_provider.py
-  tests/                      966 tests
+  scripts/
+    check_running_server.py   Is the API running this working copy?
+    render_size_guide.py      Rewrite the Size Guide page from the size chart
+    enrich_catalog_from_source.py  Pull length/fit/model data out of the cache
+    migrate_stored_size_profiles.py  Recompute saved sizes after a chart change
+    verify_pose_provider.py   Exercise the pose model outside pytest
+  tests/                      1,062 tests
 Base_Website/
   serve.py                    no-cache dev server
+  diagnose.html               session troubleshooting page
   index.html, collection.html, product.html, size-guide.html, about.html, ...
   js/                         storefront + shared chrome
+    data.js                   catalog, per-colour images, brand colour values
+    site-chrome.js            shared header/footer + session reconciliation
+    placeholder.js            colour-aware image resolution
   frontend/pages/             intake flow, recommendations, new releases, account, auth
-  images/                     product photography and brand assets
+  images/products/            203 photographs, keyed by product and colourway
+  images/brand/               logo, hero and banner assets
 planning_documents/           design notes
 ```

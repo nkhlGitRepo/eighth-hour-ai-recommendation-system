@@ -98,7 +98,13 @@ PRODUCTS = [
         "fabric": "Linen",
         "price": 49.99,
         "colors": ["White", "Beige", "Navy"],
-        "sizes": ["S", "M", "L", "XL"],
+        # Stocks XS like the other Tops. This catalog only holds two Tops, so a
+        # single one of them missing the customer's size drops the category
+        # below MIN_RECOMMENDATIONS and M6 starts relaxing filters -- which
+        # makes category-filter tests fail for a reason that has nothing to do
+        # with category filtering. The real catalog carries every size on
+        # nearly every product; the fixture should not be narrower.
+        "sizes": ["XS", "S", "M", "L", "XL"],
         "description": "Broadens shoulders for athletic shapes",
         "length": "Regular",
     },

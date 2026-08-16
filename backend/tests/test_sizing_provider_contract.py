@@ -107,12 +107,24 @@ class TestProviderContract:
         Also the practical canary for an inches/cm mix-up.
         """
         m = _extract(provider)
-        for field in REQUIRED_FIELDS:
+        # Every field the provider populates, not just the required four.
+        #
+        # This used to check REQUIRED_FIELDS only, and that gap shipped a real
+        # bug: a provider returned a shoulder of 26.5cm (valid range 30-60),
+        # nothing objected because shoulder is optional, and the session was
+        # then permanently unreadable by the fit checker and the new-releases
+        # feed while the recommendation engine kept working. "Optional" means
+        # the field may be absent, not that it may hold any value.
+        for field in MEASUREMENT_RANGES:
+            value = getattr(m, field, None)
+            if value is None:
+                continue                      # not populated: legitimately optional
             low, high = MEASUREMENT_RANGES[field]
-            value = getattr(m, field)
             assert low <= value <= high, (
                 f"{field}={value} is outside the supported range {low}-{high} cm. "
-                f"If your vendor returns inches, convert to cm before returning."
+                f"If your vendor returns inches, convert to cm before returning. "
+                f"An out-of-range optional field is stored happily and then "
+                f"rejected by every module that validates its input."
             )
 
     def test_honors_the_supplied_height(self, provider):

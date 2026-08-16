@@ -10,8 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
+import hashlib
 import json
 import os
+import time
 
 from py_src.modules.m1_intake_orchestrator import IntakeOrchestrator, IntakeState
 from py_src.modules.m2_sizing_integration import SizingIntegration, build_sizing_provider
@@ -35,7 +37,11 @@ from py_src.persistence.session_repository import SQLiteSessionRepository
 from py_src.persistence.user_repository import UserRepository
 from py_src.utils.errors import ModuleError, GuardrailError, AuthError
 from py_src.utils.logger import logger
-from py_src.constants import CATEGORY_TO_SIZE_PROFILE_KEY
+from py_src.constants import (
+    CATEGORY_TO_SIZE_PROFILE_KEY,
+    SIZE_CHART_SOURCE,
+    STANDARD_SIZES,
+)
 
 # Initialize FastAPI app
 app = FastAPI(title="AI Styling Engine", version="1.0.0")
@@ -60,6 +66,72 @@ async def handle_auth_error(request, exc: AuthError):
     try/except body ever runs.
     """
     return JSONResponse(status_code=401, content={"detail": exc.message})
+
+
+# When this process started, and a hash of the reference data it loaded. Both
+# are reported by /health so a stale process can be spotted without guessing --
+# see that endpoint for why. Computed lazily so the catalog hash reflects what
+# was actually loaded at startup rather than what is on disk right now.
+PROCESS_STARTED_AT = time.time()
+
+
+def _source_digest():
+    """
+    Hash of every Python source file the app is built from.
+
+    The data hashes below catch an edited size chart or catalog, but they would
+    happily report "current" for a process running a month-old M5 -- which is
+    the more common way this goes wrong, since logic changes far more often than
+    the chart does. Read once at import, so it describes the code this process
+    actually loaded rather than what is on disk now.
+    """
+    root = os.path.dirname(os.path.abspath(__file__))
+    accumulator = hashlib.sha256()
+    for directory, _, filenames in sorted(os.walk(os.path.join(root, "py_src"))):
+        if "__pycache__" in directory:
+            continue
+        for filename in sorted(filenames):
+            if filename.endswith(".py"):
+                accumulator.update(
+                    open(os.path.join(directory, filename), "rb").read()
+                )
+    accumulator.update(open(os.path.join(root, "main.py"), "rb").read())
+    return accumulator.hexdigest()[:12]
+
+
+SOURCE_DIGEST = _source_digest()
+
+
+def runtime_fingerprint():
+    """
+    Short hashes of the size chart and catalog this process is serving.
+
+    Deliberately derived from the in-memory objects, not by re-reading the
+    files: re-reading would report what the source says today and hide exactly
+    the drift this is meant to expose.
+    """
+    def digest(payload):
+        return hashlib.sha256(
+            json.dumps(payload, sort_keys=True, default=str).encode()
+        ).hexdigest()[:12]
+
+    items = getattr(catalog, "items", None) or {}
+    catalog_state = sorted(
+        (slug, item.get("length"), tuple(item.get("sizes") or ()))
+        for slug, item in (items.items() if isinstance(items, dict) else [])
+    )
+    return {
+        "source": SOURCE_DIGEST,
+        # Which sizing provider this process started with. Comes from an env
+        # var, so unlike everything else here it cannot be checked against the
+        # source -- but it is the setting most easily lost across a restart, and
+        # losing it silently swaps real photo analysis for fixed demo numbers.
+        "sizing_provider": sizing_integration.provider.__class__.__name__,
+        "size_chart": digest(SIZE_CHART_SOURCE),
+        "sizes": list(STANDARD_SIZES),
+        "catalog": digest(catalog_state),
+        "product_count": len(catalog_state),
+    }
 
 
 # Initialize modules
@@ -142,6 +214,21 @@ class ConsentRecord(BaseModel):
 
 
 class CatalogProduct(BaseModel):
+    """
+    A product pushed through /catalog/sync.
+
+    Every field the engine reads has to appear here, because the endpoint
+    REPLACES the catalog with exactly these fields and anything absent is
+    silently dropped. It was already losing `silhouette` and `launched_at` --
+    which drive M6's ranking and M9's whole recency window -- so a single sync
+    would have degraded recommendations with no error anywhere. The
+    length/model fields would have joined them.
+
+    `length` defaults to None, not "Regular": two catalog products are delisted
+    upstream and deliberately carry no length, and a default would have quietly
+    reinstated the placeholder that made the length advice guess.
+    """
+
     slug: str
     name: str
     category: str
@@ -150,7 +237,13 @@ class CatalogProduct(BaseModel):
     colors: Optional[List[str]] = []
     sizes: Optional[List[str]] = []
     description: Optional[str] = ""
-    length: Optional[str] = "Regular"
+    length: Optional[str] = None
+    silhouette: Optional[str] = None
+    launched_at: Optional[str] = None
+    fit: Optional[str] = None
+    model_name: Optional[str] = None
+    model_height_cm: Optional[float] = None
+    model_size: Optional[str] = None
 
 
 # =========================================================================
@@ -242,8 +335,29 @@ def get_current_user_id(token: str = Depends(get_bearer_token)) -> str:
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "ok", "version": "1.0.0"}
+    """
+    Health check, plus a fingerprint of the data this process actually loaded.
+
+    The fingerprint exists because "the server is up" and "the server is running
+    your code" are different questions, and only the first one used to be
+    answerable. Python reads constants.py and products.json once at import, so a
+    process started before an edit keeps serving the old size chart and the old
+    catalog indefinitely, with a perfectly healthy /health. That has now caused
+    two separate false diagnoses -- a browser check that showed six sizes and a
+    wrong recommendation for half an hour, against a backend nobody had
+    restarted.
+
+    Comparing these hashes against the ones the current source produces makes
+    the mismatch a one-line check instead of an archaeology exercise:
+
+        python3 scripts/check_running_server.py
+    """
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "started_at": PROCESS_STARTED_AT,
+        "fingerprint": runtime_fingerprint(),
+    }
 
 
 @app.post("/profile")

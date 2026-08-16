@@ -1,5 +1,6 @@
 """Input validation and sanitization."""
 
+from py_src.constants import MEASUREMENT_RANGES
 from py_src.utils.sanitization import sanitize_text
 
 
@@ -49,17 +50,31 @@ class InputValidator:
         if height is not None and not isinstance(height, (int, float)):
             errors.append("height must be a number")
 
-        # Range checks (cm) - only if type is correct
-        if bust is not None and isinstance(bust, (int, float)) and (bust < 70 or bust > 150):
-            errors.append("bust out of range (70-150 cm)")
-        if waist is not None and isinstance(waist, (int, float)) and (waist < 55 or waist > 130):
-            errors.append("waist out of range (55-130 cm)")
-        if hips is not None and isinstance(hips, (int, float)) and (hips < 80 or hips > 160):
-            errors.append("hips out of range (80-160 cm)")
-        if height is not None and isinstance(height, (int, float)) and (height < 140 or height > 210):
-            errors.append("height out of range (140-210 cm)")
-        if inseam is not None and isinstance(inseam, (int, float)) and (inseam < 60 or inseam > 100):
-            errors.append("inseam out of range (60-100 cm)")
+        # Range checks (cm), driven from constants.MEASUREMENT_RANGES rather
+        # than numbers written out here.
+        #
+        # These used to be hardcoded, and they disagreed with the ranges M7 and
+        # M9 enforce when they READ a session back. Two fields diverged:
+        #
+        #   shoulder -- not checked here at all, but required to be 30-60 on
+        #               read. A session could therefore be accepted with any
+        #               shoulder value and then be permanently unreadable by the
+        #               fit checker and the new-releases feed, which answered
+        #               400 while the recommendation engine (which does not
+        #               validate shoulder) carried on working. That asymmetry
+        #               made it look like a bug in those two features.
+        #   inseam   -- 60-100 here versus 50-120 there, so a legitimate inseam
+        #               was rejected on entry.
+        #
+        # Sharing one source removes the whole class of problem: anything
+        # accepted on write is by construction acceptable on read.
+        for field in ("bust", "waist", "hips", "height", "shoulder", "inseam"):
+            value = measurements.get(field)
+            if value is None or not isinstance(value, (int, float)):
+                continue
+            low, high = MEASUREMENT_RANGES[field]
+            if value < low or value > high:
+                errors.append(f"{field} out of range ({low}-{high} cm)")
 
         return {"valid": len(errors) == 0, "errors": errors}
 

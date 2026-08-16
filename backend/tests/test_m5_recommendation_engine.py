@@ -170,21 +170,27 @@ class TestM5QueryBuilding:
         assert "shape_class" in query
         assert query["shape_class"] == "hourglass"
 
-    def test_query_includes_colors(self, recommendation_engine, completed_session):
-        """Query includes preferred colors from style profile."""
-        engine = recommendation_engine
-        query = engine._build_retrieval_query(completed_session)
-        assert "preferred_colors" in query
-        # Colors are title-cased to match catalog format
-        assert "Black" in query["preferred_colors"]
-        assert "Navy" in query["preferred_colors"]
+    def test_query_passes_colors_through_exactly_as_stored(
+        self, recommendation_engine, completed_session
+    ):
+        """
+        M4 canonicalises colours to the catalog's own spelling when it validates
+        them, so M5 must pass them through untouched. It used to title-case here
+        as well, which could never help -- M4 rejects an unrecognised spelling
+        before this code runs -- and mangled the lowercase generic buckets into
+        "Black", "Earth_Tones", which match no product at all.
+        """
+        stored = list(completed_session.style_profile.preferred_colors)
+        query = recommendation_engine._build_retrieval_query(completed_session)
+        assert query["preferred_colors"] == stored
 
     def test_multiword_colors_are_not_mangled(self, recommendation_engine, completed_session):
         """
-        Regression test: str.capitalize() lowercases every letter after the
-        first IN THE WHOLE STRING, so "Pageant Blue".capitalize() produces
-        "Pageant blue" -- which then fails to match the catalog's "Pageant
-        Blue" and silently drops every matching product. Must use .title().
+        Regression test: a multi-word catalog colour must reach M6 spelled
+        exactly as the catalog spells it, since M6 compares with `in`. An
+        earlier str.capitalize() turned "Pageant Blue" into "Pageant blue" and
+        silently dropped every matching product; the .title() that replaced it
+        was then removed in favour of not re-casing at all.
         """
         completed_session.style_profile.preferred_colors = ["Pageant Blue", "Sky Captain"]
         query = recommendation_engine._build_retrieval_query(completed_session)

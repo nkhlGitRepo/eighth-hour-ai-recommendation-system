@@ -11,6 +11,7 @@ Guardrails applied:
 - ConsentTracker: verify measurement consent before fit checking
 """
 
+import math
 from typing import Optional, Dict, List, Any
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
@@ -28,6 +29,10 @@ from py_src.constants import (
     SIZE_BOUNDARIES,
     WAIST_SIZE_BOUNDARIES,
     HIP_SIZE_BOUNDARIES,
+    GARMENT_LENGTH_CHART_IN,
+    COORD_LENGTH_CHART_ORDER,
+    LENGTH_CHART_REFERENCE_HEIGHT_CM,
+    LENGTH_NOTE_MIN_SHIFT,
 )
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
@@ -166,6 +171,14 @@ class FitChecker:
             recommended_size,
             note_dimensions,
         )
+
+        # Where the hem will actually land on this customer. Sized on
+        # circumference, so it is independent of everything above -- a garment
+        # can be a flawless fit through the body and still sit at a different
+        # point on the leg than the photograph shows.
+        length_note = self._generate_length_note(measurements.get("height"), product)
+        if length_note:
+            fit_notes.append(length_note)
 
         # Calculate overall confidence -- already rounded to 2 decimals in
         # _calculate_fit_scores, so this is guaranteed to equal
@@ -365,6 +378,167 @@ class FitChecker:
 
         return fit_scores
 
+    # Where each length class puts a hem on the body, in words. Keyed by
+    # category because the same class name means different things depending on
+    # the garment: "Cropped" is a midriff-length top but an above-the-ankle
+    # trouser, and "Short" is a waist-length vest but a pair of shorts. A single
+    # shared table produced "this will sit cropped above the waist on you" about
+    # a pair of trousers.
+    # Bare landmarks, with no leading preposition: the sentence supplies "at",
+    # "between ... and ...", "above" or "below" depending on where the hem lands.
+    # Baking "at" into the phrase produced "sit between at mid-calf and at full
+    # length".
+    _LANDMARK_PHRASES = {
+        "Skirts": {
+            "Mini": "the upper thigh", "Short": "the upper thigh",
+            "Knee": "the knee",
+            "Midi": "mid-calf", "Calf": "mid-calf",
+            "Maxi": "full length", "Full": "full length",
+        },
+        "Trousers": {
+            "Short": "the upper thigh",
+            "Capri": "mid-calf",
+            "Cropped": "the lower calf",
+            "Ankle": "the ankle",
+            "Full": "full length",
+        },
+        "Dresses": {
+            "Mini": "the upper thigh", "Short": "the upper thigh",
+            "Knee": "the knee",
+            "Midi": "mid-calf", "Calf": "mid-calf",
+            "Maxi": "full length", "Full": "full length",
+        },
+        "Tops": {
+            "Cropped": "the midriff",
+            "Short": "the waist",
+            "Regular": "the hip",
+            "Long": "the upper thigh",
+            "Thigh": "mid-thigh",
+            "Knee Length": "the knee", "Knee": "the knee",
+            "Calf Length": "mid-calf", "Calf": "mid-calf",
+            "Full Length": "full length", "Full": "full length",
+        },
+    }
+    _LANDMARK_PHRASES["Vests"] = _LANDMARK_PHRASES["Tops"]
+
+    @classmethod
+    def _length_reference_for(cls, category):
+        """
+        (inch chart, landmark phrasing) for a category, or ({}, {}).
+
+        Kept as one lookup so the two can never be fetched from different
+        categories -- reading a trouser length against a top's wording is
+        exactly the bug this replaced.
+        """
+        if category in GARMENT_LENGTH_CHART_IN:
+            return GARMENT_LENGTH_CHART_IN[category], cls._LANDMARK_PHRASES.get(category, {})
+        if category == "Co-ord Sets":
+            # One length tag describes whichever half carries it -- "Calf" for
+            # the skirt of a vest-and-skirt set, "Cropped" for the trousers.
+            # Merge both halves' charts and their wording in the same order, so
+            # a class always resolves against the chart it came from.
+            chart, phrases = {}, {}
+            for source in reversed(COORD_LENGTH_CHART_ORDER):
+                chart.update(GARMENT_LENGTH_CHART_IN[source])
+                phrases.update(cls._LANDMARK_PHRASES.get(source, {}))
+            return chart, phrases
+        return {}, {}
+
+    def _generate_length_note(self, height_cm, product):
+        """
+        Tell a customer where this hem will fall on *them*, when that differs
+        from where the photograph shows it.
+
+        The garment is a fixed number of inches long; the body it hangs on is
+        not. Eighth Hour's length guide states, for each class, the inches at
+        which the hem reaches a named landmark on their fit model -- so those
+        numbers are that model's own waist-to-knee, waist-to-calf and
+        waist-to-floor distances. Scaling them by the customer's height over
+        the model's gives the same landmarks on the customer, while the garment
+        stays the length it was cut. Whichever band it now falls in is where it
+        will actually sit.
+
+        No new body ratios are introduced: every distance used is one the
+        published chart already states. Returns None whenever anything needed
+        is missing or the shift is too small to be worth a sentence -- silence
+        is correct far more often than a note is.
+        """
+        length_class = product.get("length")
+        chart, phrases = self._length_reference_for(product.get("category"))
+        if not length_class or length_class not in chart:
+            return None
+        # isfinite, not just > 0: every comparison against NaN is False, so a
+        # NaN height slipped past a bare `<= 0` guard, divided through, and came
+        # out the far end as a confidently worded sentence about a hem landing
+        # "below full length".
+        if (not isinstance(height_cm, (int, float)) or isinstance(height_cm, bool)
+                or not math.isfinite(height_cm) or height_cm <= 0):
+            return None
+
+        reference_height = product.get("model_height_cm") or LENGTH_CHART_REFERENCE_HEIGHT_CM
+        if not reference_height:
+            return None
+
+        low, high = chart[length_class]
+        garment_inches = (low + high) / 2
+
+        # Convert to the equivalent length on the reference body: a taller
+        # customer's landmarks are further apart, so the same garment behaves
+        # like a shorter one relative to her frame.
+        equivalent = garment_inches * (reference_height / height_cm)
+
+        # Require the shift to be bigger than the class's own range, otherwise
+        # the note claims precision the chart doesn't have.
+        if abs(equivalent - garment_inches) < LENGTH_NOTE_MIN_SHIFT * (high - low):
+            return None
+
+        # Where it now lands, described with this chart's own landmarks. Ordered
+        # by inches; duplicate ranges (Midi and Calf are the same measurement)
+        # collapse to a single entry.
+        def phrase(name):
+            return phrases.get(name, name.lower())
+
+        # Bands ordered by length and reduced to distinct *places*. Two things
+        # make that necessary: a chart names the same measurement twice (Midi
+        # and Calf are both 28-32"), and a merged co-ord chart can carry two
+        # different classes that land in the same spot (a skirt's Calf at 28-32"
+        # beside a trouser's Capri at 33-36"). Left unmerged, a hem between them
+        # was described as sitting "between mid-calf and mid-calf".
+        places = []
+        for span, name in sorted({span: name for name, span in chart.items()}.items()):
+            where = phrase(name)
+            if places and places[-1][1] == where:
+                (previous_low, _), _ = places[-1]
+                places[-1] = ((previous_low, span[1]), where)
+            else:
+                places.append((span, where))
+
+        landed = None
+        for index, ((band_low, band_high), where) in enumerate(places):
+            if band_low <= equivalent <= band_high:
+                landed = f"at {where}"
+                break
+            if equivalent < band_low:
+                # Falls between two named landmarks -- the common case, since
+                # the chart's bands don't touch. Naming the nearer one alone
+                # would overstate; say which two it sits between.
+                landed = (
+                    f"above {where}" if index == 0
+                    else f"between {places[index - 1][1]} and {where}"
+                )
+                break
+        if landed is None:
+            landed = f"below {places[-1][1]}"
+
+        here = f"at {phrase(length_class)}"
+        if landed == here:
+            return None     # two names for the same place
+
+        return (
+            f"You're {'taller' if height_cm > reference_height else 'shorter'} than our fit "
+            f"model, so this will sit {landed} on you rather than {here}."
+        )
+
     def _generate_fit_notes(
         self,
         measurements: Dict[str, float],
@@ -397,47 +571,66 @@ class FitChecker:
         waist_diff = measurements["waist"] - rec_measurements["waist"]
         hips_diff = measurements["hips"] - rec_measurements["hips"]
 
-        # Generate primary recommendation. Under boundary-aware scoring
-        # (see _dimension_confidence_from_boundary), the recommended size's
-        # own score can never fall below FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE
-        # (0.85) -- that's the whole point of the guarantee it provides.
-        # The thresholds below are calibrated to that: 0.95 splits the
-        # boundary-edge ramp roughly in half, so "is a good fit" actually
-        # triggers for a meaningful stretch near a boundary (not just the
-        # last sliver right at the edge), rather than "fits perfectly"
-        # dominating almost the entire size. The bottom two tiers stay
-        # reachable for the rarer paths without that guarantee (a custom
-        # per-product size chart, or a category with no single driving
-        # measurement, like Co-ord Sets' original blended fallback).
-        rec_score = fit_scores[recommended_size]
-        if rec_score >= 0.95:
-            notes.append(f"Size {recommended_size} fits perfectly.")
-        elif rec_score >= 0.85:
-            notes.append(f"Size {recommended_size} is a good fit.")
-        elif rec_score >= 0.65:
-            notes.append(f"Size {recommended_size} is acceptable with possible minor adjustments.")
-        else:
-            notes.append(f"Size {recommended_size} may require alterations for optimal fit.")
-
-        # Add measurement-specific guidance -- only for dimensions that
-        # actually matter for this category (see docstring above).
+        # Measurement-specific guidance first, because whether any of it fires
+        # changes what the headline below is allowed to claim. Only dimensions
+        # that actually matter for this category (see docstring above).
+        caveats = []
         if "bust" in note_dimensions:
             if bust_diff < -2:
-                notes.append("Recommended size runs large in the bust.")
+                caveats.append("Recommended size runs large in the bust.")
             elif bust_diff > 2:
-                notes.append("Recommended size runs small in the bust.")
+                caveats.append("Recommended size runs small in the bust.")
 
         if "waist" in note_dimensions:
             if waist_diff < -2:
-                notes.append("Recommended size is loose in the waist.")
+                caveats.append("Recommended size is loose in the waist.")
             elif waist_diff > 2:
-                notes.append("Recommended size is snug in the waist.")
+                caveats.append("Recommended size is snug in the waist.")
 
         if "hips" in note_dimensions:
             if hips_diff < -2:
-                notes.append("Recommended size is loose in the hips.")
+                caveats.append("Recommended size is loose in the hips.")
             elif hips_diff > 2:
-                notes.append("Recommended size is snug in the hips.")
+                caveats.append("Recommended size is snug in the hips.")
+
+        # Headline. Under boundary-aware scoring (see
+        # _dimension_confidence_from_boundary), the recommended size's own score
+        # can never fall below FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE (0.85) --
+        # that's the whole point of the guarantee it provides. The thresholds
+        # below are calibrated to that: 0.95 splits the boundary-edge ramp
+        # roughly in half, so "is a good fit" actually triggers for a meaningful
+        # stretch near a boundary (not just the last sliver right at the edge),
+        # rather than the top tier dominating almost the entire size. The bottom
+        # two tiers stay reachable for the rarer paths without that guarantee (a
+        # custom per-product size chart, or a category with no single driving
+        # measurement, like Co-ord Sets' original blended fallback).
+        #
+        # The top tier is gated on there being no caveats. rec_score measures
+        # only the dimension that drives this category's size (bust for a dress,
+        # hips for a skirt -- see FIT_SCORE_DIMENSION_WEIGHTS), while the caveats
+        # above cover everything the garment touches. So a dress could score a
+        # flawless 1.0 on the bust and still be loose through the hips, and the
+        # customer was told "Size M fits perfectly." immediately followed by
+        # "Recommended size is loose in the hips." Both statements were true of
+        # what they each measured, and together they read as the system
+        # contradicting itself in consecutive sentences. "Your best fit" claims
+        # exactly what the score supports -- this is the size to buy -- without
+        # claiming the fit is flawless everywhere.
+        rec_score = fit_scores[recommended_size]
+        if rec_score >= 0.95:
+            headline = (
+                f"Size {recommended_size} is your best fit." if caveats
+                else f"Size {recommended_size} fits perfectly."
+            )
+        elif rec_score >= 0.85:
+            headline = f"Size {recommended_size} is a good fit."
+        elif rec_score >= 0.65:
+            headline = f"Size {recommended_size} is acceptable with possible minor adjustments."
+        else:
+            headline = f"Size {recommended_size} may require alterations for optimal fit."
+
+        notes.append(headline)
+        notes.extend(caveats)
 
         # Alternative size suggestion: the best-scoring size other than
         # recommended_size, capped at recommended_size's own score (a

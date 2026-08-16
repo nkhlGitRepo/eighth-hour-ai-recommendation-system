@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
-from py_src.constants import STANDARD_SIZE_CHART, SIZE_STEP_CM
+from py_src.constants import STANDARD_SIZE_CHART, SIZE_STEP_CM, STANDARD_SIZES
 from py_src.modules.m7_fit_checker import FitChecker
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
@@ -319,6 +319,57 @@ class TestM7AlgorithmAccuracy:
         assert result1 == result2, "Results should be identical for same input"
 
 
+class TestM7NotesDoNotContradictThemselves:
+    """
+    The notes are shown to the customer as one list, so they have to read as one
+    coherent statement. The score behind the headline covers only the dimension
+    that drives the category's size, while the caveats cover everything the
+    garment touches -- so without care a dress scoring 1.0 on the bust produced
+    "Size M fits perfectly." directly above "Recommended size is loose in the
+    hips."
+    """
+
+    @pytest.mark.parametrize("category,off_dimension", [
+        ("Dresses", "hips"),        # sized on bust, but covers the hips
+        ("Co-ord Sets", "waist"),
+        ("Skirts", "waist"),        # sized on hips, but covers the waist
+        ("Trousers", "waist"),
+    ])
+    def test_perfect_claim_never_sits_next_to_a_caveat(
+        self, fit_checker, category, off_dimension
+    ):
+        product = {"sku": f"{category}-1", "category": category, "sizes": STANDARD_SIZES}
+        # Dead-centre on every dimension, then push one the garment covers but
+        # doesn't size on far enough out to trigger its caveat.
+        measurements = {**STANDARD_SIZE_CHART["M"], "height": 165.0}
+        measurements[off_dimension] += 2 * SIZE_STEP_CM[off_dimension]
+
+        notes = fit_checker.check_fit("test_user", measurements, product)["fit_notes"]
+        text = " ".join(notes).lower()
+        assert off_dimension in text, (
+            f"a {category} that misfits in the {off_dimension} should say so; got {notes}"
+        )
+        assert "fits perfectly" not in text, (
+            f"claimed a perfect fit while also reporting a {off_dimension} problem: {notes}"
+        )
+
+    def test_still_says_perfect_when_nothing_is_wrong(self, fit_checker):
+        """The softened wording must not swallow the genuinely perfect case."""
+        product = {"sku": "d-1", "category": "Dresses", "sizes": STANDARD_SIZES}
+        measurements = {**STANDARD_SIZE_CHART["M"], "height": 165.0}
+        notes = fit_checker.check_fit("test_user", measurements, product)["fit_notes"]
+        assert "fits perfectly" in " ".join(notes).lower(), notes
+
+    def test_headline_always_comes_first(self, fit_checker):
+        """The caveats qualify the headline, so they have to follow it."""
+        product = {"sku": "s-1", "category": "Skirts", "sizes": STANDARD_SIZES}
+        measurements = {**STANDARD_SIZE_CHART["M"], "height": 165.0}
+        measurements["waist"] += 2 * SIZE_STEP_CM["waist"]
+        notes = fit_checker.check_fit("test_user", measurements, product)["fit_notes"]
+        assert notes[0].startswith("Size "), f"first note should be the headline: {notes}"
+        assert len(notes) > 1
+
+
 class TestM7FitNotes:
     """Test fit guidance note generation."""
 
@@ -330,16 +381,23 @@ class TestM7FitNotes:
         notes_text = " ".join(result["fit_notes"]).lower()
         assert "fits perfectly" in notes_text, "Perfect fit should mention 'fits perfectly'"
 
-    def test_loose_bust_generates_specific_note(self, fit_checker, test_product):
-        """Loose bust should generate specific note about bust, not other measurements."""
-        # A full size step below what M is cut for, with waist and hips left at
-        # M exactly, so the bust is unambiguously the dimension that misfits.
+    def test_loose_bust_generates_specific_note(self, fit_checker):
+        """A garment that will sit loose in the bust must say so.
+
+        The product is stocked in ONE size, well above this customer's bust.
+        That constraint is the whole point: a top is sized on the bust, so if
+        every size is on offer the recommendation simply follows the bust and
+        always "fits perfectly" -- there is no misfit left to describe. The
+        note only has a job when the size a customer can actually buy does not
+        match them, which is exactly the single-size case.
+        """
+        only_large = {"sku": "top-123", "name": "Test Top",
+                      "sizes": ["L"], "category": "Tops"}
         measurements = {
-            **STANDARD_SIZE_CHART["M"],
-            "bust": STANDARD_SIZE_CHART["M"]["bust"] - SIZE_STEP_CM["bust"],
+            **STANDARD_SIZE_CHART["XS"],      # a much smaller body...
             "height": 165.0,
         }
-        result = fit_checker.check_fit("test_user", measurements, test_product)
+        result = fit_checker.check_fit("test_user", measurements, only_large)
 
         # Verify note exists and mentions the specific issue
         notes_text = " ".join(result["fit_notes"]).lower()
@@ -1162,12 +1220,21 @@ class TestM7CategoryAwareDimensionWeights:
         care about bust."""
         from py_src.constants import STANDARD_SIZES
 
+        # Hips at exactly what L is cut for, taken from the chart rather than
+        # written out -- a transcribed number silently stops meaning "L's centre"
+        # the moment the size chart is revised.
         product = {"sku": "skirt-check", "category": "Skirts", "sizes": STANDARD_SIZES}
-        measurements = {"bust": 130.0, "waist": 87.0, "hips": 104.0, "height": 165.0}
+        measurements = {
+            "bust": 130.0,                                   # wildly off, and irrelevant to a skirt
+            "waist": STANDARD_SIZE_CHART["L"]["waist"],
+            "hips": STANDARD_SIZE_CHART["L"]["hips"],
+            "height": 165.0,
+        }
         result = fit_checker.check_fit("test_user", measurements, product)
 
         assert result["recommended_size"] == "L", (
-            f"Expected L (hips=104 is L's own chart center), got {result['recommended_size']}"
+            f"Expected L (hips={measurements['hips']} is L's own chart centre), "
+            f"got {result['recommended_size']}"
         )
         top_scored = max(result["fit_scores"].items(), key=lambda x: x[1])[0]
         assert top_scored == "L"

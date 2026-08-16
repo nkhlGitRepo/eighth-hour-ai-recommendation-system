@@ -932,3 +932,105 @@ form button:not([class]) {
   .find-grid { grid-template-columns: 1fr; }
   .size-banner img { height: 150px; }
 }
+
+/* ------------------------------------------------------------ cart drawer -- */
+/* Geometry taken from the storefront's own drawer: a 400px panel entering from
+   the right over a translucent backdrop, capped so it never fills a narrow
+   screen edge to edge. */
+.cart-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  visibility: hidden;
+  transition: visibility 0.3s ease;
+}
+.cart-drawer.open { visibility: visible; }
+
+.cart-drawer__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(18, 18, 18, 0.5);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.cart-drawer.open .cart-drawer__overlay { opacity: 1; }
+
+.cart-drawer__panel {
+  position: relative;
+  width: 400px;
+  max-width: calc(100vw - 30px);
+  height: 100%;
+  background: var(--color-bg);
+  border-left: 1px solid var(--color-line);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.cart-drawer.open .cart-drawer__panel { transform: translateX(0); }
+
+.cart-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--color-line);
+}
+.cart-drawer__header h2 { margin: 0; font-size: 1.3rem; font-weight: 400; }
+.cart-drawer__close {
+  width: 32px; height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* The list scrolls; the footer below does not, so the total and checkout stay
+   visible however many items are in the cart. */
+.cart-drawer__items { flex: 1; overflow-y: auto; padding: 8px 24px; }
+
+.cart-drawer__empty { text-align: center; padding: 56px 0; }
+.cart-drawer__empty p { color: var(--color-muted); margin-bottom: 20px; }
+
+.cart-drawer__row {
+  display: grid;
+  grid-template-columns: 76px 1fr auto;
+  gap: 14px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+.cart-drawer__row img { width: 76px; height: 98px; object-fit: cover; background: var(--color-surface); }
+.cart-drawer__meta a { font-size: 0.92rem; display: block; margin-bottom: 4px; }
+.cart-drawer__meta p { margin: 0; font-size: 0.82rem; }
+.cart-drawer__price { font-size: 0.92rem; white-space: nowrap; }
+.cart-drawer__remove {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.cart-drawer__remove:hover { color: var(--color-text); }
+
+.cart-drawer__footer { border-top: 1px solid var(--color-line); padding: 20px 24px 24px; }
+.cart-drawer__total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1rem;
+  margin-bottom: 6px;
+}
+.cart-drawer__note { margin: 0 0 16px; font-size: 0.8rem; color: var(--color-muted); }
+.cart-drawer__checkout { width: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-drawer, .cart-drawer__overlay, .cart-drawer__panel { transition: none; }
+}

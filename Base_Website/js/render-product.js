@@ -43,26 +43,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("pageTitle").textContent = `${product.name} — Eighth Hour`;
 
   const recommendedSize = await getRecommendedSize(product.slug);
+  // With no profile to go on, pre-select the middle of the run rather than the
+  // first entry. The list is ordered smallest-first, so sizes[0] means the
+  // smallest size in the shop is pre-selected for every anonymous shopper --
+  // which was already a poor guess at XS and became a worse one when XXS was
+  // added to the chart. The median is the least-wrong default, and a shopper
+  // who ignores the selector is far likelier to want it than an extreme.
   const defaultSize = recommendedSize && product.sizes.includes(recommendedSize)
     ? recommendedSize
-    : product.sizes[0];
-  const selection = { color: product.colors[0], size: defaultSize };
-  const mainImg = productImage(product, 0, product.name, 700, 900);
-  // One thumbnail per photograph we actually have, rather than a fixed three
-  // -- a couple of products only have two shots on the site.
-  const galleryCount = (product.images && product.images.length) || 3;
-  const thumbs = Array.from({ length: galleryCount }, (_, i) => ({
-    src: productImage(product, i, product.name, 200, 260),
-    label: i === 0 ? product.name : `${product.name} view ${i + 1}`,
-  }));
+    : product.sizes[Math.floor(product.sizes.length / 2)];
+  const selection = { color: preferredColorFor(product), size: defaultSize };
+  // The gallery is rebuilt whenever the colour changes -- see renderGallery().
 
   container.innerHTML = `
     <div class="product-detail">
       <div>
-        <div class="gallery-main"><img id="mainImage" src="${mainImg}" alt="${product.name}" /></div>
-        <div class="gallery-thumbs">
-          ${thumbs.map((t) => `<img src="${t.src}" alt="${t.label}" data-full="${productImage(product, thumbs.indexOf(t), product.name, 700, 900)}" />`).join("")}
-        </div>
+        <div class="gallery-main"><img id="mainImage" alt="${product.name}" /></div>
+        <div class="gallery-thumbs" id="galleryThumbs"></div>
       </div>
       <div>
         ${product.bestSeller ? '<span class="badge-best">Best Seller</span>' : ""}
@@ -108,13 +105,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     </div>
   `;
 
-  wireUpOptionRow("colorRow", "selectedColor", selection, "color");
+  renderGallery(product, selection.color);
+  // Selecting a colour re-renders the gallery, so the customer sees the
+  // garment in the colour they picked rather than the first colourway.
+  wireUpOptionRow("colorRow", "selectedColor", selection, "color",
+                  (colour) => renderGallery(product, colour));
   wireUpOptionRow("sizeRow", "selectedSize", selection, "size");
-  wireUpGallery();
 
   document.getElementById("addToCartBtn").addEventListener("click", () => {
     addToCart(product.slug, selection.color, selection.size, 1);
-    alert(`Added to cart: ${product.name} — ${selection.color}, size ${selection.size}`);
+    // Open the drawer rather than firing an alert: it confirms what was added
+    // and shows the running total, which is what the storefront does.
+    if (typeof openCartDrawer === "function") openCartDrawer();
   });
 });
 
@@ -157,7 +159,7 @@ function swatchHtml(value, selected) {
   return `<button type="button" class="swatch ${selected ? "selected" : ""}" data-value="${value}">${value}</button>`;
 }
 
-function wireUpOptionRow(rowId, labelId, selection, key) {
+function wireUpOptionRow(rowId, labelId, selection, key, onChange) {
   const row = document.getElementById(rowId);
   row.querySelectorAll(".swatch").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -165,6 +167,36 @@ function wireUpOptionRow(rowId, labelId, selection, key) {
       document.getElementById(labelId).textContent = btn.dataset.value;
       row.querySelectorAll(".swatch").forEach((b) => b.classList.remove("selected"));
       btn.classList.add("selected");
+      if (onChange) onChange(btn.dataset.value);
     });
   });
+}
+
+/**
+ * Draw the gallery for one colourway.
+ *
+ * Photographs are stored per colour, and the count differs between them -- some
+ * colours have three shots on the real site, some only one -- so the thumbnail
+ * strip is built from what actually exists rather than a fixed number, and is
+ * hidden entirely when there is only a single photograph to show.
+ */
+function renderGallery(product, colour) {
+  const main = document.getElementById("mainImage");
+  const strip = document.getElementById("galleryThumbs");
+  if (!main || !strip) return;
+
+  const count = productImageCount(product, colour) || 1;
+  main.src = productImage(product, 0, product.name, 700, 900, colour);
+  main.alt = `${product.name} in ${colour}`;
+
+  strip.innerHTML = Array.from({ length: count }, (_, i) => {
+    const label = i === 0 ? `${product.name} in ${colour}`
+                          : `${product.name} in ${colour}, view ${i + 1}`;
+    return `<img src="${productImage(product, i, product.name, 200, 260, colour)}"
+                 alt="${label}"
+                 data-full="${productImage(product, i, product.name, 700, 900, colour)}" />`;
+  }).join("");
+  strip.hidden = count < 2;
+
+  wireUpGallery();
 }

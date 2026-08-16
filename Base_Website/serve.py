@@ -25,6 +25,19 @@ import sys
 
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
+    # Declare UTF-8 on text responses. Without it a classic script inherits the
+    # document's encoding, so a page that forgets <meta charset> renders any
+    # non-ASCII character in the JS (the "·" separators in the cart, the em
+    # dashes in copy) as mojibake. Stating it here removes the dependency.
+    extensions_map = {
+        **http.server.SimpleHTTPRequestHandler.extensions_map,
+        ".html": "text/html; charset=utf-8",
+        ".js": "text/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
+        ".json": "application/json; charset=utf-8",
+        ".svg": "image/svg+xml; charset=utf-8",
+    }
+
     def end_headers(self):
         # no-store: don't write to cache at all. Belt-and-braces headers for
         # older browsers that ignore it.

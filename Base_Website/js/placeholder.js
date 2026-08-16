@@ -37,14 +37,84 @@ const SITE_ROOT = (function () {
  * @param index    which gallery image (0 = primary)
  * @param label    alt/placeholder text when falling back
  */
-function productImage(product, index = 0, label = "", width = 600, height = 800) {
+/**
+ * The customer's colour preferences from their style profile, parsed once per
+ * page rather than on every card.
+ */
+let _preferredColors = null;
+function preferredColors() {
+  if (_preferredColors) return _preferredColors;
+  try {
+    const saved = JSON.parse(localStorage.getItem("intakeSession") || "{}");
+    _preferredColors = (saved.styleProfile && saved.styleProfile.preferred_colors) || [];
+  } catch (error) {
+    _preferredColors = [];        // corrupt storage: behave as if none were set
+  }
+  return _preferredColors;
+}
+
+/**
+ * Which colourway to show a product in, absent an explicit choice.
+ *
+ * If the customer picked colour preferences and this product comes in one of
+ * them, that colour wins -- so a recommendation card, and the product page it
+ * leads to, both show the garment as they would actually buy it. Where several
+ * preferred colours match, the product's own first matching colour is used:
+ * deliberately independent of the order the preference checkboxes happened to
+ * be ticked in, since they are a set rather than a ranking, so the same product
+ * always resolves the same way.
+ *
+ * No preferences, or no overlap, gives the product's first colour -- exactly
+ * what a visitor with no style profile sees.
+ */
+function preferredColorFor(product) {
+  const colors = (product && product.colors) || [];
+  if (!colors.length) return null;
+  const wanted = preferredColors();
+  if (!wanted.length) return colors[0];
+  const set = new Set(wanted.map((c) => String(c).trim().toLowerCase()));
+  return colors.find((c) => set.has(String(c).trim().toLowerCase())) || colors[0];
+}
+
+function productImage(product, index = 0, label = "", width = 600, height = 800, color = undefined) {
   const item =
     typeof product === "string"
       ? (typeof PRODUCTS !== "undefined" && PRODUCTS.find((p) => p.slug === product))
       : product;
-  const src = item && item.images && item.images[index];
+
+  // Photographs are stored per colourway, so a customer selecting a colour sees
+  // the garment in THAT colour rather than whichever one happens to be first.
+  // Falls back to the default set when a colour has no photography of its own
+  // (one variant on the real site genuinely has none), so the gallery still
+  // shows the product instead of collapsing to a placeholder.
+  // No explicit colour means "whatever this customer should see" -- so every
+  // card across the site picks up the preferred colourway without each call
+  // site having to know about preferences. The one caller that must NOT do
+  // this is the cart, which passes the colour that was actually added.
+  const wanted = color === undefined ? preferredColorFor(item) : color;
+
+  let set = item && item.images;
+  if (wanted && item && item.imagesByColor && item.imagesByColor[wanted]) {
+    set = item.imagesByColor[wanted];
+  }
+
+  const src = set && set[index];
   if (src) return SITE_ROOT + src;
   return placeholderImage(label || (item && item.name) || String(product), width, height);
+}
+
+/** How many photographs exist for a product in a given colour. */
+function productImageCount(product, color = undefined) {
+  const item =
+    typeof product === "string"
+      ? (typeof PRODUCTS !== "undefined" && PRODUCTS.find((p) => p.slug === product))
+      : product;
+  if (!item) return 0;
+  const wanted = color === undefined ? preferredColorFor(item) : color;
+  if (wanted && item.imagesByColor && item.imagesByColor[wanted]) {
+    return item.imagesByColor[wanted].length;
+  }
+  return (item.images || []).length;
 }
 
 function placeholderImage(label, width = 600, height = 800) {

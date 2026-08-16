@@ -229,7 +229,27 @@ class PreferenceCapture:
             raise ModuleError("Colors must be a list", "M4")
 
         valid_colors = self._valid_colors()
-        valid = [c for c in colors if c in valid_colors]
+        # Match case-insensitively but store the catalog's own spelling. Two
+        # reasons this has to canonicalise here rather than anywhere else:
+        #
+        #   * M6 filters products with `c in preferred_colors`, an exact string
+        #     comparison against "Ebony", "Sky Captain". A stored "ebony"
+        #     matches nothing, so the colour filter silently excludes the whole
+        #     catalog and M6 relaxes it away -- the customer's colour choice
+        #     quietly stops affecting anything, with no error to notice.
+        #   * M5 used to re-case on the way out, which could never help: M4 had
+        #     already rejected the request outright. Now that exactly one layer
+        #     decides the spelling, everything downstream can use it verbatim.
+        canonical = {c.casefold(): c for c in valid_colors}
+        valid, seen = [], set()
+        for color in colors:
+            if not isinstance(color, str):
+                continue
+            match = canonical.get(color.casefold())
+            if match is not None and match not in seen:
+                seen.add(match)
+                valid.append(match)
+
         if len(valid) == 0 and len(colors) > 0:
             raise ModuleError(
                 f"No valid colors. Valid options: {valid_colors}", "M4"

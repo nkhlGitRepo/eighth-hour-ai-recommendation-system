@@ -119,6 +119,24 @@ class IntakeFlow {
       styleProfile: this.styleProfile,
       recommendations: this.recommendations,
     }));
+
+    // `currentSessionId` is the key every OTHER page reads to find the
+    // customer's profile: New Releases, the product page's fit-check widget,
+    // the homepage recommendation strip, and the header's "My Recommendations"
+    // link. It used to be written only by the two buttons on the final screen,
+    // so a customer who completed their profile and then navigated via the
+    // header left all of those believing no profile existed. The Recommendations
+    // page was the one exception, because it also accepts ?session= in the URL
+    // and the completion button supplies it -- which is why that page alone
+    // appeared to work. Kept in step with the session here so there is one
+    // writer rather than a side effect of a particular click.
+    if (this.sessionId) {
+      localStorage.setItem('currentSessionId', this.sessionId);
+    } else {
+      // Never store the string "null" -- every consumer treats any value as a
+      // usable session id, so a stale placeholder is worse than an absent key.
+      localStorage.removeItem('currentSessionId');
+    }
   }
 
   attachEventListeners() {
@@ -898,28 +916,49 @@ class IntakeFlow {
     document.getElementById('profileNext').disabled = false;
   }
 
-  displayRecommendationsPreview() {
+  async displayRecommendationsPreview() {
     const container = document.getElementById('recommendationPreview');
     if (!container) return;
 
-    if (!this.recommendations || this.recommendations.length === 0) {
+    // Recommendations are loaded once, when preferences are submitted. Returning
+    // to this screen later -- a reload, or restoreSession() putting the customer
+    // back on step 5 -- leaves the list empty, and this used to sit on
+    // "Loading recommendations..." forever because nothing ever fetched them
+    // again. Fetch them here instead of assuming an earlier step did.
+    if ((!this.recommendations || this.recommendations.length === 0) && this.sessionId) {
       container.innerHTML = '<p style="text-align: center; color: #999;">Loading recommendations...</p>';
+      await this.loadRecommendations();
+      this.saveSessionState();
+    }
+
+    if (!this.recommendations || this.recommendations.length === 0) {
+      container.innerHTML =
+        '<p style="text-align: center; color: #999;">' +
+        'We couldn\'t load your recommendations just now. ' +
+        '<a href="recommendations.html">View them here</a>.</p>';
       return;
     }
 
     const preview = this.recommendations.slice(0, 4);
+
+    // Reuses the storefront's own product card so this preview matches the
+    // rest of the site. It previously drew a grey gradient box with the product
+    // name written inside it -- a stand-in from before the catalog had any
+    // photography, which was simply never revisited once real images landed.
     container.innerHTML = `
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
-        ${preview.map(product => `
-          <div style="text-align: center;">
-            <div style="width: 100%; aspect-ratio: 3/4; background: linear-gradient(135deg, #f5f5f5 0%, #efefef 100%); border-radius: 8px; margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: #999;">
-              ${product.name}
+      <div class="product-grid completion-preview">
+        ${preview.map(product => {
+          const slug = product.slug || product.sku;
+          return `
+          <a class="product-card" href="../../product.html?slug=${slug}">
+            <div class="thumb">
+              <img src="${productImage(slug, 0, product.name, 450, 600)}"
+                   alt="${product.name}" loading="lazy" />
             </div>
-            <h4 style="margin: 0.5rem 0 0.25rem 0; font-size: 0.9rem;">${product.name}</h4>
-            <p style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.85rem;">${product.category}</p>
-            <p style="margin: 0; font-weight: 600; color: #333;">$${product.price.toFixed(2)}</p>
-          </div>
-        `).join('')}
+            <div class="name">${product.name}</div>
+            <div class="price">$${product.price.toFixed(2)}</div>
+          </a>`;
+        }).join('')}
       </div>
     `;
   }
@@ -937,12 +976,12 @@ class IntakeFlow {
   }
 
   viewRecommendations() {
-    localStorage.setItem('currentSessionId', this.sessionId);
+    this.saveSessionState();
     window.location.href = `./recommendations.html?session=${this.sessionId}`;
   }
 
   continueShopping() {
-    localStorage.setItem('currentSessionId', this.sessionId);
+    this.saveSessionState();
     window.location.href = '../../index.html';
   }
 }

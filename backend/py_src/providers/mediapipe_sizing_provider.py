@@ -678,13 +678,25 @@ class MediaPipeSizingProvider(SizingProvider):
             already inside the supported range).
         """
         adjusted = []
-        for field in ("bust", "waist", "hips"):
+        # "shoulder" is stored under a different key because anthropometry.py
+        # returns it as a breadth diagnostic; it is mapped here so it gets the
+        # same treatment. It was previously left unclamped and passed straight
+        # into Measurements, so a photo could persist a shoulder outside the
+        # supported 30-60cm range -- which M9 (new releases) and M7 (fit check)
+        # then refused with a 400, breaking both features for that customer
+        # while recommendations, which does not validate shoulder, kept working.
+        FIELD_KEYS = {"bust": "bust", "waist": "waist", "hips": "hips",
+                      "shoulder": "shoulder_cm"}
+        for field, key in FIELD_KEYS.items():
             low, high = MEASUREMENT_RANGES[field]
-            value = derived[field]
+            value = derived[key]
 
             # Beyond this margin outside the range, the scale itself is wrong.
+            # Shoulder is exempt from the hard rejection: it is an optional
+            # field that nothing sizes on, so a poor shoulder estimate is not
+            # reason enough to refuse a photo whose bust/waist/hips are sound.
             slack = (high - low) * OUT_OF_RANGE_SLACK
-            if value < low - slack or value > high + slack:
+            if field != "shoulder" and (value < low - slack or value > high + slack):
                 raise ModuleError(
                     "The measurements we worked out from that photo don't look "
                     f"right ({field} came to {value:.0f} cm). Please try a "
@@ -694,10 +706,10 @@ class MediaPipeSizingProvider(SizingProvider):
                 )
 
             if value < low:
-                derived[field] = float(low)
+                derived[key] = float(low)
                 adjusted.append(field)
             elif value > high:
-                derived[field] = float(high)
+                derived[key] = float(high)
                 adjusted.append(field)
 
         if adjusted:

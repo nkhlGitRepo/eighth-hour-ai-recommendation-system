@@ -19,6 +19,8 @@ absolute counts against shared tables.
 """
 
 import uuid
+
+from py_src.constants import STANDARD_SIZE_CHART
 import pytest
 from fastapi.testclient import TestClient
 
@@ -160,18 +162,29 @@ class TestFitCheckAgreesWithShapeProfile:
         client.post("/consent", json={
             "user_id": real_user_id, "photo_consent": True, "measurement_consent": True,
         })
-        # bust=96 -> M3 classifies tops as "M"; hips=92 -> M3 classifies
-        # skirts as "S" -- a body where the bust-driven and hips-driven
-        # category sizes genuinely differ, which is exactly what exposes
-        # the bug (a single bust+waist+hips-blended fit-check average
-        # disagreeing with M3's single-measurement, category-specific size).
+        # A body whose bust-driven and hips-driven category sizes genuinely
+        # differ -- M on top, S below -- which is exactly what exposes the bug
+        # (a single bust+waist+hips-blended fit-check average disagreeing with
+        # M3's single-measurement, category-specific size). The numbers come
+        # from the chart rather than being written out: transcribed values stop
+        # meaning "M on top, S below" the moment the chart is revised, and this
+        # test then fails for a reason that has nothing to do with what it
+        # guards.
         confirm = client.post("/intake/confirm", json={
             "session_id": session_id,
-            "manual_overrides": {"bust": 96, "waist": 84, "hips": 92, "height": 165},
+            "manual_overrides": {
+                "bust": STANDARD_SIZE_CHART["M"]["bust"],
+                "waist": STANDARD_SIZE_CHART["M"]["waist"],
+                "hips": STANDARD_SIZE_CHART["S"]["hips"],
+                "height": 165,
+            },
         }).json()
         size_by_category = confirm["shape_profile"]["size_recommendation_by_category"]
         assert size_by_category["tops"] == "M"
         assert size_by_category["skirts"] == "S"
+        assert size_by_category["tops"] != size_by_category["skirts"], (
+            "this test is only meaningful while the two disagree"
+        )
 
         client.post("/intake/preferences", json={
             "session_id": session_id,

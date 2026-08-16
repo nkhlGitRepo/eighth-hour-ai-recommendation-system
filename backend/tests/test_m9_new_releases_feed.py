@@ -8,7 +8,8 @@ from py_src.modules.m6_catalog_kb import CatalogKB
 from py_src.modules.m7_fit_checker import FitChecker
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
-from py_src.constants import SHAPE_CATEGORY_AFFINITY, SIZE_BOUNDARIES
+from py_src.constants import SHAPE_CATEGORY_AFFINITY, SIZE_BOUNDARIES, STANDARD_SIZES
+from py_src.utils.sizing import infer_size_from_bust
 from py_src.utils.errors import ModuleError
 
 
@@ -220,19 +221,20 @@ class TestM9ScoreProductForProfile:
         assert score == 0.0
 
     def test_availability_in_size(self, feed_manager, measurements):
-        """Product with user's size should score 1.0."""
-        # measurements fixture has bust=90.0, which maps to "S" under the
-        # shared SIZE_BOUNDARIES (84-92cm).
-        product = {"sizes": ["S", "M"]}
-        score = feed_manager._score_availability(product, measurements)
-        assert score == 1.0
+        """Product stocked in the customer's size should score 1.0."""
+        # Ask the shared inference what size this body is rather than asserting
+        # a band from memory -- the previous comment ("bust=90 maps to S, 84-92")
+        # described a chart revision ago and quietly stopped being true.
+        size = infer_size_from_bust(measurements["bust"])
+        product = {"sizes": [size]}
+        assert feed_manager._score_availability(product, measurements) == 1.0
 
     def test_availability_out_of_size(self, feed_manager):
-        """Product without user's size should score 0.0."""
-        product = {"sizes": ["XS"]}
-        measurements = {"bust": 95}  # Would be L
-        score = feed_manager._score_availability(product, measurements)
-        assert score == 0.0
+        """Product not stocked in the customer's size should score 0.0."""
+        measurements = {"bust": 95}
+        size = infer_size_from_bust(measurements["bust"])
+        other = next(s for s in STANDARD_SIZES if s != size)
+        assert feed_manager._score_availability({"sizes": [other]}, measurements) == 0.0
 
     def test_no_products_given(self, feed_manager):
         """If no products provided, score should reflect that."""

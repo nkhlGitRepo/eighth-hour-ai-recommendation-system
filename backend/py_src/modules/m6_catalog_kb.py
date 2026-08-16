@@ -113,6 +113,17 @@ class CatalogKB:
             "sizes": product.get("sizes", []),
             "description": product.get("description", ""),
             "length": product.get("length", "Regular"),
+            # Carried through for M7's length advice, which scales the published
+            # length chart by (customer height / the height of the model this
+            # piece was actually shot on). This normaliser builds an explicit
+            # dict, so a field that isn't listed here is silently dropped -- and
+            # these were, which made the per-product model height look wired up
+            # while every garment quietly fell back to the default reference.
+            # Four pieces are shot on a model 5cm taller than that default.
+            "fit": product.get("fit"),
+            "model_name": product.get("model_name"),
+            "model_height_cm": product.get("model_height_cm"),
+            "model_size": product.get("model_size"),
             "fit_flatterers": self._infer_fit_flatterers(product),
             "flatters_shapes": self._infer_flatters_shapes(product),
             "silhouette_class": product.get("silhouette") or self._infer_silhouette(product),
@@ -239,12 +250,25 @@ class CatalogKB:
             fabrics = safe_query["fabrics"]
             candidates = [item for item in candidates if item["fabric"] in fabrics]
 
-        if "size" in active_filters and safe_query.get("size"):
-            size = safe_query["size"]
-            candidates = [
-                item for item in candidates
-                if item["sizes_in_stock"].get(size) and item["in_stock"]
-            ]
+        if "size" in active_filters and (
+            safe_query.get("size") or safe_query.get("sizes_by_category")
+        ):
+            # Each item is checked against the size for ITS OWN category, not a
+            # single size for the whole catalog. A customer who is M on top and
+            # S below wears S skirts; filtering her skirts by M excluded the
+            # ones she could actually buy and kept the ones she couldn't.
+            # `size` remains the fallback for any category the profile has no
+            # entry for, and for callers that only pass a single size.
+            by_category = safe_query.get("sizes_by_category") or {}
+            default_size = safe_query.get("size")
+
+            def stocked_in_her_size(item):
+                wanted = by_category.get(item.get("category"), default_size)
+                if not wanted:
+                    return True     # no size known for this category: don't exclude
+                return bool(item["sizes_in_stock"].get(wanted)) and item["in_stock"]
+
+            candidates = [item for item in candidates if stocked_in_her_size(item)]
 
         if "preferred_colors" in active_filters and safe_query.get("preferred_colors"):
             preferred_colors = safe_query["preferred_colors"]

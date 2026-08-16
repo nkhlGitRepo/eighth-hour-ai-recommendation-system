@@ -22,6 +22,123 @@ const CHROME_ROOT = (function () {
   return self ? self.replace(/js\/site-chrome\.js.*$/, "") : "";
 })();
 
+/**
+ * Keep the browser's idea of the customer's style profile in step with the
+ * server's, and repair it when it is wrong.
+ *
+ * Two keys are involved: the intake flow writes `intakeSession`, while every
+ * other feature (New Releases, the product page's fit-check widget, the
+ * homepage strip, the header's "My Recommendations" link) looks the profile up
+ * under `currentSessionId`.
+ *
+ * There are two distinct failures, and only the first was handled before:
+ *
+ *   MISSING  -- the key was never written. Backfilled below from intakeSession,
+ *               or failing that from the server.
+ *   STALE    -- the key holds a session id from an earlier, abandoned attempt.
+ *               This is the nastier one: the id looks perfectly valid, so every
+ *               guard that checks "do we have a session?" passes, and then every
+ *               profile endpoint answers 400 because that session was never
+ *               completed. The features then report "complete your style
+ *               profile" to somebody who plainly has one.
+ *
+ * The server is the authority: /account/profile returns the session id of the
+ * customer's actual completed profile. If it disagrees with what is stored, the
+ * stored one is wrong -- replace it. One reload follows so the page's scripts,
+ * which read these keys during their own DOMContentLoaded handlers, see the
+ * corrected state.
+ */
+(function syncSessionWithServer() {
+  const CHECKED = "eh_session_synced";
+
+  function readIntake() {
+    try { return JSON.parse(localStorage.getItem("intakeSession") || "{}"); }
+    catch (error) { return {}; }
+  }
+
+  try {
+    // Cheap synchronous repair first: if the key is simply absent but the
+    // intake state has it, no server round-trip is needed.
+    if (!localStorage.getItem("currentSessionId")) {
+      const saved = readIntake();
+      if (saved && saved.sessionId) localStorage.setItem("currentSessionId", saved.sessionId);
+    }
+
+    const token = localStorage.getItem("authToken");
+    if (!token) return;                                  // logged out: nothing to sync
+    if (sessionStorage.getItem(CHECKED)) return;         // at most once per tab
+    sessionStorage.setItem(CHECKED, "1");
+
+    fetch("http://localhost:8000/account/profile", {
+      headers: { Authorization: "Bearer " + token },
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((profile) => {
+        if (!profile || !profile.session_id) return;     // no completed profile yet
+
+        const stored = localStorage.getItem("currentSessionId");
+        if (stored === profile.session_id) return;       // already correct
+
+        localStorage.setItem("currentSessionId", profile.session_id);
+        // Rebuild intakeSession too: the header links decide what to show from
+        // styleProfile, not from the session id alone.
+        localStorage.setItem("intakeSession", JSON.stringify({
+          userId: localStorage.getItem("userId"),
+          sessionId: profile.session_id,
+          step: 5,
+          measurements: profile.measurements || {},
+          shapeProfile: profile.shape_profile || null,
+          styleProfile: profile.style_profile || null,
+          recommendations: [],
+        }));
+        window.location.reload();
+      })
+      .catch(() => {
+        // Offline or API down -- leave the page as it is rather than reloading
+        // into the same state.
+      });
+  } catch (error) {
+    // localStorage/sessionStorage unavailable (private mode): skip silently.
+  }
+})();
+
+/**
+ * Re-resolve the customer's session from the server and store it.
+ *
+ * Used as a repair step by the pages that depend on a session: if a profile
+ * endpoint rejects the stored id, the id is wrong rather than the profile
+ * missing, and the server can say what the right one is. Exposed globally
+ * because these are separate scripts with no module system.
+ *
+ * Returns the session id, or null if there is nothing to recover.
+ */
+window.ehResolveSession = async function ehResolveSession() {
+  try {
+    const token = localStorage.getItem("authToken");
+    if (!token) return null;
+    const response = await fetch("http://localhost:8000/account/profile", {
+      headers: { Authorization: "Bearer " + token },
+    });
+    if (!response.ok) return null;
+    const profile = await response.json();
+    if (!profile || !profile.session_id) return null;
+
+    localStorage.setItem("currentSessionId", profile.session_id);
+    localStorage.setItem("intakeSession", JSON.stringify({
+      userId: localStorage.getItem("userId"),
+      sessionId: profile.session_id,
+      step: 5,
+      measurements: profile.measurements || {},
+      shapeProfile: profile.shape_profile || null,
+      styleProfile: profile.style_profile || null,
+      recommendations: [],
+    }));
+    return profile.session_id;
+  } catch (error) {
+    return null;
+  }
+};
+
 // Thin line icons matching the storefront's own header set.
 const ICONS = {
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5" stroke-linecap="round"/></svg>',
@@ -115,7 +232,12 @@ function headerHtml() {
           </div>
         </div>
 
-        <a class="icon-btn cart-btn" href="${CHROME_ROOT}cart.html" aria-label="Cart">
+        <!--
+          Opens the slide-out drawer rather than navigating. Still a real link
+          to cart.html so it works without JavaScript, and so the page remains
+          reachable by URL -- the click handler calls preventDefault().
+        -->
+        <a class="icon-btn cart-btn" href="${CHROME_ROOT}cart.html" id="cartToggle" aria-label="Cart">
           ${ICONS.bag}<span class="cart-count" id="cartCount">0</span>
         </a>
       </div>
@@ -124,6 +246,39 @@ function headerHtml() {
     <div class="header-search" id="headerSearch" hidden>
       <input type="search" id="searchInput" placeholder="Search products" aria-label="Search products" />
       <div class="search-results" id="searchResults"></div>
+    </div>`;
+}
+
+/**
+ * The slide-out cart, matching the storefront's own drawer: a 400px panel
+ * entering from the right over a translucent backdrop, with the total and
+ * checkout pinned to the bottom so they stay visible however long the list.
+ *
+ * Rendered next to the header so every page has it, rather than each page
+ * carrying a copy.
+ */
+function cartDrawerHtml() {
+  return `
+    <div class="cart-drawer" id="cartDrawer" role="dialog" aria-modal="true"
+         aria-label="Cart" aria-hidden="true">
+      <div class="cart-drawer__overlay" id="cartDrawerOverlay"></div>
+      <div class="cart-drawer__panel">
+        <div class="cart-drawer__header">
+          <h2>Cart</h2>
+          <button class="cart-drawer__close" id="cartDrawerClose" type="button"
+                  aria-label="Close cart">&times;</button>
+        </div>
+        <div class="cart-drawer__items" id="cartDrawerItems"></div>
+        <div class="cart-drawer__footer" id="cartDrawerFooter" hidden>
+          <div class="cart-drawer__total">
+            <span>Estimated total</span>
+            <span id="cartDrawerTotal">$0.00</span>
+          </div>
+          <p class="cart-drawer__note">Taxes and shipping calculated at checkout.</p>
+          <button class="btn btn-primary cart-drawer__checkout" id="cartDrawerCheckout"
+                  type="button">Check out</button>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -208,6 +363,11 @@ document.addEventListener("DOMContentLoaded", () => {
     header.className = "site-header";
     header.innerHTML = headerHtml();
   }
+  // Drawer lives at the end of <body> so it overlays everything.
+  if (header && !document.getElementById("cartDrawer")) {
+    document.body.insertAdjacentHTML("beforeend", cartDrawerHtml());
+  }
+
   const footer = document.querySelector("[data-site-footer]");
   if (footer) {
     footer.className = "site-footer";
