@@ -108,23 +108,50 @@ def main():
     if not SOURCE.exists():
         raise SystemExit(f"{SOURCE} missing -- run once with --fetch")
 
-    live = {p["handle"]: p for p in json.loads(SOURCE.read_text())["products"]}
-    catalog = json.loads(CATALOG.read_text())
+    products = json.loads(SOURCE.read_text())["products"]
+    live = {p["handle"]: p for p in products}
 
-    updated, unmatched, no_length, changes = 0, [], [], []
+    # Match on the product NAME as well as the handle. Two live products have a
+    # handle that disagrees with their own title -- "crepe-silk-embroidered-long-top"
+    # is titled "Mulberry Silk Embroidered Long Top", and
+    # "mulberry-silk-pintuck-boat-neck-vest" is titled "Mulberry Silk Pintuck Wide
+    # Neck Vest" -- presumably renamed after the handle was minted. Matching on
+    # handle alone missed exactly those two, which then looked delisted and were
+    # given a null length, so they silently showed no length advice at all while
+    # every other product did.
+    by_name = {}
+    for p in products:
+        by_name.setdefault(p["title"].strip().casefold(), p)
+
+    catalog = json.loads(CATALOG.read_text())
+    claimed = set()
+
+    updated, unmatched, no_length, changes, by_title = 0, [], [], [], []
     for product in catalog:
         source = live.get(product["slug"])
         if source is None:
-            # Delisted since the catalog was captured, so its real length is
-            # unknowable from here. Clear the placeholder rather than leave it:
-            # "Regular" is a genuine class on the tops chart, so leaving it
-            # would look like verified data and produce confident length advice
-            # from a value nobody ever set. None makes the gap visible, and
+            candidate = by_name.get(product["name"].strip().casefold())
+            # One live product must not satisfy two of ours -- that would mean a
+            # name collision, and quietly copying one product's length onto
+            # another is worse than admitting the gap.
+            if candidate is not None and candidate["handle"] not in claimed:
+                source = candidate
+                by_title.append((product["slug"], candidate["handle"]))
+        if source is not None:
+            claimed.add(source["handle"])
+
+        if source is None:
+            # Genuinely not on the live store, so its real length is unknowable
+            # from here. Clear the placeholder rather than leave it: "Regular" is
+            # a real class on the tops chart, so leaving it would look like
+            # verified data and produce confident length advice from a value
+            # nobody ever set. None makes the gap visible, and
             # _generate_length_note stays silent instead of guessing.
+            #
             # Explicit nulls rather than absent keys, so every product carries
             # the same schema. Missing keys read the same through .get(), but a
             # ragged catalog invites a future consumer to assume a field exists
-            # because 27 of 29 have it.
+            # because most rows have it.
             product["length"] = None
             for field in ("fit", "model_name", "model_height_cm", "model_size"):
                 product.setdefault(field, None)
@@ -160,6 +187,10 @@ def main():
 
     print(f"  products in catalog        : {len(catalog)}")
     print(f"  matched against live store : {updated}")
+    if by_title:
+        print("  matched by NAME (the live handle disagrees with its own title):")
+        for slug, handle in by_title:
+            print(f"    {slug}  <-  live handle {handle!r}")
     if unmatched:
         print(f"  NOT on the live store      : {unmatched}")
     if no_length:

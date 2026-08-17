@@ -388,13 +388,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Pintuck Wide Neck Vest from our collection",
-    "length": null,
+    "length": "Regular",
     "silhouette": "fitted",
     "launched_at": "2025-06-12",
-    "fit": null,
-    "model_name": null,
-    "model_height_cm": null,
-    "model_size": null
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-pintuck-vest",
@@ -705,13 +705,13 @@
       "XXL"
     ],
     "description": "Mulberry Silk Embroidered Long Top from our collection",
-    "length": null,
+    "length": "Calf Length",
     "silhouette": "fitted",
     "launched_at": "2026-07-22",
-    "fit": null,
-    "model_name": null,
-    "model_height_cm": null,
-    "model_size": null
+    "fit": "Relaxed",
+    "model_name": "Lori",
+    "model_height_cm": 167.6,
+    "model_size": "XXS"
   },
   {
     "slug": "mulberry-silk-embroidered-dress",

@@ -14,7 +14,7 @@ Everything runs locally. There are no paid APIs, no external calls at runtime, a
 leaves the machine. Photo measurement uses a pose model that runs on your own CPU, and the uploaded
 image is held in memory and discarded — never written to disk.
 
-**Status:** 1,071 tests — 1,067 passing, 4 skipped by design (they need the real pose model, which
+**Status:** 1,074 tests — 1,070 passing, 4 skipped by design (they need the real pose model, which
 deadlocks under pytest; see [Testing](#testing)). The recommendation, sizing, fit-checking and
 history modules are complete. Photo measurement works but is deliberately weighted low — see
 [Photo-based measurement](#5-photo-based-measurement-m2--providers) for the honest accuracy numbers.
@@ -453,11 +453,19 @@ python scripts/enrich_catalog_from_source.py            # from the cache
 python scripts/enrich_catalog_from_source.py --fetch    # refresh the cache first
 ```
 
-It never touches the network without `--fetch`. Two catalog products have since
-been delisted upstream, so their length is set to `null` rather than left at the
-old `"Regular"` placeholder — `"Regular"` is a real class on the tops chart, so
-leaving it would look like verified data and generate confident advice from a
-value nobody set. The note stays silent instead, which is the only honest output.
+It never touches the network without `--fetch`. Matching is by handle **and by
+product name**: two live products carry a handle that disagrees with their own
+title (`crepe-silk-embroidered-long-top` is titled *"Mulberry Silk Embroidered
+Long Top"*), so handle-only matching missed exactly those two, treated them as
+withdrawn from the store, and left them with no length — which showed up as those products
+silently having no length advice while every other one did. All 29 now match.
+
+If a product ever genuinely leaves the store its length is set to `null` rather
+than left at the old `"Regular"` placeholder — `"Regular"` is a real class on the
+tops chart, so leaving it would look like verified data and generate confident
+advice from a value nobody set. The note stays silent instead, and
+`tests/test_m7_length_notes.py` fails if any catalog product is in that state, so
+it can't pass for a matching bug again.
 
 **The advice appears on every recommendation**, not only when something is off.
 It names the fit model's height so the claim is checkable, gives the movement in
@@ -475,8 +483,8 @@ at 186cm:  Cut to sit at the waist on our 168cm fit model, so at 186cm expect it
 ```
 
 Silence is reserved for genuine unknowns: no recorded length, no height, an
-unrecognised category. It covers 93% of (height, product) pairs — the 7% that
-stay quiet are exactly the two delisted products with no length.
+unrecognised category. Every product in the catalog now has a recorded length, so
+in practice the advice appears on all of them.
 
 An earlier version spoke only when the hem moved further than the length class's
 own chart range. Those ranges run from 0.5″ to 2″, so that rule made a vest speak
@@ -1006,7 +1014,7 @@ statements attached to it:
 ```bash
 cd backend
 source venv/bin/activate
-python -m pytest tests/ -q                    # all 1,071
+python -m pytest tests/ -q                    # all 1,074
 python -m pytest tests/test_m7_fit_checker.py -q
 ```
 
@@ -1059,7 +1067,7 @@ backend/
     enrich_catalog_from_source.py  Pull length/fit/model data out of the cache
     migrate_stored_size_profiles.py  Recompute saved sizes after a chart change
     verify_pose_provider.py   Exercise the pose model outside pytest
-  tests/                      1,071 tests
+  tests/                      1,074 tests
 Base_Website/
   serve.py                    no-cache dev server
   diagnose.html               session troubleshooting page

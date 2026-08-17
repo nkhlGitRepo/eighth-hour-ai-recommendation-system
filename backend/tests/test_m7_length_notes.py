@@ -127,8 +127,11 @@ class TestSilenceWhenUnknown:
 
     def test_no_note_when_the_length_is_unknown(self, checker):
         """
-        Two catalog products were delisted upstream, so their length is null
-        rather than a guess. Silence is the only honest output.
+        A product with no recorded length gets no advice rather than a guess.
+        Nothing in the catalog is in that state today (see
+        TestEveryProductGetsLengthAdvice), so this uses a synthetic product --
+        the code path still has to be right for the day something really is
+        withdrawn from the store.
         """
         assert checker._generate_length_note(195.0, product(length=None)) is None
 
@@ -259,7 +262,9 @@ class TestAgainstTheRealCatalog:
     def test_the_placeholder_length_is_gone_from_lower_body_products(self):
         """
         Every product once read "Regular" -- a placeholder that isn't even a
-        valid class for a skirt, dress or trouser.
+        valid class for a skirt, dress or trouser. Vests and tops legitimately
+        have a "Regular" class, so only the lower-body categories can be checked
+        this way.
         """
         for item in CATALOG:
             if item["category"] in ("Skirts", "Dresses", "Trousers"):
@@ -435,3 +440,42 @@ class TestIdenticalGarmentsGetIdenticalAdvice:
                     f"{key} disagrees at {height}cm across "
                     f"{[m['slug'] for m in members]}: {notes}"
                 )
+
+
+class TestEveryProductGetsLengthAdvice:
+    """
+    A product silently missing length advice while every other one has it reads
+    as a broken page, not as an honest gap -- and here it was neither. Two live
+    products carry a handle that disagrees with their own title
+    ("crepe-silk-embroidered-long-top" is titled "Mulberry Silk Embroidered Long
+    Top"), so matching the catalog on handle alone missed exactly those two.
+    They were recorded as delisted, given a null length, and showed nothing.
+    """
+
+    def test_no_product_is_missing_its_length(self):
+        missing = [p["slug"] for p in CATALOG if not p.get("length")]
+        assert not missing, (
+            f"{missing} have no recorded length, so they will show no length "
+            f"advice at all while every other product does. If they really are "
+            f"gone from the live store that is correct -- otherwise re-run "
+            f"scripts/enrich_catalog_from_source.py"
+        )
+
+    def test_every_product_produces_advice_at_every_supported_height(self, checker):
+        from py_src.modules.m6_catalog_kb import CatalogKB
+
+        catalog = CatalogKB(CATALOG)
+        for product in CATALOG:
+            item = catalog.get_item(product["slug"])
+            for height in (140.0, 168.0, 210.0):
+                assert checker._generate_length_note(height, item), (
+                    f"{product['slug']} produced no length advice at {height}cm"
+                )
+
+    def test_catalog_names_are_unique(self):
+        """
+        Name matching is only safe while names identify a product. A duplicate
+        would let one live product's length be copied onto another.
+        """
+        names = [p["name"].strip().casefold() for p in CATALOG]
+        assert len(names) == len(set(names)), "duplicate product names"
