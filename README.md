@@ -28,6 +28,7 @@ history modules are complete. Photo measurement works but is deliberately weight
 - [Backend features](#backend-features)
 - [Frontend features](#frontend-features)
 - [Plugging in a photo-measurement API](#plugging-in-a-photo-measurement-api)
+- [Connecting to the Shopify storefront](#connecting-to-the-shopify-storefront)
 - [Deployment](#deployment)
 - [Testing](#testing)
 - [Project layout](#project-layout)
@@ -909,6 +910,178 @@ the band-holding rather than inheriting settings tuned for a different problem.
 Two things to confirm before going live: that the image is transmitted over TLS, and that you have a
 data-processing agreement with the vendor covering biometric-adjacent data. The disclosure block
 makes the customer-facing statement automatic; it does not make the contract exist.
+
+---
+
+## Connecting to the Shopify storefront
+
+This is the path from the local demo to the real eighth-hour.com. The short
+version: **nothing in this repo runs on Shopify.** Shopify serves Liquid templates
+and JavaScript; it does not execute Python. So the engine stays where it is, on
+your own host, and the theme calls it over HTTP. `Base_Website/` is a stand-in for
+the real storefront and is not deployed — the parts of it worth porting are the
+API call sequences, which are listed below.
+
+Two things are true and worth knowing before starting:
+
+- **Recommendation generation makes zero database queries.** It is a pure function
+  of (stored profile, in-memory catalog), measured at ~1,475 req/s for this
+  catalog. Throughput will not be your problem.
+- **The engine currently believes every product is in stock in every size.** On a
+  live store that is false for about 13% of size/colour combinations, concentrated
+  at XXS/XS/XL/XXL. Fixing this is the highest-value item on the list, and it is
+  first for that reason.
+
+### 1. Feed it real inventory
+
+`CatalogKB._normalize_product` hardcodes `in_stock: True` and
+`sizes_in_stock: {size: True}`. Every filter that asks "can she buy this?" — including
+the per-category size filter — reads those fields, so today they are correct logic
+over fabricated data.
+
+Shopify already publishes what is needed. In the products payload each variant
+carries `available`, with `option1` = colour and `option2` = size:
+
+```json
+{ "title": "Forest Night / XXS", "option1": "Forest Night",
+  "option2": "XXS", "available": false, "price": "320.00" }
+```
+
+Build `sizes_in_stock` from the variants a size actually appears in, rather than
+from the product's size list. A size with no available variant is not a size she
+can buy, and the recommender should not offer it.
+
+Inventory is also the most volatile field on a store, so a one-off import goes
+stale within hours. Subscribe to the `products/update` and
+`inventory_levels/update` webhooks and rebuild the affected entries, or re-import
+on a short interval. Whichever you choose, note the caveat in step 4 about
+running more than one process.
+
+### 2. Let Shopify own identity
+
+The backend currently has its own `users` table, its own bcrypt hashing and its
+own bearer tokens (`/auth/register`, `/auth/login`, `/auth/me`). On a Shopify
+store that is a second, competing account system — customers already have one.
+
+Retire it in favour of Shopify's customer, and key the stored profile on the
+Shopify `customer_id` instead of the local `user_id`. Two useful consequences:
+
+- Every measurement of the login path in this repo becomes irrelevant. bcrypt was
+  the single worst bottleneck (one login collapsed browsing throughput 65×), and
+  it leaves with the auth code.
+- Since the engine needs no database to compute, storing the profile in Shopify
+  **customer metafields** rather than SQLite would make the service genuinely
+  stateless — any number of identical instances behind a load balancer, no shared
+  storage. That is nearly free to design in now and expensive to retrofit.
+
+Authenticate requests by verifying the signature Shopify attaches to
+[App Proxy](https://shopify.dev/docs/apps/build/online-store/display-dynamic-data)
+requests, rather than by issuing your own tokens. A proxied request arrives with
+the customer's id (`logged_in_customer_id`) and a `signature` you check against
+your app's shared secret — check the current Shopify docs for the exact scheme
+before implementing, as the details are theirs to change, not ours.
+
+### 3. Port the call sequences, not the pages
+
+The theme replaces `Base_Website/`, but the order of calls is the part that took
+work to get right. Each step below is one request; the `session_id` returned by
+the first is the key every later call needs.
+
+**Building a style profile** (the quiz):
+
+```
+POST /intake/session                       -> { session_id }
+POST /intake/consent                       { session_id, photo_consent, measurement_consent }
+POST /intake/confirm                       { session_id, manual_overrides: { bust, waist, hips, height } }
+POST /intake/preferences                   { session_id, preferred_colors, preferred_silhouettes, occasions }
+```
+
+`/intake/confirm` returns the shape profile, including
+`size_recommendation_by_category` — the size to show per category. Consent is
+recorded twice on purpose: `/intake/consent` for the session and `/consent` for
+the customer, and the second is what every later guardrail checks.
+
+**Photo measurement instead of typing** (replaces `/intake/confirm`):
+
+```
+GET  /intake/photo-disclosure              -> what to tell the customer, per active provider
+POST /intake/photo-measure                 multipart: session_id, height_cm, photo,
+                                           optional usual_top_size / usual_bottom_size
+```
+
+Render the notice from `/intake/photo-disclosure` rather than writing it into the
+theme. It reports what the configured provider actually does with the image, so
+the day a vendor API replaces on-server analysis, the disclosure starts naming
+that vendor by itself instead of quietly going stale.
+
+**Showing recommendations, new releases and fit advice:**
+
+```
+GET  /recommendations/{session_id}?k=10&user_id={id}
+GET  /new-releases/{session_id}?user_id={id}
+POST /fit-check/{session_id}/{product_sku}   -> recommended_size, fit_scores, fit_notes
+POST /feedback/fit                            { user_id, fit_check_id, product_sku, feedback_type }
+```
+
+`/fit-check` is the one to call from a product page. It returns a score for every
+size the product stocks plus the notes shown under "Fit Recommendation" — the
+size guidance, and the length advice ("expect it about 6cm higher"). `product_sku`
+is the product's slug/handle, so Shopify's handle can be passed straight through
+if the catalog is imported with handles as slugs.
+
+**Resuming:** `POST /intake/resume` returns a partially-completed session, which
+is what lets a customer close the tab mid-quiz and come back.
+
+### 4. One process, or fix the shared state first
+
+`catalog` is module-level state that `/catalog/sync` mutates in place. With a
+single process that is fine. Run two and a sync updates **one** of them, leaving
+the other serving a stale catalog indefinitely, with no error and no way to tell
+which one answered. The same applies to a rolling deploy.
+
+So either run exactly one process, or move the catalog behind something shared
+(rebuild from Shopify on boot plus webhooks per instance, or a shared cache)
+before scaling out. `python3 scripts/check_running_server.py` reports the
+fingerprint of the catalog and source a process actually loaded, which is how you
+confirm instances agree.
+
+### 5. Lock down the edges
+
+- `allow_origins=["*"]` in `main.py` must become the shop's domain. It is
+  currently open so the local demo can call the API from any port.
+- Serve over HTTPS. Measurements are personal data and photo-derived
+  measurements are the sensitive kind.
+- If you route through an App Proxy, check Shopify's current request size and
+  timeout limits before sending a multi-megabyte photo through it. The simpler
+  option is to post the image **directly** to your API with CORS restricted to the
+  shop domain, and use the proxy only for the light JSON calls.
+- The photo path never writes the image to disk and should stay that way; only
+  the derived measurements are stored.
+
+### 6. Metafields for the data that is currently scraped
+
+Garment length, fit and the fit model's height are read out of Shopify **tags**
+and **description prose** (`scripts/enrich_catalog_from_source.py`). It works, and
+it is the only reason height advice exists — but it broke once already, when two
+products had a handle that disagreed with their own title. As proper metafields
+(`length`, `fit`, `model_height_cm`) they become structured data instead of parsed
+English, and the enrichment step disappears.
+
+### What does not carry over
+
+The disclosure screen and its acknowledgment checkbox live in
+`Base_Website/frontend/pages/intake-flow.html` and would need rebuilding in the
+theme — the *content* comes from the API, but the markup does not. Same for the
+colour swatches in the quiz, which read `colorHex()` from `js/data.js`; on Shopify
+the swatch should come from the variant's own colour rather than a hand-kept map.
+
+### Order I would do it in
+
+1. Real inventory (step 1) — without it the engine recommends things that cannot be bought.
+2. Shopify identity + profile storage (step 2) — everything else depends on how a customer is identified.
+3. Port the quiz and the product-page fit widget (step 3).
+4. CORS, HTTPS, and the photo upload route (step 5).
+5. Metafields (step 6) and multi-instance (step 4) when traffic or editing pain justifies them.
 
 ---
 
