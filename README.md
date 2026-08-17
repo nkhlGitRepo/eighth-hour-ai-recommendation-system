@@ -14,7 +14,7 @@ Everything runs locally. There are no paid APIs, no external calls at runtime, a
 leaves the machine. Photo measurement uses a pose model that runs on your own CPU, and the uploaded
 image is held in memory and discarded — never written to disk.
 
-**Status:** 1,062 tests — 1,058 passing, 4 skipped by design (they need the real pose model, which
+**Status:** 1,071 tests — 1,067 passing, 4 skipped by design (they need the real pose model, which
 deadlocks under pytest; see [Testing](#testing)). The recommendation, sizing, fit-checking and
 history modules are complete. Photo measurement works but is deliberately weighted low — see
 [Photo-based measurement](#5-photo-based-measurement-m2--providers) for the honest accuracy numbers.
@@ -449,9 +449,32 @@ old `"Regular"` placeholder — `"Regular"` is a real class on the tops chart, s
 leaving it would look like verified data and generate confident advice from a
 value nobody set. The note stays silent instead, which is the only honest output.
 
-Silence is in fact the common case: the note only appears when the hem moves
-further than the length class's own range, so a 3cm height difference says
-nothing rather than manufacturing precision the chart doesn't have.
+**The advice appears on every recommendation**, not only when something is off.
+It names the fit model's height so the claim is checkable, gives the movement in
+centimetres, and names the destination only when that's a *different* landmark —
+"about 10cm lower — closer to full length" tells a customer something, while
+"about 10cm lower — below mid-calf" about a mid-calf skirt only restates itself:
+
+```
+at 152cm:  Cut to sit at mid-calf on our 168cm fit model, so at 152cm expect it
+           about 7cm lower.
+at 168cm:  Cut to sit at mid-calf on our 168cm fit model, and at 168cm it should
+           still sit at mid-calf on you.
+at 186cm:  Cut to sit at the waist on our 168cm fit model, so at 186cm expect it
+           about 6cm higher — at the midriff.
+```
+
+Silence is reserved for genuine unknowns: no recorded length, no height, an
+unrecognised category. It covers 93% of (height, product) pairs — the 7% that
+stay quiet are exactly the two delisted products with no length.
+
+An earlier version spoke only when the hem moved further than the length class's
+own chart range. Those ranges run from 0.5″ to 2″, so that rule made a vest speak
+up once you were 3.8cm taller than the model while a skirt waited until 12cm —
+despite the skirt's hem moving *further*, being the longer garment. Whether you
+got advice depended on how precisely Eighth Hour happened to write that row of
+their guide. The threshold is now expressed in centimetres on the customer's own
+body, which is the thing she can perceive.
 
 ### 5. Photo-based measurement (M2 + providers)
 
@@ -973,7 +996,7 @@ statements attached to it:
 ```bash
 cd backend
 source venv/bin/activate
-python -m pytest tests/ -q                    # all 1,062
+python -m pytest tests/ -q                    # all 1,071
 python -m pytest tests/test_m7_fit_checker.py -q
 ```
 
@@ -1026,7 +1049,7 @@ backend/
     enrich_catalog_from_source.py  Pull length/fit/model data out of the cache
     migrate_stored_size_profiles.py  Recompute saved sizes after a chart change
     verify_pose_provider.py   Exercise the pose model outside pytest
-  tests/                      1,062 tests
+  tests/                      1,071 tests
 Base_Website/
   serve.py                    no-cache dev server
   diagnose.html               session troubleshooting page

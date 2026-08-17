@@ -32,7 +32,7 @@ from py_src.constants import (
     GARMENT_LENGTH_CHART_IN,
     COORD_LENGTH_CHART_ORDER,
     LENGTH_CHART_REFERENCE_HEIGHT_CM,
-    LENGTH_NOTE_MIN_SHIFT,
+    LENGTH_NOTE_SAME_AS_SHOWN_CM,
 )
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
@@ -398,7 +398,10 @@ class FitChecker:
         "Trousers": {
             "Short": "the upper thigh",
             "Capri": "mid-calf",
-            "Cropped": "the lower calf",
+            # "mid-shin", not "the lower calf": the sentence also uses "lower"
+            # as a direction, and "Cut to sit at the lower calf ... expect it
+            # about 3cm higher" makes a reader parse the same word two ways.
+            "Cropped": "mid-shin",
             "Ankle": "the ankle",
             "Full": "full length",
         },
@@ -422,49 +425,69 @@ class FitChecker:
     _LANDMARK_PHRASES["Vests"] = _LANDMARK_PHRASES["Tops"]
 
     @classmethod
-    def _length_reference_for(cls, category):
+    def _length_reference_for(cls, category, length_class=None):
         """
         (inch chart, landmark phrasing) for a category, or ({}, {}).
 
         Kept as one lookup so the two can never be fetched from different
-        categories -- reading a trouser length against a top's wording is
-        exactly the bug this replaced.
+        categories -- reading a trouser length against a top's wording was a
+        real bug here.
+
+        A co-ord set carries one length tag describing whichever half has it:
+        "Calf" for the skirt of a vest-and-skirt set, "Cropped" for the
+        trousers. `length_class` picks the half, by choosing the first chart
+        that defines that name. The vocabularies barely overlap, so this is
+        unambiguous.
+
+        This used to MERGE the skirt and trouser charts instead, and that
+        quietly produced different advice for identical garments: trousers name
+        33-36" "mid-calf" (Capri) and skirts name 28-32" "mid-calf" (Calf), so
+        merging fused them into one 28-36" region. A 30" hem on a 152cm customer
+        then read as "still sits at mid-calf" for a vest-and-skirt set while an
+        otherwise identical skirt correctly said "about 7cm lower".
         """
         if category in GARMENT_LENGTH_CHART_IN:
             return GARMENT_LENGTH_CHART_IN[category], cls._LANDMARK_PHRASES.get(category, {})
         if category == "Co-ord Sets":
-            # One length tag describes whichever half carries it -- "Calf" for
-            # the skirt of a vest-and-skirt set, "Cropped" for the trousers.
-            # Merge both halves' charts and their wording in the same order, so
-            # a class always resolves against the chart it came from.
-            chart, phrases = {}, {}
-            for source in reversed(COORD_LENGTH_CHART_ORDER):
-                chart.update(GARMENT_LENGTH_CHART_IN[source])
-                phrases.update(cls._LANDMARK_PHRASES.get(source, {}))
-            return chart, phrases
+            for source in COORD_LENGTH_CHART_ORDER:
+                if length_class is None or length_class in GARMENT_LENGTH_CHART_IN[source]:
+                    return (GARMENT_LENGTH_CHART_IN[source],
+                            cls._LANDMARK_PHRASES.get(source, {}))
         return {}, {}
 
     def _generate_length_note(self, height_cm, product):
         """
-        Tell a customer where this hem will fall on *them*, when that differs
-        from where the photograph shows it.
+        Where this hem will fall on *this* customer, said on every garment whose
+        length is known.
 
         The garment is a fixed number of inches long; the body it hangs on is
         not. Eighth Hour's length guide states, for each class, the inches at
         which the hem reaches a named landmark on their fit model -- so those
         numbers are that model's own waist-to-knee, waist-to-calf and
-        waist-to-floor distances. Scaling them by the customer's height over
-        the model's gives the same landmarks on the customer, while the garment
-        stays the length it was cut. Whichever band it now falls in is where it
-        will actually sit.
+        waist-to-floor distances. Scaling them by the customer's height over the
+        model's gives the same landmarks on the customer, while the garment stays
+        the length it was cut. Whichever band it now falls in is where it will
+        actually sit. No new body ratios are introduced: every distance used is
+        one the published chart already states.
 
-        No new body ratios are introduced: every distance used is one the
-        published chart already states. Returns None whenever anything needed
-        is missing or the shift is too small to be worth a sentence -- silence
-        is correct far more often than a note is.
+        Two things this deliberately does NOT do any more:
+
+        * It no longer stays silent when the difference is small. The advice
+          appears on every recommendation, so absence would read as missing
+          information rather than as reassurance -- "falls as shown" is itself
+          worth saying. Silence is now reserved for genuine unknowns: no length
+          recorded, no height, an unrecognised category.
+        * It no longer decides whether to speak by comparing the shift against
+          the length class's chart range. Those ranges run from 0.5" to 2", so
+          that rule made a vest speak up at 3.8cm taller while a skirt waited
+          until 12cm -- despite the skirt's hem moving further, being longer.
+          The magnitude is now reported in centimetres on the customer's own
+          body, which is the thing she can actually perceive.
+
+        Returns a single sentence, or None if the answer isn't knowable.
         """
         length_class = product.get("length")
-        chart, phrases = self._length_reference_for(product.get("category"))
+        chart, phrases = self._length_reference_for(product.get("category"), length_class)
         if not length_class or length_class not in chart:
             return None
         # isfinite, not just > 0: every comparison against NaN is False, so a
@@ -487,10 +510,11 @@ class FitChecker:
         # like a shorter one relative to her frame.
         equivalent = garment_inches * (reference_height / height_cm)
 
-        # Require the shift to be bigger than the class's own range, otherwise
-        # the note claims precision the chart doesn't have.
-        if abs(equivalent - garment_inches) < LENGTH_NOTE_MIN_SHIFT * (high - low):
-            return None
+        # How far the hem sits from where it is pictured, in centimetres on this
+        # customer's body. Her landmark is at garment_inches * (height/reference)
+        # while the garment is still garment_inches long, so the gap between them
+        # is what she sees. Positive means higher up her leg.
+        shift_cm = garment_inches * (height_cm / reference_height - 1) * 2.54
 
         # Where it now lands, described with this chart's own landmarks. Ordered
         # by inches; duplicate ranges (Midi and Calf are the same measurement)
@@ -513,31 +537,54 @@ class FitChecker:
             else:
                 places.append((span, where))
 
-        landed = None
-        for index, ((band_low, band_high), where) in enumerate(places):
-            if band_low <= equivalent <= band_high:
-                landed = f"at {where}"
-                break
-            if equivalent < band_low:
-                # Falls between two named landmarks -- the common case, since
-                # the chart's bands don't touch. Naming the nearer one alone
-                # would overstate; say which two it sits between.
-                landed = (
-                    f"above {where}" if index == 0
-                    else f"between {places[index - 1][1]} and {where}"
-                )
-                break
-        if landed is None:
-            landed = f"below {places[-1][1]}"
-
-        here = f"at {phrase(length_class)}"
-        if landed == here:
-            return None     # two names for the same place
-
-        return (
-            f"You're {'taller' if height_cm > reference_height else 'shorter'} than our fit "
-            f"model, so this will sit {landed} on you rather than {here}."
+        # Describe the landing point against the NEAREST landmark, not as a range
+        # between two of them. The chart's bands don't touch, and some gaps are
+        # enormous -- the trouser chart jumps from Short (12-16") straight to
+        # Capri (33-36") because nothing in between is published. "Between the
+        # upper thigh and mid-calf" spans most of a leg and tells a customer
+        # almost nothing, whereas "just above mid-calf" is both accurate and
+        # usable. The centimetre figure in the sentence supplies the precision.
+        inside = next(
+            (where for (band_low, band_high), where in places
+             if band_low <= equivalent <= band_high),
+            None,
         )
+
+        def gap(place):
+            (band_low, band_high), _ = place
+            return band_low - equivalent if equivalent < band_low else equivalent - band_high
+
+        nearest = inside or min(places, key=gap)[1]
+
+        cut_for = phrase(length_class)
+
+        # Name the reference instead of alluding to it. "Our fit model" is an
+        # anonymous benchmark the customer cannot check; her height is recorded
+        # per product, and stating it makes the claim verifiable. Centimetres
+        # throughout, matching every other measurement on the site.
+        shown_on = f"Cut to sit at {cut_for} on our {round(reference_height)}cm fit model"
+        her_height = f"{round(height_cm)}cm"
+
+        # Still reaching the same landmark it was cut for. Say that, rather than
+        # "much the same": the hem may genuinely have moved a couple of
+        # centimetres, and the useful fact is that it lands in the same place.
+        if inside == cut_for:
+            return f"{shown_on}, and at {her_height} it should still sit at {cut_for} on you."
+
+        # Too small a move to put a number on, and never "about 0cm".
+        if abs(shift_cm) < LENGTH_NOTE_SAME_AS_SHOWN_CM:
+            return f"{shown_on}, and at {her_height} it should fall much the same on you."
+
+        direction = "higher" if shift_cm > 0 else "lower"
+        moved = f"{shown_on}, so at {her_height} expect it about {abs(shift_cm):.0f}cm {direction}"
+
+        # Name where it ends up only when that is a DIFFERENT landmark. Saying
+        # "10cm lower -- below mid-calf" about a mid-calf skirt restates itself;
+        # saying "10cm lower -- closer to full length" tells her something the
+        # number alone doesn't.
+        if nearest == cut_for:
+            return f"{moved}."
+        return f"{moved} — {'at' if inside else 'closer to'} {nearest}."
 
     def _generate_fit_notes(
         self,

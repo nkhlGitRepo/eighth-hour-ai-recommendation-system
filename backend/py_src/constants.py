@@ -304,11 +304,20 @@ MODEL_HEIGHTS_CM = {"Lori": 167.6, "Beatriz": 172.7}   # 5'6", 5'8"
 # consistent with her, so she is the reference the chart describes.
 LENGTH_CHART_REFERENCE_HEIGHT_CM = MODEL_HEIGHTS_CM["Lori"]
 
-# How far a hem has to shift, as a fraction of the distance between the two
-# named landmarks it sits between, before it is worth telling the customer.
-# Below this the difference is smaller than the length class's own range and
-# saying anything would be false precision.
-LENGTH_NOTE_MIN_SHIFT = 0.5
+# How far a hem must move before the note says so rather than "much the same".
+# In CENTIMETRES on the customer's own body, deliberately: this replaced a
+# threshold expressed as a fraction of the length class's chart range, which
+# made the note's behaviour depend on how precisely Eighth Hour happened to
+# write that row of their guide rather than on anything a customer experiences.
+# The ranges run from 0.5" to 2", so a vest spoke up once you were 3.8cm taller
+# than the fit model while a skirt stayed silent until 12cm -- even though the
+# skirt's hem physically moves further, being the longer garment.
+#
+# 1.5cm is about the point where a hem sits visibly off where it is pictured.
+# Below it the note says the length falls as shown, which is still worth
+# saying -- the advice appears on every recommendation, so silence would read
+# as missing information rather than as reassurance.
+LENGTH_NOTE_SAME_AS_SHOWN_CM = 1.5
 
 FIT_NOTE_RELEVANT_DIMENSIONS = {
     "Tops": {"bust"},
