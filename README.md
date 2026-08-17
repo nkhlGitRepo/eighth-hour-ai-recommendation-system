@@ -429,6 +429,16 @@ collection tags — `"Calf"`, `"Cropped"` next to `"Fig"`, `"Best Sellers"`. The
 model's height and size are prose in the description: *"Model: Lori is 5.6 ft and
 wears a size XXS."* All 31 live products carry exactly one length tag, so the
 coverage is complete rather than best-effort.
+
+**One assumption, worth knowing about.** `"5.6 ft"` is read as 5 ft 6 in
+(167.6 cm), not 5.6 decimal feet (170.7 cm) — a 3 cm difference. That reading is
+the common convention, and it matches an independent estimate from the length
+guide's own maxi rows (~162–164 cm). It is the least-grounded input in this
+feature: every quoted figure scales with it, so the other reading would shift
+each one by roughly 1–2 cm, occasionally enough to turn "should still sit at the
+knee" into "about 2 cm higher". Both models live in one constant,
+`MODEL_HEIGHTS_CM`, so confirming it with whoever writes the product copy is a
+two-value edit.
 `scripts/enrich_catalog_from_source.py` reads both out of a cached copy of the
 store response and writes `length`, `fit`, `model_name`, `model_height_cm` and
 `model_size` into `products.json`. Note that adding fields to the catalog means
