@@ -82,6 +82,11 @@ class IntakeFlow {
               </label>
             `)
             .join('');
+          // This replaces the markup wholesale, so the colour samples have to be
+          // (re)applied here. Applying them only on DOMContentLoaded decorated
+          // the static fallback list and was then wiped the moment this fetch
+          // resolved -- which is every time the API is reachable.
+          renderColorSwatches();
         }
       }
     } catch (error) {
@@ -986,6 +991,34 @@ class IntakeFlow {
   }
 }
 
+/**
+ * Put a sample of each colour beside its name in the preferences step.
+ *
+ * Rendered from colorHex() rather than written into the markup, so the sample a
+ * customer picks from is the same value the product pages paint their swatches
+ * with -- two hardcoded copies would eventually disagree, and a colour named
+ * "Sky Captain" is impossible to sanity-check by eye.
+ *
+ * The swatch goes INSIDE the span, not between the input and the span: the
+ * checked-state styling is `input:checked + span`, an adjacent-sibling rule that
+ * an element inserted between the two would silently break.
+ */
+function renderColorSwatches() {
+  if (typeof colorHex !== 'function') return;   // data.js absent; names still work
+  document.querySelectorAll('.color-options input[name="color"]').forEach((input) => {
+    const label = input.nextElementSibling;
+    if (!label || label.querySelector('.color-swatch')) return;
+    const sample = document.createElement('i');
+    sample.className = 'color-swatch';
+    sample.style.background = colorHex(input.value);
+    // Decorative: the colour's name is already the accessible label, so a
+    // screen reader announcing it twice would be noise.
+    sample.setAttribute('aria-hidden', 'true');
+    label.prepend(sample);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  renderColorSwatches();
   new IntakeFlow();
 });

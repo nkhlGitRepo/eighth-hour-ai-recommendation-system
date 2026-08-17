@@ -223,6 +223,33 @@
   color: var(--color-accent);
 }
 
+/* Colour sample beside the name, injected by renderColorSwatches(). Sits inside
+   the span so the :checked + span rule above still matches.
+
+   The span becomes a flex row so a two-word name wraps as a block beside the
+   sample rather than flowing back underneath it -- inline, "Chocolate Truffle"
+   put "Truffle" on a second line starting left of the swatch, which read as a
+   layout bug. Scoped to .color-options so the silhouette and occasion labels,
+   which have no sample, are untouched. */
+.color-options .option-label > span {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.color-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  /* The outline is load-bearing, not decoration: Moonless Night is #000000 and
+     White Alyssum is #ece8e4, so without it one reads as a hole in the page and
+     the other is invisible against the panel. */
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  vertical-align: -0.12em;
+  flex: none;
+}
+
 .profile-display {
   margin: 1.5rem 0;
 }
