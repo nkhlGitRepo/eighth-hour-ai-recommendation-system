@@ -147,6 +147,14 @@ class RecommendationsPage {
         <div class="profile-label">Waist</div>
         <div class="profile-value">${measurements.waist ? measurements.waist + ' cm' : 'N/A'}</div>
       </div>
+      <div class="profile-item">
+        <div class="profile-label">Hips</div>
+        <div class="profile-value">${measurements.hips ? measurements.hips + ' cm' : 'N/A'}</div>
+      </div>
+      <div class="profile-item">
+        <div class="profile-label">Height</div>
+        <div class="profile-value">${measurements.height ? measurements.height + ' cm' : 'N/A'}</div>
+      </div>
     `;
   }
 

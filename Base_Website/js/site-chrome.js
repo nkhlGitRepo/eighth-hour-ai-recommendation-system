@@ -76,8 +76,19 @@ const CHROME_ROOT = (function () {
       .then((profile) => {
         if (!profile || !profile.session_id) return;     // no completed profile yet
 
+        // Both keys have to be right, and they can be wrong independently.
+        // Returning as soon as currentSessionId matched left intakeSession
+        // absent whenever something had cleared it -- and nothing restored it,
+        // because the id it would have been compared against was already
+        // correct. The Recommendations page's "Your Profile" panel reads only
+        // intakeSession, so it sat on "Complete intake flow to see profile"
+        // while the recommendations beside it rendered from the very profile it
+        // claimed was missing.
         const stored = localStorage.getItem("currentSessionId");
-        if (stored === profile.session_id) return;       // already correct
+        const intake = readIntake();
+        const idIsRight = stored === profile.session_id;
+        const intakeIsUsable = Boolean(intake.sessionId && intake.shapeProfile);
+        if (idIsRight && intakeIsUsable) return;         // genuinely in sync
 
         localStorage.setItem("currentSessionId", profile.session_id);
         // Rebuild intakeSession too: the header links decide what to show from
