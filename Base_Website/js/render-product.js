@@ -4,7 +4,7 @@
  * color/size selection and an "add to cart" action.
  * Runs only on product.html.
  */
-const PRODUCT_API_BASE = "http://localhost:8000";
+const PRODUCT_API_BASE = window.EH_API_BASE;
 
 /**
  * Looks up this customer's fit-checked size for a product, if a style

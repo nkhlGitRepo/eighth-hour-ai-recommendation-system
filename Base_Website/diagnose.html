@@ -26,10 +26,11 @@
     <div class="verdict" id="verdict"></div>
   </div>
 
+  <script src="js/config.js?v=20260926"></script>
   <script>
     // Standalone on purpose: no shared scripts, so it still reports accurately
     // even if something in the normal page chrome is broken.
-    const API = "http://localhost:8000";
+    const API = window.EH_API_BASE;
     const rows = [];
     const add = (k, v, good) =>
       rows.push(`<div class="row"><span class="k">${k}</span>

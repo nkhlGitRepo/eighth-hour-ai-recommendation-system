@@ -1,0 +1,40 @@
+# Render blueprint for the styling-engine API (backend/).
+#
+# The storefront is served separately by GitHub Pages from this same branch;
+# js/config.js points it at the URL this service gets.
+#
+# Free plan caveats:
+#   - The service sleeps after 15 minutes without traffic; the next request
+#     waits ~30-60 s while it wakes.
+#   - The disk is temporary, so accounts and saved profiles are wiped whenever
+#     the service restarts, sleeps or redeploys. To keep them, switch to a paid
+#     plan and uncomment the disk below (DATABASE_PATH then points into it).
+services:
+  - type: web
+    name: eighth-hour-api
+    runtime: python
+    plan: free
+    branch: gh-pages
+    rootDir: backend
+    # Bake the pose model into the build so the first photo upload doesn't
+    # have to download it.
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python -c "from py_src.providers.mediapipe_sizing_provider import ensure_model; ensure_model()"
+    # One worker: the pose model costs ~200 MB per worker, and the free plan
+    # has 512 MB.
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13"
+      - key: SIZING_PROVIDER
+        value: mediapipe
+      - key: ALLOWED_ORIGINS
+        value: https://nkhlgitrepo.github.io
+    #   - key: DATABASE_PATH
+    #     value: /var/data/intake_sessions.db
+    # disk:
+    #   name: data
+    #   mountPath: /var/data
+    #   sizeGB: 1

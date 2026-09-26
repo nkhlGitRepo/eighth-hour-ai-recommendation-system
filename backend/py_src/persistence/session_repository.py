@@ -6,6 +6,7 @@ Swappable backend: SQLite (dev) or PostgreSQL (prod).
 """
 
 import json
+import os
 import sqlite3
 import time
 from typing import Optional, Dict, TYPE_CHECKING
@@ -39,8 +40,10 @@ class SessionRepository:
 class SQLiteSessionRepository(SessionRepository):
     """SQLite-backed session repository for development."""
 
-    def __init__(self, db_path: str = "intake_sessions.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: str = None):
+        # DATABASE_PATH lets a deployment put the file somewhere stable (e.g. a
+        # mounted disk) instead of wherever the process happened to start.
+        self.db_path = db_path or os.environ.get("DATABASE_PATH", "intake_sessions.db")
         self._init_db()
 
     def _init_db(self):

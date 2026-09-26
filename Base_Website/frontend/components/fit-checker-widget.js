@@ -3,7 +3,7 @@
  * Embeds on product pages to show personalized fit recommendations
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.EH_API_BASE;
 
 class FitCheckerWidget {
   constructor(productSku, productName) {

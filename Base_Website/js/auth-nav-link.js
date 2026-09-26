@@ -49,7 +49,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const token = localStorage.getItem("authToken");
     if (token) {
       try {
-        await fetch("http://localhost:8000/auth/logout", {
+        await fetch(`${window.EH_API_BASE}/auth/logout`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         });
