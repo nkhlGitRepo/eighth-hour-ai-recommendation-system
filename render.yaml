@@ -16,11 +16,18 @@ services:
     plan: free
     branch: gh-pages
     rootDir: backend
-    # Bake the pose model into the build so the first photo upload doesn't
-    # have to download it.
+    # 1. mediapipe pulls in opencv-contrib-python, the desktop build of OpenCV,
+    #    which needs libGL -- absent on a server, so `import mediapipe` would
+    #    fail on the first photo. The headless build is the same cv2 module
+    #    without the GUI dependencies.
+    # 2. Load the pose model once, which downloads it into the build and fails
+    #    the deploy (instead of a customer's upload) if anything native is
+    #    missing.
     buildCommand: >-
       pip install -r requirements.txt &&
-      python -c "from py_src.providers.mediapipe_sizing_provider import ensure_model; ensure_model()"
+      pip uninstall -y opencv-contrib-python &&
+      pip install opencv-contrib-python-headless==5.0.0.93 &&
+      python -c "from py_src.providers.mediapipe_sizing_provider import MediaPipeSizingProvider; MediaPipeSizingProvider()._get_landmarker()"
     # One worker: the pose model costs ~200 MB per worker, and the free plan
     # has 512 MB.
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
