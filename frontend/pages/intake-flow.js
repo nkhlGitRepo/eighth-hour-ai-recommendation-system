@@ -3,7 +3,7 @@
  * Orchestrates the multi-step intake process with backend API calls
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.EH_API_BASE;
 
 // Ceiling on a photo-measurement request. The local pose model answers in about
 // a second, but a hosted vendor can take tens of seconds and could hang

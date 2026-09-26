@@ -46,10 +46,22 @@ from py_src.constants import (
 # Initialize FastAPI app
 app = FastAPI(title="AI Styling Engine", version="1.0.0")
 
-# Enable CORS for website integration (adjust origins as needed)
+# Which sites may call the API from a browser. Defaults to the local storefront;
+# a deployment names its real site(s) in ALLOWED_ORIGINS, comma-separated. No
+# wildcard: with allow_credentials, "*" makes the API echo back any origin that
+# asks, so every website on the internet could call it as the visitor.
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "ALLOWED_ORIGINS",
+        "http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000",
+    ).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8080", "*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

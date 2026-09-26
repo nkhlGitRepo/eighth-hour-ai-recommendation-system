@@ -9,7 +9,7 @@
  * Loaded on: login.html, signup.html, account.html, intake-flow.html.
  */
 
-const AUTH_API_BASE = "http://localhost:8000";
+const AUTH_API_BASE = window.EH_API_BASE;
 
 // Only known, in-app pages are ever legitimate `?redirect=` targets --
 // never navigate to the raw query param value itself (open-redirect guard).

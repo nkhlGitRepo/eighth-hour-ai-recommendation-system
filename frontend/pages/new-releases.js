@@ -7,7 +7,7 @@
  * GET /new-releases/{session_id} (M9) instead.
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.EH_API_BASE;
 const PREVIEW_COUNT = 6;
 
 class NewReleasesPage {

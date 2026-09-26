@@ -69,7 +69,7 @@ const CHROME_ROOT = (function () {
     if (sessionStorage.getItem(CHECKED)) return;         // at most once per tab
     sessionStorage.setItem(CHECKED, "1");
 
-    fetch("http://localhost:8000/account/profile", {
+    fetch(`${window.EH_API_BASE}/account/profile`, {
       headers: { Authorization: "Bearer " + token },
     })
       .then((response) => (response.ok ? response.json() : null))
@@ -127,7 +127,7 @@ window.ehResolveSession = async function ehResolveSession() {
   try {
     const token = localStorage.getItem("authToken");
     if (!token) return null;
-    const response = await fetch("http://localhost:8000/account/profile", {
+    const response = await fetch(`${window.EH_API_BASE}/account/profile`, {
       headers: { Authorization: "Bearer " + token },
     });
     if (!response.ok) return null;

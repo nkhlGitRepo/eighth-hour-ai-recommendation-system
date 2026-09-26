@@ -26,7 +26,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from py_src.constants import SIZE_CHART_SOURCE, STANDARD_SIZES  # noqa: E402
 
-PAGE = Path(__file__).resolve().parents[2] / "Base_Website" / "size-guide.html"
+_REPO = Path(__file__).resolve().parents[2]
+# The storefront lives in Base_Website/ on main and at the repo root on the
+# gh-pages branch, which GitHub Pages serves from.
+PAGE = next(
+    (p for p in (_REPO / "Base_Website" / "size-guide.html", _REPO / "size-guide.html") if p.exists()),
+    _REPO / "Base_Website" / "size-guide.html",
+)
 
 # Which dimensions each table shows, keyed by the id on its <table>.
 TABLES = {

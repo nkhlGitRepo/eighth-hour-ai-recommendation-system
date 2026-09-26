@@ -3,7 +3,7 @@
  * Shows personalized recommendations if user has completed intake
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.EH_API_BASE;
 
 class HomeRecommendationsLoader {
   constructor() {

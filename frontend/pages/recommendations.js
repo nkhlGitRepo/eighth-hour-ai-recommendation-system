@@ -3,7 +3,7 @@
  * Displays personalized recommendations based on intake session
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.EH_API_BASE;
 
 class RecommendationsPage {
   constructor() {
