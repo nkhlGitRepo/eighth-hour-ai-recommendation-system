@@ -10,6 +10,9 @@ const API_BASE = window.EH_API_BASE;
 // outright -- fetch() has no default timeout, so without this the spinner would
 // spin forever instead of showing the error panel.
 const PHOTO_SCAN_TIMEOUT_MS = 60000;
+// Photos are shrunk to this before upload (see shrinkPhotoForUpload). Above the
+// server's 1280 px analysis size, so the server's own resize is the last step.
+const PHOTO_UPLOAD_LONGEST_SIDE_PX = 1600;
 
 class IntakeFlow {
   constructor() {
@@ -671,7 +674,7 @@ class IntakeFlow {
       const formData = new FormData();
       formData.append('session_id', this.sessionId);
       formData.append('height_cm', String(height));
-      formData.append('photo', this.selectedPhoto);
+      formData.append('photo', await shrinkPhotoForUpload(this.selectedPhoto));
       // Required (the scan button stays disabled until both are chosen): the
       // backend anchors bust on the top size and waist/hips on the bottom size,
       // and the photo adjusts within them. A photo alone was measured missing
@@ -1054,6 +1057,42 @@ class IntakeFlow {
   continueShopping() {
     this.saveSessionState();
     window.location.href = '../../index.html';
+  }
+}
+
+/**
+ * A copy of the photo no larger than the analysis needs, as a JPEG.
+ *
+ * The server analyses photos at ~1280 px, but phones shoot 12-48 megapixels,
+ * and decoding a full-size WEBP or HEIC there costs hundreds of megabytes --
+ * enough to crash the server. Shrinking here also makes the upload far faster
+ * on a phone connection. The browser applies the photo's EXIF rotation when
+ * decoding, so the copy is the right way up. If the browser can't decode the
+ * format (HEIC in desktop Chrome, say), the original is sent unchanged.
+ */
+async function shrinkPhotoForUpload(file, longestSide = PHOTO_UPLOAD_LONGEST_SIDE_PX) {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, longestSide / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.type === 'image/jpeg') {
+      bitmap.close?.();
+      return file;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    // JPEG has no transparency: without a fill, a transparent PNG would
+    // upload as a person on a black background.
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    return blob ? new File([blob], 'photo.jpg', { type: 'image/jpeg' }) : file;
+  } catch (error) {
+    console.warn('Sending the photo at its original size:', error);
+    return file;
   }
 }
 

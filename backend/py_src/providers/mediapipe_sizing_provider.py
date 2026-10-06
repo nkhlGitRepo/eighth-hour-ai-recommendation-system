@@ -86,6 +86,16 @@ ARM_SEGMENTS = tuple(
 ANALYSIS_LONGEST_SIDE_PX = 1280
 ANALYSIS_WIDTH_MULTIPLE = 16
 
+# JPEGs decode straight to a reduced size (see _decode), so any resolution is
+# cheap. Other formats decode at full size first, and the decoders alone cost
+# ~13 bytes a pixel: measured, a 20-megapixel WEBP added 320 MB and a 24 MP HEIC
+# 264 MB, on top of the ~220 MB the app and pose model already hold -- past the
+# server's 512 MB. Above this many pixels such a photo is refused with a request
+# for a smaller copy. 12.5 MP admits a standard 12.2 MP phone photo (a full scan
+# of a 13 MP WEBP peaked at 470 MB, HEIC 426 MB); the storefront shrinks photos
+# before uploading, so mostly only a direct API caller should ever see this.
+MAX_FULL_DECODE_PIXELS = 12_500_000
+
 # Visibility requirements differ by what a landmark is used FOR.
 #
 # Shoulders and hips supply the horizontal breadths that become measurements,
@@ -501,10 +511,46 @@ class MediaPipeSizingProvider(SizingProvider):
 
         try:
             image = Image.open(io.BytesIO(bytes(image_bytes)))
+            # A JPEG can be decoded straight to a fraction of its size (the
+            # format's own DCT scaling), so a 20-megapixel phone photo never
+            # exists in memory at full size. Decoded whole, each copy below
+            # (rotation, conversion) cost ~60 MB, and five scans of one such
+            # photo peaked at 492 MB -- against a 512 MB server. draft() picks
+            # the smallest scale still at least this big, so nothing is lost.
+            image.draft("RGB", (ANALYSIS_LONGEST_SIDE_PX, ANALYSIS_LONGEST_SIDE_PX))
+            if image.format != "JPEG" and image.width * image.height > MAX_FULL_DECODE_PIXELS:
+                raise ModuleError(
+                    "That photo is too large to analyse. Please send a smaller copy, "
+                    "or a JPEG -- most phones' Share option can do this.",
+                    "M2",
+                )
             # Phone photos are commonly stored rotated with an EXIF flag; without
-            # this a portrait shot arrives sideways and no pose is found.
-            image = ImageOps.exif_transpose(image)
+            # this a portrait shot arrives sideways and no pose is found. Read it
+            # now: the reduction below returns an image without the EXIF.
+            orientation = image.getexif().get(0x0112)
+            # Other formats (WEBP, PNG, HEIC) decode at full size, so shrink at
+            # once, before any further copies -- a 20-megapixel WEBP otherwise
+            # peaked at 614 MB. An integer box reduction is cheap and keeps the
+            # image at least the analysis size; the precise resize is below.
+            factor = max(image.width, image.height) // ANALYSIS_LONGEST_SIDE_PX
+            if factor >= 2:
+                image = image.reduce(factor)
+            # The same mapping ImageOps.exif_transpose uses, applied by hand
+            # because the reduced copy no longer carries the EXIF.
+            undo = {
+                2: Image.Transpose.FLIP_LEFT_RIGHT,
+                3: Image.Transpose.ROTATE_180,
+                4: Image.Transpose.FLIP_TOP_BOTTOM,
+                5: Image.Transpose.TRANSPOSE,
+                6: Image.Transpose.ROTATE_270,
+                7: Image.Transpose.TRANSVERSE,
+                8: Image.Transpose.ROTATE_90,
+            }.get(orientation)
+            if undo is not None:
+                image = image.transpose(undo)
             image = image.convert("RGB")
+        except ModuleError:
+            raise
         except Exception as err:
             raise ModuleError(f"Couldn't read that image file ({err})", "M2")
 
