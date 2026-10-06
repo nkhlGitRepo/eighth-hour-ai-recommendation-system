@@ -324,3 +324,29 @@ class TestIntakeSessionGating:
         r = client.post("/intake/session", headers=auth_headers(account["token"]))
         assert r.status_code == 200
         assert r.json()["user_id"] == account["user_id"]
+
+
+class TestRootAddress:
+    """
+    The API's bare address is the link Render shows. It answered
+    {"detail": "Not Found"}, which reads as broken to a person.
+    """
+
+    def test_redirects_a_browser_to_the_storefront_when_configured(self, client, monkeypatch):
+        import main
+        monkeypatch.setattr(main, "STOREFRONT_URL", "https://shop.example.test/")
+        r = client.get("/", follow_redirects=False)
+        assert r.status_code == 307
+        assert r.headers["location"] == "https://shop.example.test/"
+
+    def test_otherwise_says_what_the_service_is(self, client, monkeypatch):
+        import main
+        monkeypatch.setattr(main, "STOREFRONT_URL", "")
+        r = client.get("/")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok" and r.json()["health"] == "/health"
+
+    def test_a_malformed_setting_is_not_followed(self, client, monkeypatch):
+        import main
+        monkeypatch.setattr(main, "STOREFRONT_URL", "javascript:alert(1)")
+        assert client.get("/", follow_redirects=False).status_code == 200

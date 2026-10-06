@@ -39,6 +39,9 @@ services:
         value: mediapipe
       - key: ALLOWED_ORIGINS
         value: https://nkhlgitrepo.github.io
+      # Where the API's own address sends a browser (it has no page of its own).
+      - key: STOREFRONT_URL
+        value: https://nkhlgitrepo.github.io/eighth-hour-ai-recommendation-system/
     #   - key: DATABASE_PATH
     #     value: /var/data/intake_sessions.db
     # disk:

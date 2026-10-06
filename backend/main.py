@@ -7,7 +7,7 @@ Website calls this API to get styling recommendations.
 
 from fastapi import FastAPI, HTTPException, Query, Header, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import hashlib
@@ -344,6 +344,26 @@ def get_current_user_id(token: str = Depends(get_bearer_token)) -> str:
 # =========================================================================
 # ENDPOINTS
 # =========================================================================
+
+
+# Where the API's bare address sends someone who opens it in a browser. Without
+# a route here, the address Render shows for the service answered
+# {"detail": "Not Found"} -- correct for an API, but it reads as broken to a
+# person following the link. Set to the storefront in render.yaml.
+STOREFRONT_URL = os.environ.get("STOREFRONT_URL", "").strip()
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Send a browser to the storefront, or say what this service is."""
+    if STOREFRONT_URL.startswith(("https://", "http://")):
+        return RedirectResponse(STOREFRONT_URL, status_code=307)
+    return {
+        "service": "Eighth Hour styling API",
+        "status": "ok",
+        "health": "/health",
+        "docs": "/docs",
+    }
 
 
 @app.get("/health")
