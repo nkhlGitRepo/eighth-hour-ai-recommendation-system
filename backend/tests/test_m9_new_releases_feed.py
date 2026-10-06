@@ -840,22 +840,22 @@ class TestM9IndependentOfM6FilterRelaxation:
         is what verifies the strict, unrelaxed scoring/recency logic in
         isolation from that fallback.
         """
-        catalog_with_no_recent_items = CatalogKB([{
-            "slug": "old-item",
-            "name": "Old Item",
-            "category": "Tops",
-            "fabric": "Cotton",
-            "price": 40.0,
-            "colors": ["Ebony"],
-            "sizes": ["M"],
-            "launched_at": days_ago(400),  # well outside the recency window
-        }])
+        nothing_new_matches = CatalogKB([
+            # Launched this week, but in a colour the customer didn't pick.
+            {"slug": "recent-no-match", "name": "Recent No Match", "category": "Tops",
+             "fabric": "Cotton", "price": 40.0, "colors": ["Chartreuse"], "sizes": ["M"],
+             "launched_at": days_ago(5)},
+            # A perfect match, but from long before the latest drop.
+            {"slug": "old-item", "name": "Old Item", "category": "Tops", "fabric": "Cotton",
+             "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],
+             "launched_at": days_ago(400)},
+        ])
         feed_mgr = NewReleasesFeed(
-            catalog=catalog_with_no_recent_items,
+            catalog=nothing_new_matches,
             fit_checker=fit_checker,
             consent_tracker=consent_tracker,
         )
-        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, min_items=0)
+        feed = feed_mgr.generate_feed("test_user", None, {"preferred_colors": ["Ebony"], "preferred_silhouettes": [], "occasions": []}, None, min_items=0)
         assert feed == []
 
 
@@ -930,14 +930,18 @@ class TestM9MinimumItemsGuarantee:
     def test_min_items_zero_disables_the_guarantee(self, fit_checker, consent_tracker):
         """Explicit opt-out: min_items=0 preserves the old exact-scoring
         behavior, including a legitimately empty result."""
-        catalog = CatalogKB([{
-            "slug": "old-item",
-            "name": "Old Item", "category": "Tops", "fabric": "Cotton",
-            "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],
-            "launched_at": days_ago(400),
-        }])
+        catalog = CatalogKB([
+            # Launched this week, but in a colour the customer didn't pick.
+            {"slug": "recent-no-match", "name": "Recent No Match", "category": "Tops",
+             "fabric": "Cotton", "price": 40.0, "colors": ["Chartreuse"], "sizes": ["M"],
+             "launched_at": days_ago(5)},
+            # A perfect match, but from long before the latest drop.
+            {"slug": "old-item", "name": "Old Item", "category": "Tops", "fabric": "Cotton",
+             "price": 40.0, "colors": ["Ebony"], "sizes": ["M"],
+             "launched_at": days_ago(400)},
+        ])
         feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
-        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, min_items=0)
+        feed = feed_mgr.generate_feed("test_user", None, {"preferred_colors": ["Ebony"], "preferred_silhouettes": [], "occasions": []}, None, min_items=0)
         assert feed == []
 
     def test_empty_catalog_returns_empty_without_erroring(self, fit_checker, consent_tracker):
@@ -976,3 +980,46 @@ class TestM9MinimumItemsGuarantee:
         feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
         feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, limit=1, min_items=1)
         assert len(feed) <= 1
+
+
+class TestM9BetweenDrops:
+    """
+    "New" used to be measured only against today, so the feed decayed by
+    itself: a month after the last launch nothing counted as new, and it fell
+    back to a single item from the whole catalog -- what the live site was
+    showing. When nothing has launched within the window, the latest drop is
+    still the newest thing in the shop.
+    """
+
+    def _stale_catalog(self):
+        def item(slug, days):
+            return {"slug": slug, "name": slug, "category": "Tops", "fabric": "Cotton",
+                    "price": 40.0, "colors": ["Ebony"], "sizes": ["M"], "launched_at": days_ago(days)}
+        return CatalogKB([item("latest-drop-a", 60), item("latest-drop-b", 75),
+                          item("previous-drop", 120), item("legacy", 400)])
+
+    def test_the_latest_drop_is_still_shown_as_new(self, fit_checker, consent_tracker):
+        feed_mgr = NewReleasesFeed(catalog=self._stale_catalog(), fit_checker=fit_checker,
+                                   consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, min_items=0)
+        assert sorted(item["sku"] for item in feed) == ["latest-drop-a", "latest-drop-b"]
+
+    def test_a_fresh_catalog_is_measured_from_today_as_before(self, fit_checker, consent_tracker):
+        catalog = CatalogKB([
+            {"slug": "this-week", "name": "This Week", "category": "Tops", "fabric": "Cotton",
+             "price": 40.0, "colors": ["Ebony"], "sizes": ["M"], "launched_at": days_ago(3)},
+            {"slug": "two-months", "name": "Two Months", "category": "Tops", "fabric": "Cotton",
+             "price": 40.0, "colors": ["Ebony"], "sizes": ["M"], "launched_at": days_ago(60)},
+        ])
+        feed_mgr = NewReleasesFeed(catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, min_items=0)
+        assert [item["sku"] for item in feed] == ["this-week"]
+
+    def test_the_real_catalog_has_new_releases_whatever_the_date(self, fit_checker, consent_tracker):
+        import json
+        from pathlib import Path
+        products = json.loads((Path(__file__).resolve().parent.parent / "products.json").read_text())
+        feed_mgr = NewReleasesFeed(catalog=CatalogKB(products), fit_checker=fit_checker,
+                                   consent_tracker=consent_tracker)
+        feed = feed_mgr.generate_feed("test_user", {"shape_class": "balanced"}, None, None, min_items=0)
+        assert len(feed) >= 3

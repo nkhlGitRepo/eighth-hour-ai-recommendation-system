@@ -121,8 +121,8 @@ class RecommendationEngine:
 
     def _validate_session(self, session) -> None:
         """Validate that session is complete and has required data."""
-        # Check status
-        if session.status != "complete":
+        # Check it holds a finished profile (see IntakeSession.has_completed_profile)
+        if not session.has_completed_profile():
             raise ModuleError(
                 f"Session must be complete (status='complete'), got status='{session.status}'",
                 "M5"

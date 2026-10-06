@@ -97,6 +97,58 @@ STANDARD_SIZE_CHART = {
     for size in STANDARD_SIZES
 }
 
+# --- Body shape classification (M3) -----------------------------------------
+#
+# Based on FFIT for Apparel (Simmons, Istook & Devarajan, 2004), the standard
+# measurement-based shape classification in apparel research. Its rules compare
+# bust, waist and hips by their DIFFERENCES: which of bust and hips is fuller
+# decides pear versus top-heavy, and how much smaller the waist is decides how
+# defined it is.
+#
+# The previous rules used bust/waist and waist/hip ratios only and never
+# compared bust with hips, so equal bust and hips (107/90/107) came out "pear"
+# -- the one shape defined by hips being fuller than the bust.
+#
+# FFIT states its thresholds in inches at an average body. Applied verbatim
+# they would grade bodies by size as well as shape: a proportionally identical
+# figure has smaller differences at XXS than at XXL, so petite hourglass figures
+# would read as rectangles. Each threshold is therefore expressed as a fraction
+# of the body's "frame" -- the mean of bust and hips -- calibrated at the
+# middle size of the published chart, which is where FFIT's inches apply as
+# written. Nothing here is fitted to any particular customer.
+_SHAPE_REFERENCE_SIZE = STANDARD_SIZES[len(STANDARD_SIZES) // 2]
+_SHAPE_REFERENCE_FRAME_CM = (
+    STANDARD_SIZE_CHART[_SHAPE_REFERENCE_SIZE]["bust"]
+    + STANDARD_SIZE_CHART[_SHAPE_REFERENCE_SIZE]["hips"]
+) / 2
+
+
+def _ffit_fraction(inches):
+    """An FFIT inch threshold as a fraction of the body's frame."""
+    return inches * 2.54 / _SHAPE_REFERENCE_FRAME_CM
+
+
+SHAPE_THRESHOLDS = {
+    # FFIT: bust and hips within 1" of each other count as even.
+    "bust_hips_even": _ffit_fraction(1.0),
+    # FFIT: 3.6" or more and one of them is distinctly fuller -- the line
+    # between hourglass/rectangle and triangle (pear) or inverted triangle.
+    "bust_hips_distinct": _ffit_fraction(3.6),
+    # FFIT: a waist 9" smaller than the bust, or 10" smaller than the hips, is
+    # a defined (hourglass) waist.
+    "bust_waist_defined": _ffit_fraction(9.0),
+    "hips_waist_defined": _ffit_fraction(10.0),
+    # Not FFIT, which has no apple class. Apple is the figure whose waist is
+    # about as full as its fullest point: within 2" of the fuller of bust and
+    # hips, FFIT's own smallest step after "even".
+    "apple_waist_gap": _ffit_fraction(2.0),
+    # Not FFIT either: it calls everything between apple and hourglass a
+    # rectangle. This splits that span at its midpoint (5.5", halfway between
+    # the 2" apple line and the 9" hourglass line) into "straight" -- little
+    # waist definition -- and "balanced", a moderately defined waist.
+    "balanced_waist_gap": _ffit_fraction(5.5),
+}
+
 
 def _boundaries_from_chart(dimension):
     """

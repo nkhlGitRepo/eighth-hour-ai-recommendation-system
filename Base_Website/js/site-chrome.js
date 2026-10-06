@@ -88,7 +88,23 @@ const CHROME_ROOT = (function () {
         const intake = readIntake();
         const idIsRight = stored === profile.session_id;
         const intakeIsUsable = Boolean(intake.sessionId && intake.shapeProfile);
-        if (idIsRight && intakeIsUsable) return;         // genuinely in sync
+        // The server rebuilds a profile made by older shape rules (see
+        // BodyShapeProfiler.refresh_if_outdated), but this browser keeps the
+        // copy it saved at the time -- and the quiz and Recommendations pages
+        // read only that copy. Without this, a customer told "pear" by the old
+        // rules would keep seeing "pear" here while their account said otherwise.
+        const serverVersion = profile.shape_profile && profile.shape_profile.profile_version;
+        const savedIsCurrent = !serverVersion ||
+          (intake.shapeProfile && intake.shapeProfile.profile_version === serverVersion);
+        if (idIsRight && intakeIsUsable && savedIsCurrent) return;   // genuinely in sync
+        if (idIsRight && intakeIsUsable) {
+          // Same session, older rules: swap in the current profile and keep
+          // everything else (step, measurements, recommendations) as it was.
+          intake.shapeProfile = profile.shape_profile;
+          localStorage.setItem("intakeSession", JSON.stringify(intake));
+          window.location.reload();
+          return;
+        }
 
         localStorage.setItem("currentSessionId", profile.session_id);
         // Rebuild intakeSession too: the header links decide what to show from

@@ -100,8 +100,10 @@ class TestM1MeasurementValidation:
         assert session.shape_profile["shape_class"] in [
             "pear", "hourglass", "apple", "athletic", "straight", "balanced"
         ]
-        # Mock returns hourglass for these measurements
-        assert session.shape_profile["shape_class"] == "hourglass"
+        # The mock's 88/70/102 has hips 14 cm fuller than the bust: FFIT's
+        # triangle, i.e. pear. (The old rules said hourglass because they never
+        # compared bust with hips.)
+        assert session.shape_profile["shape_class"] == "pear"
 
         # Verify shape profile has all required fields
         assert "ratios" in session.shape_profile
@@ -553,7 +555,8 @@ class TestM1EndToEndScearios:
         # Measurements
         session = orchestrator.extract_measurements(session.session_id)
         assert session.body_measurements.bust == 88.0
-        assert session.shape_profile["shape_class"] == "hourglass"  # Mock returns hourglass
+        # Mock's 88/70/102: hips 14 cm fuller than the bust -> pear.
+        assert session.shape_profile["shape_class"] == "pear"
 
         # Preferences
         session = orchestrator.capture_preferences(

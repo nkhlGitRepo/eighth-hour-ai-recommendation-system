@@ -18,6 +18,7 @@ from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.modules.m2_sizing_integration import SizingIntegration, Measurements
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
+from py_src.constants import STANDARD_SIZES
 from py_src.modules.m4_style_preference import PreferenceCapture, StyleProfile
 from py_src.persistence.session_repository import SessionRepository, SQLiteSessionRepository
 import time
@@ -87,6 +88,29 @@ class IntakeSession:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+
+    def has_completed_profile(self) -> bool:
+        """
+        Whether this session holds a finished profile that recommendations, fit
+        checks, new releases and the account page can use.
+
+        Not simply status == complete. A customer who finished intake and then
+        follows "Update Style" edits this same session, which moves it back
+        through the intake states -- and every feature that required "complete"
+        then stopped working, with the account showing no profile at all,
+        until they finished again (or for good, if they left part-way). What
+        those features need is the data: measurements, a shape profile (rebuilt
+        whenever the measurements change) and style preferences (kept while the
+        measurements are edited). A session that has been completed once and
+        still has all three is usable.
+        """
+        if self.status == IntakeState.COMPLETE.value:
+            return True
+        return bool(
+            self.body_measurements and self.shape_profile and self.style_profile
+            and any(event.get("to_state") == IntakeState.COMPLETE.value
+                    for event in self.event_log)
+        )
 
     def record_event(self, from_state: str, to_state: str, reason: str, user_action: str = None):
         """Record a state transition event for replay/debug."""
@@ -438,6 +462,20 @@ class IntakeOrchestrator:
             ModuleError: If the provider can't extract usable measurements
         """
         session = self.get_session(session_id)
+
+        # The sizes the customer usually wears are required with a photo. A
+        # frontal photo can't see depth, and measured against real bodies the
+        # photo alone missed by ~17 cm on average against ~4 cm once anchored on
+        # the size chart -- a tester's photo-only estimate came out 82/66/92 for
+        # a body measuring 107/90/107. The photo adjusts the estimate within the
+        # stated sizes rather than standing in for them.
+        if any(not size or str(size).strip().upper() not in STANDARD_SIZES
+               for size in (usual_top_size, usual_bottom_size)):
+            raise ModuleError(
+                "Please tell us the sizes you usually wear in tops and bottoms -- "
+                "a photo is measured against them.",
+                "M1",
+            )
 
         measurements = self.sizing.extract_from_image(
             image_bytes=image_bytes,

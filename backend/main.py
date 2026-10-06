@@ -1114,8 +1114,8 @@ async def get_session_recommendations(
         # Retrieve the completed session
         session = intake_orchestrator.get_session(session_id)
 
-        # Verify session is complete
-        if session.status != "complete":
+        # Verify session has a finished profile (see has_completed_profile)
+        if not session.has_completed_profile():
             raise ModuleError(
                 f"Session must be complete to get recommendations (status={session.status})",
                 "M5"
@@ -1192,8 +1192,8 @@ async def check_product_fit(session_id: str, product_sku: str):
         # Retrieve the completed session
         session = intake_orchestrator.get_session(session_id)
 
-        # Verify session is complete
-        if session.status != "complete":
+        # Verify session has a finished profile (see has_completed_profile)
+        if not session.has_completed_profile():
             raise ModuleError(
                 "Session must be complete to check fit",
                 "M7"
@@ -1307,8 +1307,8 @@ async def get_new_releases(session_id: str, limit: int = 20):
         # Retrieve the completed session
         session = intake_orchestrator.get_session(session_id)
 
-        # Verify session is complete
-        if session.status != "complete":
+        # Verify session has a finished profile (see has_completed_profile)
+        if not session.has_completed_profile():
             raise ModuleError(
                 "Session must be complete to view new releases",
                 "M9"

@@ -211,24 +211,28 @@ class SQLiteSessionRepository(SessionRepository):
             raise
 
     def get_latest_completed_session_by_user(self, user_id: str) -> Optional["IntakeSession"]:
-        """Get the most recently completed session for a user (for account login hydration)."""
+        """
+        The user's most recent session holding a finished profile (for account
+        login hydration) -- including one being edited after completion, see
+        IntakeSession.has_completed_profile.
+        """
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.row_factory = sqlite3.Row
-                row = conn.execute(
+                rows = conn.execute(
                     """
                     SELECT * FROM intake_sessions
-                    WHERE user_id = ? AND status = 'complete'
+                    WHERE user_id = ?
                     ORDER BY updated_at DESC
-                    LIMIT 1
                     """,
                     (user_id,),
-                ).fetchone()
+                ).fetchall()
 
-            if not row:
-                return None
-
-            return self._row_to_session(row)
+            for row in rows:
+                session = self._row_to_session(row)
+                if session.has_completed_profile():
+                    return session
+            return None
 
         except Exception as err:
             logger.error("Latest completed session retrieval failed", err)
@@ -408,6 +412,17 @@ class SQLiteSessionRepository(SessionRepository):
                     f"Failed to deserialize session measurements: {str(err)}",
                     "SessionRepository"
                 )
+
+        # A profile made by older shape/size rules is rebuilt from the stored
+        # measurements, so a returning customer sees what the current rules say
+        # rather than whatever they were told at the time. Done here because
+        # every read path (get, get_by_user, latest completed) comes through
+        # this one function. See BodyShapeProfiler.refresh_if_outdated.
+        if session.shape_profile and session.body_measurements:
+            from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
+            session.shape_profile = BodyShapeProfiler.refresh_if_outdated(
+                session.shape_profile, session.body_measurements.to_dict()
+            )
 
         # Reconstruct style profile object
         if row["style_profile"]:

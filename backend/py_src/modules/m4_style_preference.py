@@ -55,16 +55,22 @@ class StyleProfile:
         "structured",
     ]
 
+    # No "gym": the label makes no activewear, so no product could ever match
+    # it -- choosing it only made the recommender drop the occasion filter.
     VALID_OCCASIONS = [
         "work",
         "casual",
         "evening",
         "weekend",
-        "gym",
         "travel",
         "date_night",
         "vacation",
     ]
+
+    # Occasions the form used to offer. Dropped quietly rather than rejected, so
+    # a page loaded before the change (or a saved selection) can still submit:
+    # "gym" alone would otherwise fail the whole step with "No valid occasions".
+    RETIRED_OCCASIONS = {"gym"}
 
     VALID_COVERAGE = {
         "neckline": ["conservative", "moderate", "open"],
@@ -276,6 +282,7 @@ class PreferenceCapture:
         if not isinstance(occasions, list):
             raise ModuleError("Occasions must be a list", "M4")
 
+        occasions = [o for o in occasions if o not in StyleProfile.RETIRED_OCCASIONS]
         valid = [o for o in occasions if o in StyleProfile.VALID_OCCASIONS]
         if len(valid) == 0 and len(occasions) > 0:
             raise ModuleError(

@@ -16,35 +16,35 @@ class TestBodyShapeProfiler:
 
     def test_initialization(self):
         """Profiler should initialize."""
-        assert self.profiler.PROFILE_VERSION == "1.0.0"
+        assert self.profiler.PROFILE_VERSION == "2.0.0"
 
     def test_classify_pear_shape_correctly(self):
-        """PEAR: bust/waist > 1.15, waist/hip < 0.85"""
+        """PEAR (FFIT triangle): hips distinctly fuller than the bust."""
         profile = self.profiler.profile(MEASUREMENTS["pear"])
         assert profile["shape_class"] == "pear"
 
     def test_classify_hourglass_shape_correctly(self):
-        """HOURGLASS: bust/waist > 1.25, waist/hip < 0.80"""
+        """HOURGLASS: even bust and hips, defined waist."""
         profile = self.profiler.profile(MEASUREMENTS["hourglass"])
         assert profile["shape_class"] == "hourglass"
 
     def test_classify_athletic_shape_correctly(self):
-        """ATHLETIC: bust/waist > 1.25, waist/hip < 0.90"""
+        """ATHLETIC (FFIT inverted triangle): bust distinctly fuller, waist undefined."""
         profile = self.profiler.profile(MEASUREMENTS["athletic"])
         assert profile["shape_class"] == "athletic"
 
     def test_classify_apple_shape_correctly(self):
-        """APPLE: bust/waist < 1.05, waist/hip > 0.95"""
+        """APPLE: waist nearly as full as the fuller of bust and hips."""
         profile = self.profiler.profile(MEASUREMENTS["apple"])
         assert profile["shape_class"] == "apple"
 
     def test_classify_straight_shape_correctly(self):
-        """STRAIGHT: bust/waist 1.0-1.15, waist/hip 0.95-1.05"""
+        """STRAIGHT (FFIT rectangle): little waist definition."""
         profile = self.profiler.profile(MEASUREMENTS["straight"])
         assert profile["shape_class"] == "straight"
 
     def test_classify_balanced_shape_correctly(self):
-        """BALANCED: middle ground"""
+        """BALANCED (FFIT rectangle): moderately defined waist."""
         profile = self.profiler.profile(MEASUREMENTS["balanced"])
         assert profile["shape_class"] == "balanced"
 
@@ -99,7 +99,7 @@ class TestBodyShapeProfiler:
     def test_profile_returns_versioned_data(self):
         """Profile should include version."""
         profile = self.profiler.profile(MEASUREMENTS["pear"])
-        assert profile["profile_version"] == "1.0.0"
+        assert profile["profile_version"] == "2.0.0"
 
     def test_ratios_are_computed_correctly(self):
         """Ratios should be computed correctly."""
@@ -181,12 +181,19 @@ class TestBodyShapeProfiler:
         assert profile1["size_recommendation_by_category"] == profile2["size_recommendation_by_category"]
 
     def test_profile_with_optional_shoulder(self):
-        """Profile should work with optional shoulder measurement."""
+        """
+        The shoulder is optional and doesn't affect the shape. Nor does it
+        produce a shoulder/hip ratio: the shoulder is a breadth and the hips a
+        circumference, and without a shoulder the old ratio silently used the
+        hips, showing every such customer 1.00.
+        """
         measurements = MEASUREMENTS["pear"].copy()
         measurements_no_shoulder = {k: v for k, v in measurements.items() if k != "shoulder"}
-        profile = self.profiler.profile(measurements_no_shoulder)
-        assert profile["shape_class"] is not None
-        assert "shoulder_hip" in profile["ratios"]
+        with_shoulder = self.profiler.profile(measurements)
+        without = self.profiler.profile(measurements_no_shoulder)
+        assert with_shoulder["shape_class"] == without["shape_class"]
+        assert "shoulder_hip" not in with_shoulder["ratios"]
+        assert "shoulder_hip" not in without["ratios"]
 
     def test_bust_size_boundary_transitions_exact(self):
         """

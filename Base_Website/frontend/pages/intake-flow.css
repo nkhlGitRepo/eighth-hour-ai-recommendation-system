@@ -223,31 +223,87 @@
   color: var(--color-accent);
 }
 
-/* Colour sample beside the name, injected by renderColorSwatches(). Sits inside
-   the span so the :checked + span rule above still matches.
+/* Colour tiles, built by renderColorSwatches(): a large sample with the name
+   beneath it. Customers pick by eye -- Pantone names like "Sky Captain" or
+   "Kombu Green" mean nothing to most people, and the old 0.85rem dot beside
+   them was too small to judge a colour from.
 
-   The span becomes a flex row so a two-word name wraps as a block beside the
-   sample rather than flowing back underneath it -- inline, "Chocolate Truffle"
-   put "Truffle" on a second line starting left of the swatch, which read as a
-   layout bug. Scoped to .color-options so the silhouette and occasion labels,
-   which have no sample, are untouched. */
+   The checkbox stays the real control (keyboard, screen readers, form value);
+   it is only visually hidden, and the tile shows its state. The sample sits
+   INSIDE the span so the `input:checked + span` rule above still matches. */
+.color-options {
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+}
+
+.color-options .option-label {
+  position: relative;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0.85rem 0.5rem 0.75rem;
+  text-align: center;
+}
+
+.color-options .option-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
 .color-options .option-label > span {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.55rem;
+  width: 100%;
 }
 
 .color-swatch {
-  display: inline-block;
-  width: 0.85rem;
-  height: 0.85rem;
+  position: relative;
+  display: block;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 50%;
   /* The outline is load-bearing, not decoration: Moonless Night is #000000 and
      White Alyssum is #ece8e4, so without it one reads as a hole in the page and
      the other is invisible against the panel. */
   border: 1px solid rgba(0, 0, 0, 0.25);
-  vertical-align: -0.12em;
   flex: none;
+  transition: box-shadow 0.15s;
+}
+
+.color-name {
+  font-size: 0.8rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+/* Selected: a ring around the sample and a tick drawn in whichever ink reads
+   against that colour (--swatch-ink, set per swatch from its lightness). */
+.color-options input[type="checkbox"]:checked + span .color-swatch {
+  box-shadow: 0 0 0 3px var(--color-bg), 0 0 0 5px var(--color-accent);
+}
+
+.color-options input[type="checkbox"]:checked + span .color-swatch::after {
+  content: "\2713";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--swatch-ink, #fff);
+}
+
+.color-options .option-label:has(input:checked) {
+  border-color: var(--color-accent);
+}
+
+/* The hidden checkbox still takes keyboard focus; show it on the tile. */
+.color-options .option-label:has(input:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .profile-display {
@@ -277,9 +333,20 @@
 
 .profile-ratios {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Four comparisons whose values run to "Bust 12 cm fuller": a 2 x 2 grid
+     fits them at every width, where auto-fit left a lone fourth item. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin-top: 0.75rem;
+}
+
+/* The sentence explaining the shape from the customer's own measurements. It
+   is the substance of this screen, so it reads as body text, not a caption. */
+.shape-summary {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--color-text, #333);
 }
 
 .ratio-item {
@@ -658,6 +725,107 @@ button:disabled:hover,
   screen doesn't read as a wall of alerts, but the leading clause of each item
   is bolded because the framing rule alone accounts for most failed uploads.
 */
+/* Framing guide: one correct silhouette and the three mistakes that actually
+   stop a photo being measured. Four across on a desktop, two on a phone. */
+.framing-guide {
+  margin-bottom: 1rem;
+}
+
+.framing-examples {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 560px) {
+  .framing-examples {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.framing-example {
+  margin: 0;
+  padding: 0.6rem 0.5rem 0.7rem;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-bg);
+  text-align: center;
+}
+
+.framing-example.is-good {
+  border-color: var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+.framing-example svg {
+  display: block;
+  width: 100%;
+  max-width: 7.5rem;
+  height: auto;
+  margin: 0 auto 0.5rem;
+}
+
+.framing-example .frame {
+  fill: var(--color-surface);
+  stroke: var(--color-muted);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+/* "Too close" draws the frame twice: filled beneath the enlarged figure, and
+   as an outline on top so the crop edge stays visible. */
+.framing-example .frame-fill { stroke: none; }
+.framing-example .frame-edge { fill: none; }
+
+.framing-example .person {
+  fill: var(--color-muted);
+  stroke: var(--color-muted);
+}
+
+.framing-example.is-good .person {
+  fill: var(--color-accent);
+  stroke: var(--color-accent);
+}
+
+.framing-example .person path,
+.framing-example .person circle {
+  stroke: none;
+}
+
+.framing-example .limb,
+.framing-example .arm {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.framing-example .limb { stroke-width: 8; }
+.framing-example .arm { stroke-width: 5.5; }
+
+.framing-example .badge { fill: #c0392b; }
+.framing-example.is-good .badge { fill: var(--color-accent); }
+
+.framing-example .badge-mark {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.framing-example figcaption {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--color-muted);
+}
+
+.framing-example figcaption strong {
+  display: block;
+  margin-bottom: 0.15rem;
+  color: var(--color-text);
+  font-size: 0.82rem;
+}
+
 .photo-tips {
   background: var(--color-bg);
   border: 1px solid var(--color-line);
