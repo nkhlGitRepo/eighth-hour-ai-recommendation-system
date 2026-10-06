@@ -820,3 +820,47 @@ class TestHeadMustBeInTheFrame:
         from py_src.providers.mediapipe_sizing_provider import NOSE
         provider = provider_with_landmarks(shifted({NOSE: (400, 200)}))
         assert provider.extract_from_image(b"x", "image/jpeg", 170.0, "M", "M").bust > 0
+
+
+class TestLargePhotosStayWithinMemory:
+    """
+    Decoding a full-size WEBP or HEIC costs ~13 bytes a pixel (measured: a
+    20 MP WEBP added 320 MB), which crashes a 512 MB server. JPEGs decode at a
+    reduced scale; anything else above MAX_FULL_DECODE_PIXELS is refused before
+    it is decoded.
+    """
+
+    def _encoded(self, size, fmt, orientation=None):
+        from PIL import Image
+        image = Image.new("RGB", size, (120, 140, 200))
+        kwargs = {}
+        if orientation:
+            exif = Image.Exif()
+            exif[0x0112] = orientation
+            kwargs["exif"] = exif.tobytes()
+        buffer = io.BytesIO()
+        image.save(buffer, format=fmt, **kwargs)
+        return buffer.getvalue()
+
+    def test_an_oversized_non_jpeg_is_refused_before_decoding(self):
+        from py_src.providers.mediapipe_sizing_provider import MAX_FULL_DECODE_PIXELS
+        side = int((MAX_FULL_DECODE_PIXELS * 1.2) ** 0.5)
+        with pytest.raises(ModuleError) as exc:
+            MediaPipeSizingProvider()._decode(self._encoded((side, side), "WEBP"))
+        assert "too large" in exc.value.message
+
+    def test_a_twelve_megapixel_phone_photo_is_accepted_in_any_format(self):
+        for fmt in ("WEBP", "PNG"):
+            array, width, height = MediaPipeSizingProvider()._decode(self._encoded((3024, 4032), fmt))
+            assert max(width, height) <= 1280 + 16
+
+    def test_a_huge_jpeg_is_accepted(self):
+        array, width, height = MediaPipeSizingProvider()._decode(self._encoded((6000, 8000), "JPEG"))
+        assert max(width, height) <= 1280 + 16
+
+    @pytest.mark.parametrize("fmt", ["JPEG", "WEBP"])
+    def test_exif_rotation_survives_the_shrink(self, fmt):
+        """Stored landscape with 'rotate 90' (orientation 6): must come out portrait."""
+        array, width, height = MediaPipeSizingProvider()._decode(
+            self._encoded((4000, 3000), fmt, orientation=6))
+        assert height > width
