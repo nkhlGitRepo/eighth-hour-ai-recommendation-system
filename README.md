@@ -40,7 +40,7 @@ history modules are complete. Photo measurement works but is deliberately weight
 ### Requirements
 
 - **Python 3.11+** (developed and tested on 3.13; the pinned dependencies are what was verified)
-- **Node.js** — only if you want to run the front-end integration tests; not needed to use the site
+- **Node.js 18+** — only if you want to run the front-end integration tests; not needed to use the site
 - No database server: persistence is SQLite, created automatically on first run
 
 ### 1. Backend
@@ -1222,8 +1222,18 @@ statements attached to it:
 ```bash
 cd backend
 source venv/bin/activate
-python -m pytest tests/ -q                    # all 1,074
+python -m pytest tests/ -q                    # all 1,131
 python -m pytest tests/test_m7_fit_checker.py -q
+```
+
+The front end has an end-to-end suite that drives a running API over HTTP the way the storefront
+does — creating throwaway accounts, completing intake, scanning a real catalog photo, and checking
+that the API accepts exactly the measurement limits the form advertises. Start the API first and
+confirm it's current (see [above](#is-the-server-running-your-code)):
+
+```bash
+node frontend/tests/integration.test.js       # Base_Website/frontend/tests/ on main
+API_BASE=http://localhost:8199 node frontend/tests/integration.test.js
 ```
 
 Four tests skip by default: they need the real MediaPipe model, which deadlocks inside pytest (it
@@ -1246,8 +1256,11 @@ else),
 *that* category, and colour preferences survive any casing),
 `test_sizing_provider_contract.py` (a reusable suite any new sizing vendor must pass, including
 declaring how it handles images), `test_image_validation.py` (the upload surface, including the
-HEIC-vs-MP4 container case), and `test_mediapipe_provider.py` (pose validation and the stated-size
-round-trip, driven by synthetic landmarks so it needs no model or photograph).
+HEIC-vs-MP4 container case), and `test_mediapipe_provider.py` and `test_anthropometry.py` (pose validation, outline
+measurement and the stated-size round-trip, driven by synthetic landmarks and masks so they need no
+model or photograph), `test_body_shape_classification.py` (every shape's definition holds across
+the whole measurement range, and the explanation never contradicts the numbers), and
+`test_preference_options.py` (every occasion the form offers is accepted and matches a product).
 
 ---
 
