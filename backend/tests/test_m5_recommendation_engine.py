@@ -168,7 +168,9 @@ class TestM5QueryBuilding:
         engine = recommendation_engine
         query = engine._build_retrieval_query(completed_session)
         assert "shape_class" in query
-        assert query["shape_class"] == "hourglass"
+        # Carried through from the profile M3 produced, not re-derived. (The
+        # mock's 88/70/102 is a pear: hips 14 cm fuller than the bust.)
+        assert query["shape_class"] == completed_session.shape_profile["shape_class"] == "pear"
 
     def test_query_passes_colors_through_exactly_as_stored(
         self, recommendation_engine, completed_session

@@ -1,151 +1,213 @@
 """
-Tests for the pose-landmark -> body-measurement math.
+Tests for the outline -> body-measurement math.
 
-Deliberately model-free: this is pure geometry, so it runs in milliseconds
-without loading MediaPipe, and a different pose source could reuse it.
+Deliberately model-free: every function takes plain numbers and a boolean mask,
+so these run in milliseconds on synthetic bodies whose true widths are known --
+which is what lets them assert exact answers rather than "plausible" ones.
 """
 
-import math
+import numpy as np
 import pytest
 
-from py_src.constants import MEASUREMENT_RANGES
+import py_src.providers.anthropometry as A
 from py_src.providers.anthropometry import (
-    ellipse_circumference,
-    pixels_to_cm_scale,
-    measurements_from_breadths,
     SHOULDER_TO_ANKLE_RATIO,
+    circumferences_from_breadths,
+    combined_scale,
+    pixels_to_cm_scale,
+    silhouette_breadths,
+    torso_width,
 )
 
+SHOULDER_Y, HIP_Y, MID_X, SIZE = 200, 500, 500, 1000
 
-class TestEllipseCircumference:
-    def test_circle_matches_known_formula(self):
-        """A circle is the degenerate ellipse -- must equal pi*d."""
-        assert ellipse_circumference(28.0, 28.0) == pytest.approx(math.pi * 28.0, rel=1e-3)
 
-    def test_flatter_ellipse_has_smaller_circumference(self):
-        """Same breadth, less depth -> smaller way around."""
-        assert ellipse_circumference(30.0, 24.0) < ellipse_circumference(30.0, 30.0)
+def body_mask(half_width_at, arms=None):
+    """
+    A synthetic person: for each row between the shoulders and below the hips,
+    the torso spans MID_X +/- half_width_at(t), t = 0 at shoulders, 1 at hips.
 
-    def test_scales_linearly(self):
-        """Doubling both axes doubles the perimeter."""
-        assert ellipse_circumference(60.0, 48.0) == pytest.approx(
-            2 * ellipse_circumference(30.0, 24.0), rel=1e-6
-        )
+    arms: optional (offset_from_midline_px, half_width_px) -- two vertical arms.
+    """
+    mask = np.zeros((SIZE, SIZE), dtype=bool)
+    for y in range(SHOULDER_Y, int(SHOULDER_Y + 1.4 * (HIP_Y - SHOULDER_Y))):
+        t = (y - SHOULDER_Y) / (HIP_Y - SHOULDER_Y)
+        h = int(round(half_width_at(t)))
+        mask[y, MID_X - h:MID_X + h + 1] = True
+        if arms:
+            offset, half = arms
+            for centre in (MID_X - offset, MID_X + offset):
+                mask[y, centre - half:centre + half + 1] = True
+    return mask
 
-    def test_degenerate_inputs_return_zero(self):
-        assert ellipse_circumference(0, 10) == 0.0
-        assert ellipse_circumference(10, 0) == 0.0
-        assert ellipse_circumference(-5, 10) == 0.0
+
+def arm_segments(offset, half_cm):
+    """Two vertical arms from the shoulders to below the hips."""
+    bottom = SHOULDER_Y + 1.4 * (HIP_Y - SHOULDER_Y)
+    return [((MID_X - offset, SHOULDER_Y), (MID_X - offset, bottom), half_cm),
+            ((MID_X + offset, SHOULDER_Y), (MID_X + offset, bottom), half_cm)]
+
+
+def hourglass(bust=100, waist=70, hips=105):
+    """Half-widths (px) peaking at the bust line, narrowest at the navel line, fullest at the seat."""
+    def half(t):
+        if t <= A.BUST_LINE_T:
+            return bust
+        if t <= A.NAVEL_LINE_T:
+            f = (t - A.BUST_LINE_T) / (A.NAVEL_LINE_T - A.BUST_LINE_T)
+            return bust + (waist - bust) * f
+        if t <= A.SEAT_LINE_T:
+            f = (t - A.NAVEL_LINE_T) / (A.SEAT_LINE_T - A.NAVEL_LINE_T)
+            return waist + (hips - waist) * f
+        return hips
+    return half
 
 
 class TestPixelScale:
     def test_scale_uses_the_anthropometric_span(self):
-        """500px spanning shoulder->ankle on a 170cm body."""
-        scale = pixels_to_cm_scale(500, 170)
-        assert scale == pytest.approx(SHOULDER_TO_ANKLE_RATIO * 170 / 500)
+        assert pixels_to_cm_scale(780.0, 165.0) == pytest.approx(
+            SHOULDER_TO_ANKLE_RATIO * 165.0 / 780.0)
 
     def test_taller_person_same_pixels_means_bigger_scale(self):
-        """Identical framing but a taller stated height -> every cm value grows."""
-        assert pixels_to_cm_scale(500, 190) > pixels_to_cm_scale(500, 155)
+        assert pixels_to_cm_scale(800, 180) > pixels_to_cm_scale(800, 160)
 
-    def test_more_pixels_same_height_means_smaller_scale(self):
-        """A closer/larger photo of the same person -> fewer cm per pixel."""
-        assert pixels_to_cm_scale(1000, 170) < pixels_to_cm_scale(500, 170)
-
-    @pytest.mark.parametrize("span,height", [(0, 170), (-10, 170), (500, 0), (500, -5)])
+    @pytest.mark.parametrize("span,height", [(0, 165), (-5, 165), (800, 0)])
     def test_rejects_unusable_inputs(self, span, height):
         with pytest.raises(ValueError):
             pixels_to_cm_scale(span, height)
 
 
-class TestMeasurementsFromBreadths:
-    def test_average_body_produces_plausible_measurements(self):
-        """
-        Inputs are MEDIAPIPE LANDMARK SPANS, not tape measurements: a 36cm
-        shoulder span with a 22cm pelvis span (the ~0.60 ratio real photos
-        show) is close to an average adult woman. Output should look like a
-        real size-chart entry.
-        """
-        m = measurements_from_breadths(36.0, 22.0)
-        assert 80 <= m["bust"] <= 95
-        assert 62 <= m["waist"] <= 78
-        assert 92 <= m["hips"] <= 108
+class TestCombinedScale:
+    def _spans(self, ratio, span=800.0):
+        return span, span * ratio
 
-    def test_output_is_within_the_ranges_the_app_accepts(self):
-        """Otherwise SizingIntegration would reject the extraction downstream."""
-        m = measurements_from_breadths(36.0, 22.0)
+    def test_agreeing_spans_are_averaged(self):
+        span, torso = self._spans(A.EXPECTED_TORSO_TO_SPAN)
+        scale, source = combined_scale(span, torso, 165)
+        assert source == "both"
+        assert scale == pytest.approx(pixels_to_cm_scale(span, 165))
+
+    def test_feet_out_of_frame_uses_the_torso(self):
+        span, torso = self._spans(A.EXPECTED_TORSO_TO_SPAN)
+        scale, source = combined_scale(span, torso, 165, ankles_in_frame=False)
+        assert source == "torso"
+        assert scale == pytest.approx(A.SHOULDER_TO_HIP_RATIO * 165 / torso)
+
+    def test_ankles_guessed_too_high_falls_back_to_the_torso(self):
+        """Cropped feet push the ratio up; the photo is still usable."""
+        span, torso = self._spans(A.EXPECTED_TORSO_TO_SPAN + 2 * A.TORSO_TO_SPAN_TOLERANCE)
+        _, source = combined_scale(span, torso, 165)
+        assert source == "torso"
+
+    @pytest.mark.parametrize("torso,height", [(0, 165), (-3, 165), (300, 0)])
+    def test_unusable_torso_raises(self, torso, height):
+        with pytest.raises(ValueError):
+            combined_scale(800, torso, height)
+
+
+class TestTapeLines:
+    def test_lines_in_body_order(self):
+        assert 0 < A.BUST_LINE_T < A.NAVEL_LINE_T < A.SEAT_LINE_T
+
+    def test_bands_contain_their_lines_and_meet(self):
+        assert A.BUST_BAND[0] < A.BUST_LINE_T < A.BUST_BAND[1] <= A.WAIST_BAND[0]
+        assert A.WAIST_BAND[0] < A.NAVEL_LINE_T < A.WAIST_BAND[1] == A.HIP_BAND[0]
+        assert A.HIP_BAND[0] < A.SEAT_LINE_T < A.HIP_BAND[1]
+
+
+class TestTorsoWidth:
+    def row(self, torso_half=100, arm=None):
+        r = np.zeros(SIZE, dtype=bool)
+        r[MID_X - torso_half:MID_X + torso_half + 1] = True
+        if arm:
+            centre, half = arm
+            r[centre - half:centre + half + 1] = True
+        return r
+
+    def test_no_arms(self):
+        assert torso_width(self.row(), MID_X, []) == (200, "clear")
+
+    def test_separate_arm_is_ignored(self):
+        r = self.row(arm=(MID_X + 140, 20))
+        assert torso_width(r, MID_X, [(MID_X + 140, 20)]) == (200, "clear")
+
+    def test_arm_resting_beside_is_cut_at_its_inner_edge(self):
+        # Arm 40 px wide touching the torso's right edge (torso ends at +100).
+        r = self.row(arm=(MID_X + 120, 20))
+        width, quality = torso_width(r, MID_X, [(MID_X + 120, 20)])
+        assert quality == "estimated"
+        assert width == 200
+
+    def test_arm_in_front_skips_the_row(self):
+        r = self.row()
+        assert torso_width(r, MID_X, [(MID_X + 30, 20)]) == (None, None)
+
+    def test_no_body_at_the_midline(self):
+        assert torso_width(np.zeros(SIZE, dtype=bool), MID_X, []) == (None, None)
+
+
+class TestSilhouetteBreadths:
+    CM_PER_PX = 0.15
+
+    def measure(self, mask, arms=()):
+        return silhouette_breadths(mask, SHOULDER_Y, HIP_Y, MID_X, list(arms), self.CM_PER_PX)
+
+    def test_reads_bust_waist_and_hips_from_the_outline(self):
+        b = self.measure(body_mask(hourglass(100, 70, 105)))
+        assert b["bust"] == pytest.approx(200 * self.CM_PER_PX, abs=0.5)
+        # Waist and hips are read as percentiles of their bands, so they sit just
+        # inside the narrowest and fullest widths.
+        assert 140 * self.CM_PER_PX <= b["waist"] <= 160 * self.CM_PER_PX
+        assert 200 * self.CM_PER_PX <= b["hips"] <= 211 * self.CM_PER_PX
+        assert b["quality"] == {"bust": "clear", "waist": "clear", "hips": "clear"}
+
+    def test_fuller_body_reads_fuller(self):
+        """The reported failure: a fuller body came out far too small."""
+        slim = circumferences_from_breadths(self.measure(body_mask(hourglass(90, 70, 95))))
+        full = circumferences_from_breadths(self.measure(body_mask(hourglass(120, 105, 120))))
         for field in ("bust", "waist", "hips"):
-            low, high = MEASUREMENT_RANGES[field]
-            assert low <= m[field] <= high
+            assert full[field] > slim[field] * 1.15, field
 
-    def test_hips_exceed_waist_for_a_typical_body(self):
-        m = measurements_from_breadths(36.0, 22.0)
-        assert m["hips"] > m["waist"]
+    def test_waist_to_hip_ratio_follows_the_body(self):
+        """The old estimator gave every photo the same 0.717."""
+        defined = self.measure(body_mask(hourglass(100, 65, 105)))
+        straight = self.measure(body_mask(hourglass(100, 95, 100)))
+        assert defined["waist"] / defined["hips"] < 0.7
+        assert straight["waist"] / straight["hips"] > 0.9
 
-    def test_broader_shoulders_increase_bust_only(self):
-        """Bust comes from the shoulders; waist/hips come from the pelvis."""
-        narrow = measurements_from_breadths(33.0, 22.0)
-        broad = measurements_from_breadths(40.0, 22.0)
-        assert broad["bust"] > narrow["bust"]
-        assert broad["waist"] == narrow["waist"]
-        assert broad["hips"] == narrow["hips"]
+    def test_separate_arms_change_nothing(self):
+        plain = self.measure(body_mask(hourglass()))
+        half_px = 15
+        with_arms = self.measure(body_mask(hourglass(), arms=(160, half_px)),
+                                 arm_segments(160, half_px * self.CM_PER_PX))
+        assert with_arms["quality"] == plain["quality"]
+        for field in ("bust", "waist", "hips"):
+            assert with_arms[field] == plain[field]
 
-    def test_wider_pelvis_increases_waist_and_hips_only(self):
-        narrow = measurements_from_breadths(36.0, 19.0)
-        wide = measurements_from_breadths(36.0, 25.0)
-        assert wide["waist"] > narrow["waist"]
-        assert wide["hips"] > narrow["hips"]
-        assert wide["bust"] == narrow["bust"]
+    def test_arms_resting_against_the_body_are_cut_away(self):
+        """Arms touching at every row: still measured, from the arm's inner edge."""
+        torso = hourglass(100, 100, 100)          # a straight torso, edge at +/-100
+        half_px = 15
+        offset = 100 + half_px                    # arm's inner edge on the torso edge
+        b = self.measure(body_mask(torso, arms=(offset, half_px)),
+                         arm_segments(offset, half_px * self.CM_PER_PX))
+        assert b["quality"] == {"bust": "estimated", "waist": "estimated", "hips": "estimated"}
+        for field in ("bust", "waist", "hips"):
+            assert b[field] == pytest.approx(200 * self.CM_PER_PX, abs=0.3)
 
-    def test_shoulder_breadth_is_reported_unchanged(self):
-        assert measurements_from_breadths(36.4, 22.0)["shoulder_cm"] == 36.4
-
-    def test_different_bodies_give_different_numbers(self):
-        """
-        The property that separates this from the placeholder provider: output
-        actually varies with the input body.
-        """
-        a = measurements_from_breadths(33.0, 19.0)
-        b = measurements_from_breadths(40.0, 25.0)
-        assert (a["bust"], a["waist"], a["hips"]) != (b["bust"], b["waist"], b["hips"])
+    def test_arms_across_the_body_leave_the_field_unread(self):
+        """Hands over the waist: nothing honest to measure there."""
+        b = self.measure(body_mask(hourglass()), arm_segments(20, 2.0))
+        assert b["waist"] is None and b["quality"]["waist"] is None
 
 
-class TestCalibratedToRealMediaPipeOutput:
-    """
-    Regression guard for a real bug: the multipliers were originally derived
-    from surface-anthropometry tables, but MediaPipe's hip landmarks are joint
-    centres and measure only ~0.57-0.62 of the shoulder span. That mismatch
-    produced waists near 56cm and hips NARROWER than the bust, and a
-    ratio-based pose check that rejected ordinary photos.
+class TestCircumferences:
+    def test_population_mean_breadths_give_population_mean_circumferences(self):
+        c = circumferences_from_breadths({"bust": 26.93, "waist": 29.99, "hips": 35.38})
+        assert c == {"bust": 94.7, "waist": 86.1, "hips": 102.1}
 
-    The two cases below are the actual geometry measured off real photographs.
-    """
-
-    # (label, shoulder_span_cm, pelvis_span_cm) as MediaPipe reported them
-    REAL_OBSERVATIONS = [
-        ("standing torso photo", 37.0, 22.3),
-        ("wide-stance photo", 39.9, 22.9),
-    ]
-
-    @pytest.mark.parametrize("label,shoulder,pelvis", REAL_OBSERVATIONS)
-    def test_real_geometry_yields_a_plausible_female_figure(self, label, shoulder, pelvis):
-        m = measurements_from_breadths(shoulder, pelvis)
-        assert 80 <= m["bust"] <= 105, f"{label}: bust {m['bust']}"
-        assert 62 <= m["waist"] <= 85, f"{label}: waist {m['waist']}"
-        assert 92 <= m["hips"] <= 115, f"{label}: hips {m['hips']}"
-
-    @pytest.mark.parametrize("label,shoulder,pelvis", REAL_OBSERVATIONS)
-    def test_hips_are_not_narrower_than_the_bust(self, label, shoulder, pelvis):
-        """
-        The clearest symptom of the old miscalibration. For the overwhelming
-        majority of women hips are at least as large as the bust, so hips well
-        below bust means the pelvis multiplier is wrong again.
-        """
-        m = measurements_from_breadths(shoulder, pelvis)
-        assert m["hips"] >= m["bust"] * 0.95, f"{label}: hips {m['hips']} vs bust {m['bust']}"
-
-    @pytest.mark.parametrize("label,shoulder,pelvis", REAL_OBSERVATIONS)
-    def test_waist_is_not_implausibly_small(self, label, shoulder, pelvis):
-        """The old constants produced ~56cm here, below the app's 55cm floor."""
-        m = measurements_from_breadths(shoulder, pelvis)
-        assert m["waist"] >= 62, f"{label}: waist {m['waist']}"
+    def test_scales_linearly(self):
+        one = circumferences_from_breadths({"bust": 30, "waist": 25, "hips": 35})
+        two = circumferences_from_breadths({"bust": 60, "waist": 50, "hips": 70})
+        for field in one:
+            assert two[field] == pytest.approx(2 * one[field], abs=0.1)

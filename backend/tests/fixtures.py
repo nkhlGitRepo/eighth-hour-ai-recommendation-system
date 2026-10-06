@@ -23,9 +23,12 @@ MEASUREMENTS = {
         "shoulder": 40,
         "height": 167,
     },
+    # FFIT inverted triangle: bust distinctly fuller than hips (12 cm), waist
+    # not defined (16 cm under the bust). The previous 96/72/88 had a waist
+    # 24 cm under the bust -- FFIT's top hourglass, not this shape.
     "athletic": {
-        "bust": 96,
-        "waist": 72,
+        "bust": 100,
+        "waist": 84,
         "hips": 88,
         "shoulder": 41,
         "height": 172,

@@ -14,7 +14,7 @@ Everything runs locally. There are no paid APIs, no external calls at runtime, a
 leaves the machine. Photo measurement uses a pose model that runs on your own CPU, and the uploaded
 image is held in memory and discarded — never written to disk.
 
-**Status:** 1,074 tests — 1,070 passing, 4 skipped by design (they need the real pose model, which
+**Status:** 1,131 tests — 1,127 passing, 4 skipped by design (they need the real pose model, which
 deadlocks under pytest; see [Testing](#testing)). The recommendation, sizing, fit-checking and
 history modules are complete. Photo measurement works but is deliberately weighted low — see
 [Photo-based measurement](#5-photo-based-measurement-m2--providers) for the honest accuracy numbers.
@@ -323,9 +323,21 @@ succeed.
 or balanced — a recommended size in every category, and a few sentences of genuinely useful styling
 advice ("wrap dresses and belted silhouettes are made for you").
 
-**How it works.** A deterministic rules classifier over bust-to-waist, waist-to-hip and
-shoulder-to-hip ratios. No model, no training data, no randomness: the same measurements always
-produce the same profile, which is what makes it testable and explainable to a customer. Sizes come
+**How it works.** A deterministic classifier built on FFIT for Apparel (Simmons, Istook &
+Devarajan, 2004), the standard measurement-based scheme in apparel research: which of bust and hips
+is fuller decides pear versus athletic (inverted triangle), and how much smaller the waist is decides
+hourglass, balanced or straight; apple is a waist nearly as full as the fuller of bust and hips.
+FFIT's inch thresholds are applied as proportions of the body's frame, calibrated at the chart's
+middle size, so the same proportions give the same shape at XXS and XXL (`SHAPE_THRESHOLDS` in
+`constants.py`). The customer is shown a sentence generated from their own numbers ("Your bust and
+hips are the same, and your waist is 17 cm smaller than both…") and the comparisons in centimetres,
+so the explanation can never contradict their measurements. No model, no training data, no
+randomness: the same measurements always produce the same profile.
+
+The previous rules never compared bust with hips, so a tester measuring 107/90/107 was classified
+pear and told her hips were fuller than her bust. Stored profiles from older rules are rebuilt from
+their measurements when loaded (`BodyShapeProfiler.refresh_if_outdated`, keyed on
+`PROFILE_VERSION`), so a returning customer never keeps a label the current rules wouldn't give. Sizes come
 from the shared boundary tables rather than a local formula, so the size shown here is by
 construction the same size the recommendation engine filters on and the fit checker scores against.
 Category sizing follows how garments are actually cut — tops and dresses from the bust, skirts and
@@ -497,18 +509,25 @@ body, which is the thing she can perceive.
 
 ### 5. Photo-based measurement (M2 + providers)
 
-**What it does.** Upload a full-body photo, give your height, and it estimates your bust, waist and
-hips. Optionally tell it the sizes you usually wear in tops and bottoms, which improves the result
-substantially. The photo is analysed on your own machine and never stored.
+**What it does.** Upload a full-body photo, give your height and the sizes you usually wear in tops
+and bottoms, and it estimates your bust, waist and hips. The sizes are required: the photo is measured
+against them. The photo is analysed on your own machine and never stored.
 
 **How it works, and what it's actually worth.** `SizingProvider` is an abstract base with a registry
 (`SIZING_PROVIDERS`) and an env var, so swapping in a commercial vendor is one class, one registry
 line and one environment variable — proven end-to-end, twice, with throwaway providers. The bundled
-`MediaPipeSizingProvider` runs Google's BlazePose model locally, converts landmark geometry to
-measurements via `anthropometry.py` (pixel→cm scale from the shoulder-to-ankle span, breadth→
-circumference via a Ramanujan ellipse), and validates the pose before trusting any of it — rejecting
-rotated torsos, uneven shoulders, wide stances and cropped bodies rather than reporting distorted
-numbers.
+`MediaPipeSizingProvider` runs Google's BlazePose model locally and measures the **person's outline**
+(its segmentation mask) at the bust, waist and hip lines, converting each width to a circumference
+with the ratio real bodies show (`anthropometry.py`; every constant from ANSUR II, the 2012 US Army
+survey of 1,986 women, none fitted to test photos). Scale comes from the stated height via the
+shoulder-to-ankle and shoulder-to-hip spans, cross-checked against each other. Arms resting beside
+the body are cut away at a typical arm width; rows where an arm crosses in front are skipped, and a
+measurement the arms hide entirely falls back to the stated size. Photos are refused only when there
+is nothing usable: no person, the head out of frame, or a pose the math can't handle.
+
+The previous estimator measured the skeleton — shoulder and hip *joints* times fixed multipliers — so
+it couldn't see the body itself: fuller figures always read small (a tester measuring 107/90/107 got
+82/66/92) and every photo had the same waist-to-hip ratio, 0.717.
 
 When a customer states their usual sizes, the chart becomes the anchor and the photo is blended in at
 25%, **squashed inside the stated size's own band with tanh**. That last detail matters: a plain clip
@@ -521,8 +540,19 @@ Every field the provider returns is clamped into the supported range before bein
 the optional ones. `shoulder` originally wasn't, which is how an out-of-range value reached the
 database (see the invariant note under [Guardrails](#10-guardrails)).
 
-**Measured honestly** against 8 people who were not used in any calibration (65 Wikimedia Commons
-photos):
+**Measured, October 2026, as shipped (stated sizes required):**
+
+| test | result |
+|---|---|
+| 203 catalog photos of fit models whose worn size is known | 2.0 cm mean error vs that size's chart row; size preserved 115/115 |
+| subjects with published measurements (6 photos) | 3.2 cm mean error |
+| standard photos and feet-cropped / knees-up variants | 40 of 42 accepted |
+| rotated (EXIF), mirrored, 4× size, 300 px, PNG with alpha, greyscale, dark | ≤ 1.8 cm drift |
+
+Photo alone — no longer reachable in the app — the outline method reads loose clothing as body: on
+the catalog's loose silk pieces it over-reads the waist by ~19 cm. That is the inherent limit of one
+frontal photo, and why the sizes are required. The earlier, skeleton-based figures, measured
+against 8 people not used in any calibration (65 Wikimedia Commons photos):
 
 | condition | mean absolute error |
 |---|---|
@@ -588,7 +618,10 @@ bust with waist and hips still reported as guidance.
 email isn't a catalog dump.
 
 **How it works.** Filters the catalog by launch date within a configurable window, then scores each
-item against the saved profile, keeping only those above a match threshold. Size inference uses the
+item against the saved profile, keeping only those above a match threshold. The window is measured
+back from today while anything has launched within it, and otherwise from the latest launch — so the
+latest drop stays "new" between collections. Measured only from today, the feed decayed by itself a
+month after the last launch, falling back to a single item from the whole catalog. Size inference uses the
 same shared boundary tables as everything else, so the feed can't disagree with the profile page
 about what size someone is.
 
@@ -667,14 +700,16 @@ overwritten.
 
 ### 2. Photo upload
 
-**What it does.** Upload a photo, see a preview, add your height and (optionally) your usual sizes,
-and get measurements back — with a legal notice shown before any upload control is usable.
+**What it does.** Upload a photo, see a preview, add your height and your usual sizes (required),
+and get measurements back — with a legal notice shown before any upload control is usable. A framing
+guide of four silhouettes (one correct, three mistakes that genuinely stop a photo being measured)
+sits above the tips.
 
 **How it works.** The privacy notice is rendered from `GET /intake/photo-disclosure` rather than
 hardcoded, so it always describes what the *configured provider* actually does with the image; the
 upload controls stay hidden until it loads, so a body photo is never collected under a notice that
-couldn't be displayed. The Scan button unlocks only when file, valid height and an explicit
-acknowledgment are all present. Upload guidance sits *above* the file picker rather than below it,
+couldn't be displayed. The Scan button unlocks only when file, valid height, both usual sizes
+and an explicit acknowledgment are all present. Upload guidance sits *above* the file picker rather than below it,
 ordered by the failure reasons actually measured across 65 photographs — framing first, because that
 alone accounted for 39 of 46 rejections. An `AbortController` timeout prevents a hung request leaving
 the customer watching a spinner forever.
@@ -1240,7 +1275,7 @@ backend/
     enrich_catalog_from_source.py  Pull length/fit/model data out of the cache
     migrate_stored_size_profiles.py  Recompute saved sizes after a chart change
     verify_pose_provider.py   Exercise the pose model outside pytest
-  tests/                      1,074 tests
+  tests/                      1,131 tests
 Base_Website/
   serve.py                    no-cache dev server
   diagnose.html               session troubleshooting page

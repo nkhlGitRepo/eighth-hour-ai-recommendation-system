@@ -500,6 +500,8 @@ class TestMeasurementExtractionFromUpload:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=172.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
 
         assert updated.body_measurements is not None
@@ -515,6 +517,8 @@ class TestMeasurementExtractionFromUpload:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=181.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
 
         assert updated.body_measurements.height == 181.0
@@ -531,6 +535,8 @@ class TestMeasurementExtractionFromUpload:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=170.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
 
         assert updated.photo_refs == []
@@ -546,6 +552,8 @@ class TestMeasurementExtractionFromUpload:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=176.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
 
         reloaded = orchestrator.get_session(session.session_id)
@@ -565,6 +573,8 @@ class TestMeasurementExtractionFromUpload:
                 image_bytes=b"",
                 content_type="image/jpeg",
                 height_cm=170.0,
+                usual_top_size="M",
+                usual_bottom_size="M",
             )
 
     def test_failed_extraction_leaves_the_session_untouched(self, orchestrator):
@@ -577,6 +587,8 @@ class TestMeasurementExtractionFromUpload:
                 image_bytes=b"",
                 content_type="image/jpeg",
                 height_cm=170.0,
+                usual_top_size="M",
+                usual_bottom_size="M",
             )
 
         after = orchestrator.get_session(session.session_id)
@@ -590,6 +602,8 @@ class TestMeasurementExtractionFromUpload:
                 image_bytes=UPLOAD_JPEG,
                 content_type="image/jpeg",
                 height_cm=170.0,
+                usual_top_size="M",
+                usual_bottom_size="M",
             )
 
     def test_matches_the_photo_ref_path_state(self, orchestrator):
@@ -609,6 +623,8 @@ class TestMeasurementExtractionFromUpload:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=174.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
 
         assert via_ref.status == via_upload.status
@@ -624,6 +640,8 @@ class TestMeasurementExtractionFromUpload:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=170.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
 
         final = orchestrator.capture_preferences(
@@ -692,6 +710,8 @@ class TestMeasurementProvenancePersists:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=170.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
         original_extracted_at = orchestrator.get_session(
             session.session_id
@@ -712,6 +732,8 @@ class TestMeasurementProvenancePersists:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=170.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
 
         reloaded = orchestrator.get_session(session.session_id)
@@ -739,6 +761,8 @@ class TestConfirmPreservesExtractionProvenance:
             image_bytes=UPLOAD_JPEG,
             content_type="image/jpeg",
             height_cm=181.0,
+            usual_top_size="M",
+            usual_bottom_size="M",
         )
         return orchestrator.get_session(session.session_id)
 

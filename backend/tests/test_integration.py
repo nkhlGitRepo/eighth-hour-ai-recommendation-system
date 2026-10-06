@@ -270,7 +270,7 @@ class TestPhase1IntakeFlow:
         assert shape_class is not None
 
         # Verify profiler is available for Phase 2 recommendations
-        assert orchestrator.profiler.PROFILE_VERSION == "1.0.0"
+        assert orchestrator.profiler.PROFILE_VERSION == "2.0.0"
 
     def test_phase1_preference_capture_via_intake(self):
         """M4 preference capture through intake flow."""

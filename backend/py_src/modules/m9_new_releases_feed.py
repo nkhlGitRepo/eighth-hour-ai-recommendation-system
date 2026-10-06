@@ -214,7 +214,8 @@ class NewReleasesFeed:
         # Only products actually launched within the recency window count as
         # "new releases" -- otherwise this is just the recommendation engine
         # again under a different name.
-        recent_products = [p for p in all_products if self._is_recent(p)]
+        anchor = self._recency_anchor(all_products)
+        recent_products = [p for p in all_products if self._is_recent(p, anchor)]
 
         def score(product):
             return self.score_product_for_profile(
@@ -348,21 +349,47 @@ class NewReleasesFeed:
 
         return feed
 
-    def _is_recent(self, product: Dict[str, Any]) -> bool:
-        """
-        A product counts as a "new release" only if it actually launched
-        within the recency window. Products with no launched_at are treated
-        as legacy catalog items, not new -- otherwise every item with
-        missing metadata would incorrectly show up as "new".
-        """
+    @staticmethod
+    def _launch_date(product: Dict[str, Any]) -> Optional[datetime]:
         launched_at = product.get("launched_at")
         if not launched_at:
-            return False
+            return None
         try:
-            launch_date = datetime.fromisoformat(launched_at)
+            return datetime.fromisoformat(launched_at)
         except (ValueError, TypeError):
+            return None
+
+    @classmethod
+    def _recency_anchor(cls, products) -> datetime:
+        """
+        The date "new" is measured back from.
+
+        Today, while anything has launched within the window -- the normal case,
+        unchanged. But when nothing has (a catalog between drops), the newest
+        launch instead, so the latest collection still shows as the newest thing
+        in the shop. Measured only against today, the feed decayed by itself: a
+        month after the last launch it had nothing "new" left, and fell back to
+        a single item from the whole catalog -- which is what it was doing.
+        """
+        now = datetime.now()
+        window = timedelta(days=NEW_RELEASES_WINDOW_DAYS)
+        launched = [d for d in (cls._launch_date(p) for p in products) if d and d <= now]
+        if not launched or any(now - d <= window for d in launched):
+            return now
+        return max(launched)
+
+    def _is_recent(self, product: Dict[str, Any], anchor: Optional[datetime] = None) -> bool:
+        """
+        A product counts as a "new release" only if it launched within the
+        recency window of `anchor` (default: now; see _recency_anchor). Products
+        with no launched_at are treated as legacy catalog items, not new --
+        otherwise every item with missing metadata would incorrectly show up as
+        "new".
+        """
+        launch_date = self._launch_date(product)
+        if launch_date is None:
             return False
-        return datetime.now() - launch_date <= timedelta(days=NEW_RELEASES_WINDOW_DAYS)
+        return (anchor or datetime.now()) - launch_date <= timedelta(days=NEW_RELEASES_WINDOW_DAYS)
 
     def _score_shape_match(
         self,

@@ -74,14 +74,33 @@ class IntakeFlow {
       if (availableColors.length > 0) {
         const colorContainer = document.querySelector('.color-options');
         if (colorContainer) {
-          colorContainer.innerHTML = availableColors
-            .map(color => `
-              <label class="option-label">
-                <input type="checkbox" name="color" value="${color}" />
-                <span>${color}</span>
-              </label>
-            `)
-            .join('');
+          // This list replaces the fallback markup, and can arrive well after
+          // the page did (30-60 s while a sleeping server wakes). By then the
+          // customer may have ticked colours, or a returning customer's saved
+          // ones were restored -- keep both rather than silently wiping them.
+          const shown = Array.from(colorContainer.querySelectorAll('input[name="color"]'));
+          const ticked = new Set(shown.filter(el => el.checked).map(el => el.value));
+          // A saved colour the fallback list didn't include couldn't be restored
+          // into it, so restore it now. One it did include is already reflected
+          // above -- including if the customer has since unticked it.
+          const wasShown = new Set(shown.map(el => el.value));
+          (this.styleProfile?.preferred_colors || [])
+            .filter(color => !wasShown.has(color))
+            .forEach(color => ticked.add(color));
+
+          colorContainer.replaceChildren(...availableColors.map(color => {
+            const label = document.createElement('label');
+            label.className = 'option-label';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = 'color';
+            input.value = color;
+            input.checked = ticked.has(color);
+            const name = document.createElement('span');
+            name.textContent = color;
+            label.append(input, name);
+            return label;
+          }));
           // This replaces the markup wholesale, so the colour samples have to be
           // (re)applied here. Applying them only on DOMContentLoaded decorated
           // the static fallback list and was then wiped the moment this fetch
@@ -178,6 +197,9 @@ class IntakeFlow {
     // Photo measurement screen (an alternate view of step 2, not its own step)
     document.getElementById('photoAck')?.addEventListener('change', () => this.updatePhotoScanButton());
     document.getElementById('photoHeight')?.addEventListener('input', () => this.updatePhotoScanButton());
+    ['photoTopSize', 'photoBottomSize'].forEach(id => {
+      document.getElementById(id)?.addEventListener('change', () => this.updatePhotoScanButton());
+    });
     document.getElementById('photoFile')?.addEventListener('change', (e) => this.handlePhotoSelected(e));
     document.getElementById('photoScan')?.addEventListener('click', () => this.handlePhotoScan());
     document.getElementById('photoBack')?.addEventListener('click', () => this.goToStep(2));
@@ -548,8 +570,11 @@ class IntakeFlow {
     const height = parseFloat(document.getElementById('photoHeight')?.value);
     const acknowledged = document.getElementById('photoAck')?.checked;
     const validHeight = !isNaN(height) && height >= 140 && height <= 210;
+    // Required: the photo is measured against the sizes the customer wears.
+    const sizesChosen = ['photoTopSize', 'photoBottomSize']
+      .every(id => document.getElementById(id)?.value);
 
-    button.disabled = !(this.selectedPhoto && validHeight && acknowledged);
+    button.disabled = !(this.selectedPhoto && validHeight && acknowledged && sizesChosen);
   }
 
   /**
@@ -647,14 +672,12 @@ class IntakeFlow {
       formData.append('session_id', this.sessionId);
       formData.append('height_cm', String(height));
       formData.append('photo', this.selectedPhoto);
-      // Optional, but a much stronger accuracy signal than the image itself --
-      // the backend anchors bust on the top size and waist/hips on the bottom
-      // size. Either can be sent alone; whichever is missing falls back to the
-      // photo for those fields.
-      const topSize = document.getElementById('photoTopSize')?.value;
-      const bottomSize = document.getElementById('photoBottomSize')?.value;
-      if (topSize) formData.append('usual_top_size', topSize);
-      if (bottomSize) formData.append('usual_bottom_size', bottomSize);
+      // Required (the scan button stays disabled until both are chosen): the
+      // backend anchors bust on the top size and waist/hips on the bottom size,
+      // and the photo adjusts within them. A photo alone was measured missing
+      // by ~17 cm on average.
+      formData.append('usual_top_size', document.getElementById('photoTopSize').value);
+      formData.append('usual_bottom_size', document.getElementById('photoBottomSize').value);
 
       // Abort rather than hang if the measurement service stops responding.
       // A local model is fast, but a hosted vendor may not be -- and a request
@@ -868,7 +891,7 @@ class IntakeFlow {
     }
 
     const profile = this.shapeProfile;
-    const ratios = profile.ratios || {};
+    const comparisons = this.shapeComparisons(profile);
 
     const sizesByCategory = profile.size_recommendation_by_category || {};
     const sizesArray = Object.entries(sizesByCategory).map(([category, size]) => ({
@@ -882,28 +905,23 @@ class IntakeFlow {
         <div class="profile-value" style="text-transform: capitalize;">
           ${profile.shape_class || 'Unknown'}
         </div>
-        <p style="color: #999; font-size: 0.9rem; margin-top: 0.5rem;">
-          ${this.getShapeDescription(profile.shape_class)}
+        <p class="shape-summary">
+          ${profile.shape_summary || this.getShapeDescription(profile.shape_class)}
         </p>
       </div>
 
+      ${comparisons.length ? `
       <div class="profile-item">
-        <div class="profile-label">Your Ratios</div>
+        <div class="profile-label">How Your Measurements Compare</div>
         <div class="profile-ratios">
-          <div class="ratio-item">
-            <div class="ratio-label">Bust/Waist</div>
-            <div class="ratio-value">${(ratios.bust_waist || 0).toFixed(2)}</div>
-          </div>
-          <div class="ratio-item">
-            <div class="ratio-label">Waist/Hip</div>
-            <div class="ratio-value">${(ratios.waist_hip || 0).toFixed(2)}</div>
-          </div>
-          <div class="ratio-item">
-            <div class="ratio-label">Shoulder/Hip</div>
-            <div class="ratio-value">${(ratios.shoulder_hip || 0).toFixed(2)}</div>
-          </div>
+          ${comparisons.map(item => `
+            <div class="ratio-item">
+              <div class="ratio-label">${item.label}</div>
+              <div class="ratio-value">${item.value}</div>
+            </div>
+          `).join('')}
         </div>
-      </div>
+      </div>` : ''}
 
       <div class="profile-item">
         <div class="profile-label">Recommended Sizes</div>
@@ -968,14 +986,62 @@ class IntakeFlow {
     `;
   }
 
+  /**
+   * The comparisons the shape is decided on, in centimetres a customer can
+   * check against their own tape measure -- rather than bare ratios, which read
+   * as "off" (Bust/Waist 1.19 beside Waist/Hip 0.84) and once included a
+   * shoulder/hip figure that was invented whenever no shoulder was measured.
+   *
+   * Uses the profile's own comparisons_cm when present. A profile saved before
+   * that field existed falls back to the measurements it was made from.
+   */
+  shapeComparisons(profile) {
+    let diffs = profile.comparisons_cm;
+    const m = this.measurements || {};
+    if (!diffs && m.bust && m.waist && m.hips) {
+      const [bust, waist, hips] = [m.bust, m.waist, m.hips].map(Number);
+      diffs = {
+        bust_minus_hips: bust - hips,
+        bust_minus_waist: bust - waist,
+        hips_minus_waist: hips - waist,
+      };
+    }
+    if (!diffs) return [];
+
+    const cm = (value) => `${Math.round(Math.abs(value))} cm`;
+    const waistAgainst = (gap) => Math.round(gap) === 0 ? 'Same'
+      : `${cm(gap)} ${gap > 0 ? 'smaller' : 'larger'}`;
+    const items = [
+      {
+        label: 'Bust vs Hips',
+        value: Math.round(diffs.bust_minus_hips) === 0 ? 'Even'
+          : diffs.bust_minus_hips > 0 ? `Bust ${cm(diffs.bust_minus_hips)} fuller`
+          : `Hips ${cm(diffs.bust_minus_hips)} fuller`,
+      },
+      { label: 'Waist vs Bust', value: waistAgainst(diffs.bust_minus_waist) },
+      { label: 'Waist vs Hips', value: waistAgainst(diffs.hips_minus_waist) },
+    ];
+    const ratios = profile.ratios || {};
+    if (ratios.waist_hip) {
+      items.push({ label: 'Waist-to-Hip Ratio', value: Number(ratios.waist_hip).toFixed(2) });
+    }
+    return items;
+  }
+
+  /**
+   * Fallback text for a profile saved before the API explained each shape from
+   * the customer's own measurements (shape_summary). Keyed by the API's class
+   * names -- this previously used "rectangle" and "inverted_triangle", which the
+   * API never returns, so straight and athletic shapes got the generic line.
+   */
   getShapeDescription(shapeClass) {
     const descriptions = {
-      pear: 'Your hips are fuller than your bust. Styles that balance proportions work beautifully on you.',
-      apple: 'Fuller in the bust and mid-section. Styles with focus at the neckline and legs are flattering.',
-      hourglass: 'Balanced curves with defined waist. You can wear fitted styles with confidence.',
-      rectangle: 'Balanced proportions with less waist definition. Structured and layered styles suit you.',
-      inverted_triangle: 'Broader shoulders and narrower hips. Styles that balance your proportions work best.',
-      balanced: 'Well-proportioned with even distribution. You can wear a variety of styles beautifully.',
+      pear: 'Fuller through the hips than the bust.',
+      athletic: 'Fuller through the bust than the hips, with a straighter waist.',
+      hourglass: 'A clearly defined waist.',
+      apple: 'Fullest through the middle.',
+      straight: 'Neither bust nor hips distinctly fuller, and little waist definition.',
+      balanced: 'Neither bust nor hips distinctly fuller, with a moderately defined waist.',
     };
     return descriptions[shapeClass] || 'Your unique shape deserves styles tailored to you.';
   }
@@ -992,14 +1058,15 @@ class IntakeFlow {
 }
 
 /**
- * Put a sample of each colour beside its name in the preferences step.
+ * Turn each colour option into a tile: a large sample of the colour with its
+ * name beneath. Customers choose by eye -- most won't recognise a Pantone name
+ * like "Sky Captain" -- so the sample is the main thing and the name a caption.
  *
  * Rendered from colorHex() rather than written into the markup, so the sample a
  * customer picks from is the same value the product pages paint their swatches
- * with -- two hardcoded copies would eventually disagree, and a colour named
- * "Sky Captain" is impossible to sanity-check by eye.
+ * with -- two hardcoded copies would eventually disagree.
  *
- * The swatch goes INSIDE the span, not between the input and the span: the
+ * The sample goes INSIDE the span, not between the input and the span: the
  * checked-state styling is `input:checked + span`, an adjacent-sibling rule that
  * an element inserted between the two would silently break.
  */
@@ -1008,14 +1075,39 @@ function renderColorSwatches() {
   document.querySelectorAll('.color-options input[name="color"]').forEach((input) => {
     const label = input.nextElementSibling;
     if (!label || label.querySelector('.color-swatch')) return;
+
+    const name = document.createElement('span');
+    name.className = 'color-name';
+    name.textContent = label.textContent.trim();
+    label.textContent = '';
+
+    const hex = colorHex(input.value);
     const sample = document.createElement('i');
     sample.className = 'color-swatch';
-    sample.style.background = colorHex(input.value);
+    sample.style.background = hex;
+    // The tick drawn on a selected sample must read against it: white on the
+    // dark colours, near-black on the light ones.
+    sample.style.setProperty('--swatch-ink', swatchInk(hex));
     // Decorative: the colour's name is already the accessible label, so a
     // screen reader announcing it twice would be noise.
     sample.setAttribute('aria-hidden', 'true');
-    label.prepend(sample);
+
+    label.append(sample, name);
+    // Hovering the tile shows the hex too, for anyone matching a colour exactly.
+    input.closest('label').title = `${name.textContent} (${hex})`;
   });
+}
+
+/** Ink for marks drawn on a colour: dark on light colours, white on dark ones. */
+function swatchInk(hex) {
+  const value = String(hex).replace('#', '');
+  const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) / 255);
+  if ([r, g, b].some(Number.isNaN)) return '#ffffff';
+  // WCAG relative luminance.
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return luminance > 0.4 ? '#121212' : '#ffffff';
 }
 
 document.addEventListener('DOMContentLoaded', () => {

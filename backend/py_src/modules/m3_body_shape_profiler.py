@@ -15,13 +15,37 @@ from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.constants import (SIZE_BOUNDARIES, WAIST_SIZE_BOUNDARIES,
-                              HIP_SIZE_BOUNDARIES, STANDARD_SIZES)
+                              HIP_SIZE_BOUNDARIES, STANDARD_SIZES,
+                              SHAPE_THRESHOLDS)
+
+
+# What each shape means, in the customer's terms. Shown after the sentence that
+# says how their own measurements led there (see _explain_shape).
+SHAPE_MEANINGS = {
+    "pear": "a pear shape: fuller through the hips than the bust",
+    "athletic": "an athletic shape: fuller through the bust than the hips, "
+                "with a straighter waist",
+    "hourglass": "an hourglass shape: a clearly defined waist",
+    "apple": "an apple shape: fullest through the middle",
+    "straight": "a straight shape: neither bust nor hips distinctly fuller, "
+                "and little waist definition",
+    "balanced": "a balanced shape: neither bust nor hips distinctly fuller, "
+                "with a moderately defined waist",
+}
+
+
+# Created on first use by refresh_if_outdated, rather than once per stored
+# profile loaded.
+_refresh_profiler = None
 
 
 class BodyShapeProfiler:
     """Deterministic body shape classifier based on measurement ratios."""
 
-    PROFILE_VERSION = "1.0.0"
+    # Bump whenever the classification or size rules change. Stored profiles
+    # from an older version are recomputed when loaded (refresh_if_outdated),
+    # so a customer is never left with a label the current rules would not give.
+    PROFILE_VERSION = "2.0.0"
 
     def __init__(self):
         logger.info("M3 initialized", {"version": self.PROFILE_VERSION})
@@ -31,12 +55,14 @@ class BodyShapeProfiler:
         Create a BodyShapeProfile from Measurements.
 
         Args:
-            measurements: Dict with bust, waist, hips, shoulder, height
+            measurements: Dict with bust, waist, hips, height (shoulder and
+                inseam may be present but don't affect the shape)
             user_id: Optional user ID for consent checking and audit logging
             consent_tracker: Optional ConsentTracker to verify measurement consent
 
         Returns:
-            Profile dict with shape_class, ratios, recommendations, fit_notes
+            Profile dict with shape_class, shape_summary, comparisons_cm,
+            ratios, size_recommendation_by_category, fit_notes
 
         Raises:
             ModuleError: If measurements are invalid
@@ -74,16 +100,10 @@ class BodyShapeProfiler:
             # when the customer never provided a shoulder measurement) --
             # only when the key is absent entirely. Use `or` so both cases fall
             # back the same way.
-            shoulder = measurements.get("shoulder") or hips
-            height = measurements["height"]
-
-            # Compute ratios
             bust_waist = bust / waist
             waist_hip = waist / hips
-            shoulder_hip = shoulder / hips
 
-            # Classify shape
-            shape_class = self._classify_shape(bust_waist, waist_hip, shoulder_hip)
+            shape_class = self._classify_shape(bust, waist, hips)
 
             # Generate recommendations
             size_recommendations = self._recommend_sizes(
@@ -92,13 +112,27 @@ class BodyShapeProfiler:
 
             fit_notes = self._generate_fit_notes(shape_class, bust_waist, waist_hip)
 
+            # No shoulder ratio. It was shoulder / hips, but the shoulder is a
+            # breadth (30-60 cm across) and the hips a circumference, so the
+            # ratio meant nothing -- and when no shoulder was given it fell back
+            # to the hips, so most customers were shown exactly 1.00.
+            ratios = {
+                "bust_waist": round(bust_waist, 2),
+                "waist_hip": round(waist_hip, 2),
+                "bust_hip": round(bust / hips, 2),
+            }
+
             profile = {
                 "shape_class": shape_class,
-                "ratios": {
-                    "bust_waist": round(bust_waist, 2),
-                    "waist_hip": round(waist_hip, 2),
-                    "shoulder_hip": round(shoulder_hip, 2),
+                "shape_summary": self._explain_shape(shape_class, bust, waist, hips),
+                # Signed differences in cm (positive: the first is larger), the
+                # quantities the classification is decided on.
+                "comparisons_cm": {
+                    "bust_minus_hips": round(bust - hips, 1),
+                    "bust_minus_waist": round(bust - waist, 1),
+                    "hips_minus_waist": round(hips - waist, 1),
                 },
+                "ratios": ratios,
                 "size_recommendation_by_category": size_recommendations,
                 "fit_notes": fit_notes,
                 "profile_version": self.PROFILE_VERSION,
@@ -131,40 +165,130 @@ class BodyShapeProfiler:
             logger.error("M3 profiling failed", err)
             raise
 
-    def _classify_shape(self, bust_waist, waist_hip, shoulder_hip):
+    @staticmethod
+    def _classify_shape(bust, waist, hips):
         """
-        Classify shape from ratios using deterministic rules.
+        Classify shape from bust, waist and hips (cm). See SHAPE_THRESHOLDS in
+        constants.py for where each line comes from.
 
-        Ratios:
-        - bust_waist: bust / waist (how defined the waist is)
-        - waist_hip: waist / hips (hip/waist balance)
-        - shoulder_hip: shoulder / hips (frame breadth)
-
-        Returns:
-            Shape class string
+        Every comparison is a difference divided by the body's frame (mean of
+        bust and hips), so the same proportions give the same shape at any size.
         """
-        # HOURGLASS: curvy, balanced bust-hip with VERY small waist (MOST extreme)
-        if bust_waist > 1.25 and waist_hip < 0.80:
-            return "hourglass"
+        frame = (bust + hips) / 2
+        bust_over_hips = (bust - hips) / frame
+        bust_over_waist = (bust - waist) / frame
+        hips_over_waist = (hips - waist) / frame
+        # How much smaller the waist is than the fuller of bust and hips.
+        waist_gap = (max(bust, hips) - waist) / frame
+        t = SHAPE_THRESHOLDS
 
-        # ATHLETIC: muscular, broad frame, minimal waist (also very extreme)
-        if bust_waist > 1.25 and waist_hip < 0.90 and waist_hip >= 0.80:
-            return "athletic"
-
-        # PEAR: wider at hips, curvy at bottom (less extreme than hourglass/athletic)
-        if bust_waist > 1.15 and waist_hip < 0.85:
-            return "pear"
-
-        # APPLE: larger waist/torso
-        if bust_waist < 1.05 and waist_hip > 0.95:
+        # Waist about as full as the fullest point. Checked first: a figure that
+        # is fullest through the middle is an apple whichever of bust and hips
+        # happens to be larger.
+        if waist_gap <= t["apple_waist_gap"]:
             return "apple"
 
-        # STRAIGHT: minimal curves, balanced throughout
-        if 1.0 <= bust_waist <= 1.15 and 0.95 <= waist_hip <= 1.05:
-            return "straight"
+        # FFIT triangle (and its spoon / bottom-hourglass variants): hips
+        # distinctly fuller than the bust.
+        if -bust_over_hips >= t["bust_hips_distinct"]:
+            return "pear"
 
-        # BALANCED: middle ground (catches everything else)
+        # FFIT inverted triangle: bust distinctly fuller, waist not defined.
+        if bust_over_hips >= t["bust_hips_distinct"] and bust_over_waist < t["bust_waist_defined"]:
+            return "athletic"
+
+        # FFIT top hourglass: bust somewhat fuller, with a defined waist.
+        if bust_over_hips > t["bust_hips_even"] and bust_over_waist >= t["bust_waist_defined"]:
+            return "hourglass"
+
+        # FFIT hourglass: bust and hips even (or hips only slightly fuller --
+        # the distinct case returned above), with a defined waist.
+        if bust_over_hips <= t["bust_hips_even"] and (
+            bust_over_waist >= t["bust_waist_defined"]
+            or hips_over_waist >= t["hips_waist_defined"]
+        ):
+            return "hourglass"
+
+        # FFIT rectangle: no distinct difference anywhere. Split by how defined
+        # the waist is.
+        if waist_gap < t["balanced_waist_gap"]:
+            return "straight"
         return "balanced"
+
+    @staticmethod
+    def _explain_shape(shape_class, bust, waist, hips):
+        """
+        One or two sentences describing the customer's own measurements and the
+        shape they add up to.
+
+        Built from the same numbers the classification used, so it cannot claim
+        something about the customer's body that their measurements contradict.
+        The fixed per-shape descriptions it replaces did exactly that: everyone
+        classified pear was told their hips were fuller than their bust.
+        """
+        def cm(value):
+            return f"{abs(value):.0f} cm" if abs(value) >= 0.5 else "less than 1 cm"
+
+        frame = (bust + hips) / 2
+        difference = bust - hips
+        if abs(difference) / frame <= SHAPE_THRESHOLDS["bust_hips_even"]:
+            if round(difference) == 0:
+                balance = "Your bust and hips are the same"
+            else:
+                balance = f"Your bust and hips are within {cm(difference)} of each other"
+        elif difference > 0:
+            balance = f"Your bust is {cm(difference)} fuller than your hips"
+        else:
+            balance = f"Your hips are {cm(difference)} fuller than your bust"
+
+        if round(bust - waist) == round(hips - waist):
+            gap = bust - waist
+            waist_part = (
+                f"your waist is {cm(gap)} smaller than both" if gap > 0
+                else f"your waist is {cm(gap)} larger than both" if gap < 0
+                else "your waist measures the same as both"
+            )
+        else:
+            def against(other, name):
+                gap = other - waist
+                if round(gap) == 0:
+                    return f"the same as your {name}"
+                return f"{cm(gap)} {'smaller' if gap > 0 else 'larger'} than your {name}"
+            waist_part = f"your waist is {against(bust, 'bust')} and {against(hips, 'hips')}"
+
+        return f"{balance}, and {waist_part}. That makes {SHAPE_MEANINGS[shape_class]}."
+
+    @classmethod
+    def refresh_if_outdated(cls, profile, measurements):
+        """
+        Recompute a stored profile that was made by an older PROFILE_VERSION.
+
+        Profiles are computed once, when intake finishes, and read back from the
+        database afterwards -- so a change to these rules would otherwise never
+        reach a returning customer: someone told "pear" by the old classifier
+        would keep seeing "pear" on their account. Their measurements are the
+        source of truth, so the profile is rebuilt from them exactly as if they
+        had redone intake today.
+
+        Returns the stored profile unchanged when it is current, or when it can't
+        be recomputed honestly (missing or invalid measurements).
+        """
+        if not isinstance(profile, dict) or profile.get("profile_version") == cls.PROFILE_VERSION:
+            return profile
+        if not isinstance(measurements, dict):
+            return profile
+        if not InputValidator.validate_measurements(measurements)["valid"]:
+            return profile
+        try:
+            # No user context: consent was checked when the profile was first
+            # made, and this processes nothing beyond what is already stored.
+            global _refresh_profiler
+            if _refresh_profiler is None:
+                _refresh_profiler = cls()
+            return _refresh_profiler.profile(measurements)
+        except Exception as err:
+            logger.warn("Could not refresh stored shape profile", {"error": str(err)})
+            return profile
 
     def _recommend_sizes(self, shape_class, bust, waist, hips):
         """Generate size recommendations per category."""

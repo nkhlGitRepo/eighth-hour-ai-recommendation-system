@@ -82,13 +82,48 @@ def consented_session(client, account, photo_consent=True):
 
 
 def scan(client, token, session_id, height_cm=170.0, image=JPEG,
-         filename="photo.jpg", content_type="image/jpeg"):
+         filename="photo.jpg", content_type="image/jpeg", top="M", bottom="M"):
+    data = {"session_id": session_id, "height_cm": str(height_cm)}
+    if top is not None:
+        data["usual_top_size"] = top
+    if bottom is not None:
+        data["usual_bottom_size"] = bottom
     return client.post(
         "/intake/photo-measure",
         headers=auth_headers(token),
-        data={"session_id": session_id, "height_cm": str(height_cm)},
+        data=data,
         files={"photo": (filename, image, content_type)},
     )
+
+
+class TestUsualSizesAreRequired:
+    """
+    A photo is measured against the sizes the customer usually wears. Photo-only
+    estimates missed by ~17 cm on average against ~4 cm once anchored, and a
+    tester's came out 82/66/92 for a body measuring 107/90/107.
+    """
+
+    @pytest.mark.parametrize("top,bottom", [(None, None), ("M", None), (None, "M"),
+                                            ("", ""), ("M", "huge"), ("42", "M")])
+    def test_missing_or_unrecognised_sizes_are_refused(self, client, top, bottom):
+        account = register_and_login(client)
+        session_id = consented_session(client, account)
+        r = scan(client, account["token"], session_id, top=top, bottom=bottom)
+        assert r.status_code == 400
+        assert "sizes you usually wear" in r.json()["detail"]
+
+    def test_refusal_leaves_the_session_untouched(self, client):
+        account = register_and_login(client)
+        session_id = consented_session(client, account)
+        scan(client, account["token"], session_id, top=None, bottom=None)
+        from main import intake_orchestrator
+        assert intake_orchestrator.get_session(session_id).body_measurements is None
+
+    @pytest.mark.parametrize("size", ["m", " L ", "xxs"])
+    def test_sizes_are_case_and_space_insensitive(self, client, size):
+        account = register_and_login(client)
+        session_id = consented_session(client, account)
+        assert scan(client, account["token"], session_id, top=size, bottom=size).status_code == 200
 
 
 class TestPhotoDisclosure:
@@ -177,6 +212,49 @@ class TestPhotoMeasureHappyPath:
         assert profile.json()["measurements"]["height"] == 175.0
 
 
+class TestUpdatingAFinishedProfile:
+    """
+    "Update Style" re-opens the customer's finished session. Re-measuring moved
+    it back through the intake states, and everything that required a complete
+    session -- the account profile, recommendations, the fit check and new
+    releases -- stopped working until intake was finished again, or for good
+    if the customer left part-way through.
+    """
+
+    def _finished_then_rescanned(self, client):
+        account = register_and_login(client)
+        headers = auth_headers(account["token"])
+        session_id = consented_session(client, account)
+        scan(client, account["token"], session_id, height_cm=170.0)
+        done = client.post("/intake/preferences", json={
+            "session_id": session_id, "preferred_colors": ["Ebony"], "occasions": ["work"]})
+        assert done.json()["status"] == "complete"
+        # Update Style: a new scan on the same session, then the customer leaves.
+        rescan = scan(client, account["token"], session_id, height_cm=180.0, top="L", bottom="L")
+        assert rescan.status_code == 200
+        assert rescan.json()["status"] != "complete"    # genuinely mid-edit
+        return headers, session_id
+
+    def test_account_still_shows_the_profile_with_the_new_measurements(self, client):
+        headers, session_id = self._finished_then_rescanned(client)
+        profile = client.get("/account/profile", headers=headers).json()
+        assert profile and profile["session_id"] == session_id
+        assert profile["measurements"]["height"] == 180.0
+
+    def test_recommendations_and_new_releases_keep_working(self, client):
+        headers, session_id = self._finished_then_rescanned(client)
+        assert client.get(f"/recommendations/{session_id}?k=4", headers=headers).status_code == 200
+        assert client.get(f"/new-releases/{session_id}?limit=5", headers=headers).status_code == 200
+
+    def test_a_never_finished_session_is_still_refused(self, client):
+        account = register_and_login(client)
+        headers = auth_headers(account["token"])
+        session_id = consented_session(client, account)
+        scan(client, account["token"], session_id)
+        assert client.get(f"/new-releases/{session_id}?limit=5", headers=headers).status_code == 400
+        assert client.get("/account/profile", headers=headers).json() is None
+
+
 class TestPhotoMeasureAuth:
     def test_missing_token_rejected(self, client):
         account = register_and_login(client)
@@ -184,7 +262,7 @@ class TestPhotoMeasureAuth:
 
         r = client.post(
             "/intake/photo-measure",
-            data={"session_id": session_id, "height_cm": "170"},
+            data={"session_id": session_id, "height_cm": "170", "usual_top_size": "M", "usual_bottom_size": "M"},
             files={"photo": ("photo.jpg", JPEG, "image/jpeg")},
         )
         assert r.status_code == 401
@@ -196,7 +274,7 @@ class TestPhotoMeasureAuth:
         r = client.post(
             "/intake/photo-measure",
             headers={"Authorization": "garbage"},
-            data={"session_id": session_id, "height_cm": "170"},
+            data={"session_id": session_id, "height_cm": "170", "usual_top_size": "M", "usual_bottom_size": "M"},
             files={"photo": ("photo.jpg", JPEG, "image/jpeg")},
         )
         assert r.status_code == 401
@@ -279,7 +357,7 @@ class TestPhotoMeasureUploadValidation:
         r = client.post(
             "/intake/photo-measure",
             headers=auth_headers(account["token"]),
-            data={"session_id": session_id},
+            data={"session_id": session_id, "usual_top_size": "M", "usual_bottom_size": "M"},
             files={"photo": ("photo.jpg", JPEG, "image/jpeg")},
         )
         assert r.status_code == 422  # pydantic/form validation
@@ -291,7 +369,7 @@ class TestPhotoMeasureUploadValidation:
         r = client.post(
             "/intake/photo-measure",
             headers=auth_headers(account["token"]),
-            data={"session_id": session_id, "height_cm": "170"},
+            data={"session_id": session_id, "height_cm": "170", "usual_top_size": "M", "usual_bottom_size": "M"},
         )
         assert r.status_code == 422
 

@@ -2,9 +2,10 @@
 MediaPipe Pose sizing provider.
 
 A free, local SizingProvider that genuinely analyses the uploaded photo:
-Google's MediaPipe pose model finds body landmarks, those are scaled to real
-centimetres using the customer's stated height, and converted to bust/waist/
-hip circumferences by py_src/providers/anthropometry.py.
+Google's MediaPipe pose model finds body landmarks and outlines the person;
+the outline's width at the bust, waist and hip lines is scaled to real
+centimetres using the customer's stated height, and converted to
+circumferences by py_src/providers/anthropometry.py.
 
 Unlike MockSizingProvider, output depends on the actual image -- two different
 people produce different measurements, and a photo with no recognisable person
@@ -13,10 +14,12 @@ in it (a car, a landscape) is rejected rather than silently measured.
 Trade-offs, stated plainly:
   - Free and runs entirely on this server: no API key, no rate limit, no
     third-party transmission. Costs ~350 MB of dependencies and ~200 MB RAM.
-  - Accuracy is approximate. Circumference from a single frontal photo relies
-    on population-average ratios (see anthropometry.py). It is better than a
-    guess and genuinely responsive to the customer's proportions, but it is
-    not a tape measure or a 3D scan. A paid vendor doing real 3D
+  - Accuracy is approximate. A frontal photo shows width, not depth, so
+    circumference relies on population-average ratios (see anthropometry.py),
+    and arms resting against the body hide part of the outline. That is why the
+    customer's usual sizes are required with a photo: the size chart anchors
+    the estimate and the photo adjusts it. It is not a tape measure or a 3D
+    scan. A paid vendor doing real 3D
     reconstruction would be materially more accurate -- swapping one in is a
     single registry entry (see the README's "Plugging in a
     photo-measurement API" section).
@@ -29,8 +32,14 @@ import urllib.request
 
 from py_src.modules.m2_sizing_integration import Measurements, SizingProvider
 from py_src.providers.anthropometry import (
-    measurements_from_breadths,
-    pixels_to_cm_scale,
+    FOREARM_HALF_WIDTH_CM,
+    HEAD_TOP_ABOVE_NOSE_CM,
+    MIN_HEAD_ROOM_SHARE,
+    HAND_HALF_WIDTH_CM,
+    UPPER_ARM_HALF_WIDTH_CM,
+    circumferences_from_breadths,
+    combined_scale,
+    silhouette_breadths,
 )
 from py_src.constants import (
     HIP_SIZE_BOUNDARIES,
@@ -46,8 +55,36 @@ from py_src.utils.logger import logger
 # MediaPipe pose landmark indices (33-point BlazePose topology).
 NOSE = 0
 LEFT_SHOULDER, RIGHT_SHOULDER = 11, 12
+LEFT_ELBOW, RIGHT_ELBOW = 13, 14
+LEFT_WRIST, RIGHT_WRIST = 15, 16
+LEFT_PINKY, RIGHT_PINKY = 17, 18
+LEFT_INDEX, RIGHT_INDEX = 19, 20
 LEFT_HIP, RIGHT_HIP = 23, 24
 LEFT_ANKLE, RIGHT_ANKLE = 27, 28
+
+# Each arm as bones plus hand, with the typical half-width of that part -- used
+# to tell an arm resting beside the body from the body itself in the outline.
+ARM_SEGMENTS = tuple(
+    (start, end, half_width)
+    for shoulder, elbow, wrist, index, pinky in (
+        (LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST, LEFT_INDEX, LEFT_PINKY),
+        (RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST, RIGHT_INDEX, RIGHT_PINKY),
+    )
+    for start, end, half_width in (
+        (shoulder, elbow, UPPER_ARM_HALF_WIDTH_CM),
+        (elbow, wrist, FOREARM_HALF_WIDTH_CM),
+        (wrist, index, HAND_HALF_WIDTH_CM),
+        (wrist, pinky, HAND_HALF_WIDTH_CM),
+    )
+)
+
+# Photos are analysed at a bounded size. A phone photo can be 4000 x 6000;
+# its float person mask alone would be ~100 MB on a server with 512 MB. And the
+# width is kept to a multiple of 16: MediaPipe 1.0 aborts the whole process
+# (a native check failure, not an exception) when copying out the mask of an
+# image whose rows need padding -- seen on an ordinary 475-px-wide JPEG.
+ANALYSIS_LONGEST_SIDE_PX = 1280
+ANALYSIS_WIDTH_MULTIPLE = 16
 
 # Visibility requirements differ by what a landmark is used FOR.
 #
@@ -281,6 +318,7 @@ class MediaPipeSizingProvider(SizingProvider):
                 base_options=mp_python.BaseOptions(model_asset_path=path),
                 running_mode=vision.RunningMode.IMAGE,
                 num_poses=1,
+                output_segmentation_masks=True,
             )
             self._landmarker = vision.PoseLandmarker.create_from_options(options)
             logger.info("MediaPipe pose model loaded", {"path": path})
@@ -308,7 +346,7 @@ class MediaPipeSizingProvider(SizingProvider):
             )
 
         image_array, width_px, height_px = self._decode(image_bytes)
-        landmarks = self._detect_landmarks(image_array)
+        landmarks, mask = self._detect_landmarks(image_array)
         # Kept out of _detect_landmarks so it applies to any landmark source
         # (and stays testable without running the model).
         self._validate_landmark_visibility(landmarks)
@@ -327,22 +365,14 @@ class MediaPipeSizingProvider(SizingProvider):
         _, ray = px(RIGHT_ANKLE)
 
         shoulder_mid_y = (lsy + rsy) / 2.0
+        hip_mid_y = (lhy + rhy) / 2.0
         ankle_mid_y = (lay + ray) / 2.0
         span_px = abs(ankle_mid_y - shoulder_mid_y)
-
-        try:
-            cm_per_px = pixels_to_cm_scale(span_px, height_cm)
-        except ValueError as err:
-            raise ModuleError(
-                "Couldn't work out your proportions from that photo. Please use a "
-                f"full-body photo taken straight on. ({err})",
-                "M2",
-            )
 
         shoulder_breadth_px = abs(lsx - rsx)
         pelvis_breadth_px = abs(lhx - rhx)
 
-        if shoulder_breadth_px <= 0 or pelvis_breadth_px <= 0:
+        if shoulder_breadth_px <= 0 or pelvis_breadth_px <= 0 or span_px <= 0:
             raise ModuleError(
                 "Couldn't measure your shoulders and hips in that photo. Please use "
                 "a full-body photo, facing the camera.",
@@ -360,14 +390,42 @@ class MediaPipeSizingProvider(SizingProvider):
             left_ankle_offset_px=abs(px(LEFT_ANKLE)[0] - lhx),
             right_ankle_offset_px=abs(px(RIGHT_ANKLE)[0] - rhx),
             shoulder_mid_y=shoulder_mid_y,
-            hip_mid_y=(lhy + rhy) / 2.0,
+            hip_mid_y=hip_mid_y,
             ankle_mid_y=ankle_mid_y,
         )
 
-        shoulder_breadth_cm = shoulder_breadth_px * cm_per_px
-        pelvis_breadth_cm = pelvis_breadth_px * cm_per_px
+        # MediaPipe places ankles even when the feet are out of the photo; a
+        # normalised y beyond 1.0 means it guessed them below the frame.
+        ankles_in_frame = max(landmarks[LEFT_ANKLE].y, landmarks[RIGHT_ANKLE].y) <= 1.0
+        try:
+            cm_per_px, scale_source = combined_scale(
+                span_px, hip_mid_y - shoulder_mid_y, height_cm, ankles_in_frame)
+        except ValueError as err:
+            raise ModuleError(
+                "Couldn't work out your proportions from that photo. Please use a "
+                f"full-body photo taken straight on. ({err})",
+                "M2",
+            )
 
-        derived = measurements_from_breadths(shoulder_breadth_cm, pelvis_breadth_cm)
+        # Now the scale is known: is there room for a real head above the nose?
+        head_room_px = landmarks[NOSE].y * height_px
+        if head_room_px * cm_per_px < MIN_HEAD_ROOM_SHARE * HEAD_TOP_ABOVE_NOSE_CM:
+            logger.info("Rejected photo: head cropped",
+                        {"head_room_cm": round(head_room_px * cm_per_px, 1)})
+            raise ModuleError(self.HEAD_GUIDANCE, "M2")
+
+        breadths = silhouette_breadths(
+            mask,
+            shoulder_y=shoulder_mid_y,
+            hip_y=hip_mid_y,
+            mid_x=(lsx + rsx + lhx + rhx) / 4.0,
+            arm_segments=[(px(a), px(b), half) for a, b, half in ARM_SEGMENTS],
+            cm_per_px=cm_per_px,
+        )
+        derived, unread = self._circumferences_or_fallback(
+            breadths, usual_top_size, usual_bottom_size)
+        derived["shoulder_cm"] = round(shoulder_breadth_px * cm_per_px, 1)
+
         anchored_fields = self._steady_with_stated_sizes(
             derived, usual_top_size, usual_bottom_size)
         adjusted_fields = self._fit_to_supported_range(derived)
@@ -388,8 +446,9 @@ class MediaPipeSizingProvider(SizingProvider):
         logger.debug(
             "MediaPipe extraction complete",
             {
-                "shoulder_cm": derived["shoulder_cm"],
-                "span_px": round(span_px, 1),
+                "scale_from": scale_source,
+                "outline": breadths["quality"],
+                "from_stated_size_only": unread,
                 "min_visibility": round(min(confidences.values()), 2),
             },
         )
@@ -449,7 +508,16 @@ class MediaPipeSizingProvider(SizingProvider):
         except Exception as err:
             raise ModuleError(f"Couldn't read that image file ({err})", "M2")
 
-        array = np.asarray(image)
+        scale = min(1.0, ANALYSIS_LONGEST_SIDE_PX / max(image.width, image.height))
+        width = max(
+            ANALYSIS_WIDTH_MULTIPLE,
+            int(round(image.width * scale / ANALYSIS_WIDTH_MULTIPLE)) * ANALYSIS_WIDTH_MULTIPLE,
+        )
+        height = max(1, int(round(image.height * width / image.width)))
+        if (width, height) != image.size:
+            image = image.resize((width, height), Image.LANCZOS)
+
+        array = np.ascontiguousarray(np.asarray(image))
         return array, image.width, image.height
 
     def _detect_landmarks(self, image_array):
@@ -467,13 +535,23 @@ class MediaPipeSizingProvider(SizingProvider):
                 "M2",
             )
 
-        return result.pose_landmarks[0]
+        mask = None
+        if result.segmentation_masks:
+            mask = result.segmentation_masks[0].numpy_view()[..., 0] > 0.5
+        if mask is None or not mask.any():
+            raise ModuleError(
+                "We couldn't make out your outline in that photo. Please use a "
+                "clear, well-lit full-body photo against a plain background.",
+                "M2",
+            )
+        return result.pose_landmarks[0], mask
 
     def _validate_landmark_visibility(self, landmarks) -> None:
         """
         Refuse photos where the joints we measure BREADTHS from aren't clearly
-        visible. Ankles are held to a much lower bar -- see SCALE_LANDMARKS for
-        why, and _validate_pose for the scale check that replaces it.
+        visible, or the head is out of the frame. Ankles are held to a much
+        lower bar -- see SCALE_LANDMARKS for why, and _validate_pose for the
+        scale check that replaces it.
         """
         too_faint = [
             index for index in BREADTH_LANDMARKS
@@ -488,6 +566,22 @@ class MediaPipeSizingProvider(SizingProvider):
                 "shoulders, hips and feet all in frame.",
                 "M2",
             )
+
+        # The head must be in the photo. Cropped at the chest, MediaPipe still
+        # returns confident-looking shoulders -- invented, often at hand
+        # height -- and every measurement line lands in the wrong place.
+        # Checked on 203 catalog photos: crops like this were being measured
+        # by the old estimator and this one alike.
+        nose = landmarks[NOSE]
+        if not (0.0 <= nose.y <= 1.0 and 0.0 <= nose.x <= 1.0) or \
+                float(getattr(nose, "visibility", 1.0)) < MIN_LANDMARK_VISIBILITY:
+            logger.info("Rejected photo: head not in frame", {"nose_y": round(nose.y, 2)})
+            raise ModuleError(self.HEAD_GUIDANCE, "M2")
+
+    HEAD_GUIDANCE = (
+        "We need to see all of you, from your head down, to measure the photo. "
+        "Please step back from the camera so your whole body is in frame."
+    )
 
     # A single message for every pose failure: the customer's fix is the same
     # in all cases, and enumerating which geometric check tripped would be
@@ -609,6 +703,47 @@ class MediaPipeSizingProvider(SizingProvider):
         if headroom <= 0:
             return anchor
         return anchor + headroom * math.tanh(adjustment / headroom)
+
+    # The one case where the outline can't be used: the arms covered the waist
+    # and hips (or bust) entirely, and no stated size covers the gap.
+    ARMS_GUIDANCE = (
+        "We couldn't see the outline of your body clearly in that photo -- your "
+        "arms were covering it. Please stand with your arms held slightly away "
+        "from your sides, or enter your measurements manually."
+    )
+
+    def _circumferences_or_fallback(self, breadths, usual_top_size, usual_bottom_size):
+        """
+        Circumferences from the outline breadths. A field the outline couldn't
+        show (the arms covered it) takes the chart value for the size the
+        customer said they wear in that half of the body -- the same anchor the
+        photo would have been blended toward -- rather than refusing a photo
+        whose other measurements are fine.
+
+        Returns:
+            (derived, unread) -- the measurements, and the fields that came
+            from the stated size alone.
+
+        Raises:
+            ModuleError: if nothing could be read, or a field is unreadable and
+                there is no stated size for it.
+        """
+        stated = {
+            "bust": self._stated_size(usual_top_size),
+            "waist": self._stated_size(usual_bottom_size),
+            "hips": self._stated_size(usual_bottom_size),
+        }
+        fields = ("bust", "waist", "hips")
+        unread = [f for f in fields if breadths[f] is None]
+        if len(unread) == len(fields) or any(not stated[f] for f in unread):
+            logger.info("Rejected photo: outline hidden", {"quality": breadths["quality"]})
+            raise ModuleError(self.ARMS_GUIDANCE, "M2")
+
+        readable = {f: (breadths[f] if breadths[f] is not None else 1.0) for f in fields}
+        derived = circumferences_from_breadths(readable)
+        for field in unread:
+            derived[field] = round(STANDARD_SIZE_CHART[stated[field]][field], 1)
+        return derived, unread
 
     def _steady_with_stated_sizes(
         self, derived: dict, usual_top_size: str, usual_bottom_size: str
