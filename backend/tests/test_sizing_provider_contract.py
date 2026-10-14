@@ -1,23 +1,19 @@
 """
 Reusable contract suite for sizing providers.
 
-============================================================================
-IF YOU ARE PLUGGING IN A REAL SIZING VENDOR, START HERE.
-============================================================================
-
-Add your provider class to PROVIDERS_UNDER_TEST below and run:
+Every provider in PROVIDERS_UNDER_TEST below is held to it:
 
     pytest tests/test_sizing_provider_contract.py -v
 
 Everything in this file is an invariant the rest of the application relies
-on. If your provider passes, the intake flow, shape profiler, fit checker,
+on. If a provider passes, the intake flow, shape profiler, fit checker,
 and recommendation engine will all work with it unchanged. If it fails, the
 failure message says exactly which assumption is violated -- which is much
 cheaper than discovering it as a wrong dress size in the UI.
 
 The single most common real-world failure is units: this codebase is
 centimetres end to end (see constants.MEASUREMENT_RANGES, SIZE_BOUNDARIES),
-while many vendors return inches. `test_units_are_centimetres` and
+and a measurement in inches is the easiest mistake to make. `test_units_are_centimetres` and
 `test_values_within_supported_ranges` exist to catch exactly that.
 """
 
@@ -33,8 +29,7 @@ from py_src.utils.errors import ModuleError
 
 
 # --------------------------------------------------------------------------
-# Register providers to verify here. A real vendor gets added alongside the
-# mock; both must satisfy every test below.
+# Providers verified here. Every one must satisfy every test below.
 # --------------------------------------------------------------------------
 PROVIDERS_UNDER_TEST = [
     MockSizingProvider,
@@ -65,7 +60,7 @@ def provider(request):
 def _extract(provider):
     """
     Get measurements from whichever path the provider supports, so this suite
-    works for upload-based and photo_ref-based vendors alike.
+    works for upload-based and photo_ref-based providers alike.
     """
     try:
         return provider.extract_from_image(SAMPLE_JPEG, "image/jpeg", SAMPLE_HEIGHT_CM)
@@ -122,7 +117,7 @@ class TestProviderContract:
             low, high = MEASUREMENT_RANGES[field]
             assert low <= value <= high, (
                 f"{field}={value} is outside the supported range {low}-{high} cm. "
-                f"If your vendor returns inches, convert to cm before returning. "
+                f"If the provider produces inches, convert to cm before returning. "
                 f"An out-of-range optional field is stored happily and then "
                 f"rejected by every module that validates its input."
             )
@@ -205,7 +200,7 @@ class TestProviderContract:
         """
         The converse: a provider claiming derives_from_image=True must not
         return the same numbers for two completely different images, or it is
-        a placeholder masquerading as a real measurement service -- the exact
+        a placeholder masquerading as real photo analysis -- the exact
         situation that would mislead a customer about their own body.
         """
         if not provider.disclosure["derives_from_image"]:

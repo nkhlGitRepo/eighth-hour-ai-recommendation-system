@@ -525,8 +525,8 @@ class IntakeOrchestrator:
             # to review the estimates, so a scan is always followed by a
             # confirm submitting those same numbers back. Blindly relabelling
             # them "manual_entry" would erase the real provenance on every
-            # single scan (and, with a real vendor configured, would make the
-            # audit trail claim the customer typed values the vendor produced).
+            # single scan, making the audit trail claim the customer typed
+            # values the photo analysis produced.
             # So provenance is only reassigned when the values actually differ
             # from what was extracted -- i.e. when the human really did
             # override something.

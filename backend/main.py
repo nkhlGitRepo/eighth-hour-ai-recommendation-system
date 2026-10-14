@@ -157,10 +157,9 @@ consent_tracker = ConsentTracker(db_path=session_repo.db_path)
 # Same db-file-sharing pattern as consent_tracker above.
 user_repository = UserRepository(db_path=session_repo.db_path)
 auth_manager = AuthManager(user_repository)
-# Sizing provider comes from the SIZING_PROVIDER env var (defaults to the
-# mock estimator). This is the only wiring a real vendor integration needs --
-# see py_src/modules/m2_sizing_integration.py's registry, and the README's
-# "Plugging in a photo-measurement API" section.
+# Sizing provider comes from the SIZING_PROVIDER env var: on-server photo
+# analysis by default, or the demo estimator when asked for by name. See the
+# registry in py_src/modules/m2_sizing_integration.py.
 sizing_integration = SizingIntegration(provider=build_sizing_provider())
 intake_orchestrator = IntakeOrchestrator(
     session_repo=session_repo,
@@ -847,9 +846,8 @@ async def get_photo_disclosure():
     How the currently-configured sizing provider handles a customer's photo.
 
     The upload screen renders its legal notice from this rather than from
-    hardcoded copy, so the disclosure can't silently go stale: with the mock
-    provider nothing leaves this server, and the day a real vendor is
-    configured the notice starts naming it automatically.
+    hardcoded copy, so the disclosure always describes what the configured
+    provider actually does with the image.
 
     Returns:
     {

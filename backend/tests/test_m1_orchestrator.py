@@ -694,9 +694,8 @@ class TestPhotoHeightIsHonored:
 
 class TestMeasurementProvenancePersists:
     """
-    A real sizing vendor's identity and timing must survive a reload --
-    otherwise debugging a live integration (or answering "when was this
-    measured?") is impossible. extracted_at used to be re-stamped with "now"
+    Which provider produced the measurements, and when, must survive a reload
+    -- otherwise answering "how and when was this measured?" is impossible. extracted_at used to be re-stamped with "now"
     on every load.
     """
 
@@ -747,8 +746,8 @@ class TestConfirmPreservesExtractionProvenance:
     Photo measurement sends the customer back to the measurements screen to
     review the estimates, so every scan is followed by a confirm resubmitting
     those numbers. Provenance must only flip to manual_entry when the values
-    genuinely changed -- otherwise a real vendor's name would be erased on
-    every scan and the audit trail would claim the customer typed them.
+    genuinely changed -- otherwise the photo analysis would be erased as the
+    source on every scan and the audit trail would claim the customer typed them.
     """
 
     def _scanned_session(self, orchestrator, user_id):
