@@ -48,7 +48,7 @@ const FAQ_GROUPS = [
       },
       {
         q: "Who processes my photo?",
-        a: "In this demo the estimate is produced on our own server — your photo is not sent to any third party. If that ever changes, the notice on the upload screen will name the processor before you upload anything, because that notice is generated from the software actually in use rather than written by hand.",
+        a: "In this demo the estimate is produced on our own server — your photo is not sent to any third party. The notice on the upload screen tells you exactly how your photo is handled before you upload anything, because that notice is generated from the software actually in use rather than written by hand.",
       },
       {
         q: "How long do you keep my photo and measurements?",
@@ -60,7 +60,7 @@ const FAQ_GROUPS = [
       },
       {
         q: "How accurate are photo-based measurements?",
-        a: "In this demo build, photo measurement is not connected to a measurement service yet, so it does not analyse your photo at all \u2014 it fills in the same fixed sample values no matter what you upload (even an image that isn't a person). The upload screen says so before you upload, and the values are labelled as samples afterwards. Once a real measurement service is connected, results will be genuine automated estimates \u2014 still not a professional fitting, and still worth checking against a tape measure before buying.",
+        a: "They are automated estimates, not a professional fitting. Your photo is analysed on our own server, which measures the outline of your body at the bust, waist and hips. A single photo can't see how deep your body is, and loose clothing reads as wider than you are, so the estimate is anchored on the sizes you tell us you usually wear \u2014 the photo fine-tunes it within those sizes. You can review and edit every number before continuing, and it is still worth checking them against a tape measure before buying.",
       },
       {
         q: "How do I withdraw consent or remove my measurements?",

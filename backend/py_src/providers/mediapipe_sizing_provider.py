@@ -19,10 +19,7 @@ Trade-offs, stated plainly:
     and arms resting against the body hide part of the outline. That is why the
     customer's usual sizes are required with a photo: the size chart anchors
     the estimate and the photo adjusts it. It is not a tape measure or a 3D
-    scan. A paid vendor doing real 3D
-    reconstruction would be materially more accurate -- swapping one in is a
-    single registry entry (see the README's "Plugging in a
-    photo-measurement API" section).
+    scan.
 """
 
 import math

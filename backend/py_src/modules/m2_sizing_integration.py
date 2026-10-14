@@ -1,8 +1,9 @@
 """
 M2 — Sizing Integration
 
-Responsibility: Wrap third-party sizing provider. Extract body measurements from photos.
-Adapter pattern allows vendor swaps without touching downstream modules.
+Responsibility: Extract body measurements from photos through a sizing
+provider, and validate and audit what comes back. Downstream modules only ever
+see Measurements, never how they were produced.
 
 Guardrails applied:
 - InputValidator: validate measurements after extraction
@@ -82,7 +83,7 @@ class Measurements:
 
 
 class SizingProvider(ABC):
-    """Abstract adapter for any third-party sizing vendor."""
+    """Interface every sizing provider implements."""
 
     @abstractmethod
     def extract_measurements(
@@ -152,10 +153,8 @@ class SizingProvider(ABC):
 
         The notice is generated from this rather than hardcoded in the HTML
         so it can never drift from what the code actually does -- e.g.
-        claiming a third party processes the image while the mock provider
-        is active would be a false statement to the customer, and a real
-        vendor must not go live without disclosing that images leave the
-        machine.
+        claiming the image is analysed while the demo estimator is active
+        would be a false statement to the customer.
 
         Required keys (enforced by tests/test_sizing_provider_contract.py):
             processor_name: Who actually processes the image, in customer-
@@ -215,7 +214,6 @@ class MockSizingProvider(SizingProvider):
     ) -> Measurements:
         """
         Return deterministic measurements for testing.
-        In Phase 2: swap for real vendor (SizeStream, MySize, etc.)
         """
         if not isinstance(photo_ref, str) or len(photo_ref) == 0:
             raise ModuleError("Invalid photo reference", "M2")
@@ -232,10 +230,10 @@ class MockSizingProvider(SizingProvider):
         usual_top_size: str = None, usual_bottom_size: str = None,
     ) -> Measurements:
         """
-        Deterministic stand-in for a real vendor's image analysis. The image
-        content is deliberately NOT inspected -- this provider exists so the
-        whole flow (upload, validation, consent, profile generation, UI) can
-        be built and tested without a vendor account. Bytes are still checked
+        Deterministic stand-in for real image analysis. The image content is
+        deliberately NOT inspected -- this provider exists so the whole flow
+        (upload, validation, consent, profile generation, UI) can be built and
+        tested without loading the pose model. Bytes are still checked
         for presence so the plumbing is genuinely exercised.
         """
         if not isinstance(image_bytes, (bytes, bytearray)) or len(image_bytes) == 0:
@@ -253,7 +251,7 @@ class MockSizingProvider(SizingProvider):
 
     @property
     def disclosure(self) -> dict:
-        """No third party, no retention, and -- critically -- no analysis."""
+        """Nothing leaves the server, nothing is kept -- and nothing is analysed."""
         return {
             "processor_name": "Eighth Hour demo estimator (runs on this server)",
             "sends_image_offsite": False,
@@ -262,8 +260,8 @@ class MockSizingProvider(SizingProvider):
             # image at all, so every photo yields the same numbers. Claiming
             # otherwise in the UI would be a straightforwardly false statement
             # to the customer, so the UI reads this flag and labels the values
-            # as samples instead of measurements. A real vendor sets it True
-            # and the demo warning disappears on its own.
+            # as samples instead of measurements. A provider that really
+            # analyses the photo sets it True and the demo warning disappears.
             "derives_from_image": False,
             # Worded to be precisely true rather than maximally reassuring:
             # a web server unavoidably buffers an upload while the request is
@@ -424,19 +422,12 @@ class SizingIntegration:
 
 
 # =========================================================================
-# Provider registry -- the entire swap surface for a real vendor
+# Provider registry
 # =========================================================================
 #
-# To plug in a real sizing API:
-#   1. Write a class implementing SizingProvider (extract_from_image is the
-#      method the upload flow calls; declare the `disclosure` property so the
-#      UI can tell customers truthfully how their photo is handled).
-#   2. Add one entry to SIZING_PROVIDERS below.
-#   3. Set SIZING_PROVIDER=<your key> in the environment.
-# Nothing else in the app changes -- see the README's "Plugging in a
-# photo-measurement API" section for the full
-# walkthrough, and tests/test_sizing_provider_contract.py to verify your
-# implementation satisfies the invariants this codebase relies on
+# SIZING_PROVIDER selects one of these by name. Every provider declares a
+# `disclosure` so the UI can tell customers truthfully how their photo is
+# handled, and must satisfy tests/test_sizing_provider_contract.py
 # (centimetres, valid ranges, populated provenance, declared disclosure).
 
 def _mediapipe_provider():

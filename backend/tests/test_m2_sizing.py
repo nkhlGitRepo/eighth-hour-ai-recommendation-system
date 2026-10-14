@@ -410,7 +410,7 @@ class TestExtractFromImage:
 
 
 class TestProviderRegistry:
-    """Test the swap surface for a real vendor integration."""
+    """Test the provider registry and the SIZING_PROVIDER setting."""
 
     def test_defaults_to_real_photo_analysis(self, monkeypatch):
         """
@@ -491,10 +491,10 @@ class TestProviderRegistry:
         """
         from py_src.modules.m2_sizing_integration import build_sizing_provider
 
-        monkeypatch.setenv("SIZING_PROVIDER", "typo-vendor")
+        monkeypatch.setenv("SIZING_PROVIDER", "typo-provider")
         with pytest.raises(ModuleError) as exc:
             build_sizing_provider()
-        assert "typo-vendor" in str(exc.value)
+        assert "typo-provider" in str(exc.value)
 
     def test_name_is_case_and_whitespace_insensitive(self, monkeypatch):
         from py_src.modules.m2_sizing_integration import build_sizing_provider
@@ -541,7 +541,7 @@ class TestProviderDisclosure:
         assert sizing.disclosure == MockSizingProvider().disclosure
 
     def test_provider_without_disclosure_raises(self):
-        """A vendor cannot be plugged in without declaring photo handling."""
+        """A provider cannot be used without declaring how it handles photos."""
         from py_src.modules.m2_sizing_integration import SizingProvider
 
         class Undeclared(SizingProvider):

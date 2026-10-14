@@ -182,10 +182,8 @@ class TestIntakePhoto:
         This is not a gap in photo measurement overall -- the working photo
         path is POST /intake/photo-measure, which accepts the actual image
         bytes, runs extraction, and generates the shape profile (see
-        tests/test_api_photo_measure.py). This ref-based endpoint is kept for
-        a future vendor flow where the image is uploaded out-of-band and
-        referenced by URI, and it is deliberately left un-wired until such a
-        provider exists.
+        tests/test_api_photo_measure.py). This ref-based endpoint takes an image
+        referenced by URI instead, and is deliberately left un-wired.
         """
         user_id = unique_user()
         session_id = create_session(client, user_id).json()["session_id"]

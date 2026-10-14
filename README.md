@@ -27,7 +27,6 @@ history modules are complete. Photo measurement works but is deliberately weight
 - [Sample inputs and outputs](#sample-inputs-and-outputs)
 - [Backend features](#backend-features)
 - [Frontend features](#frontend-features)
-- [Plugging in a photo-measurement API](#plugging-in-a-photo-measurement-api)
 - [Connecting to the Shopify storefront](#connecting-to-the-shopify-storefront)
 - [Deployment](#deployment)
 - [Testing](#testing)
@@ -513,10 +512,7 @@ body, which is the thing she can perceive.
 and bottoms, and it estimates your bust, waist and hips. The sizes are required: the photo is measured
 against them. The photo is analysed on your own machine and never stored.
 
-**How it works, and what it's actually worth.** `SizingProvider` is an abstract base with a registry
-(`SIZING_PROVIDERS`) and an env var, so swapping in a commercial vendor is one class, one registry
-line and one environment variable — proven end-to-end, twice, with throwaway providers. The bundled
-`MediaPipeSizingProvider` runs Google's BlazePose model locally and measures the **person's outline**
+**How it works, and what it's actually worth.** `MediaPipeSizingProvider` runs Google's BlazePose model locally and measures the **person's outline**
 (its segmentation mask) at the bust, waist and hip lines, converting each width to a circumference
 with the ratio real bodies show (`anthropometry.py`; every constant from ANSUR II, the 2012 US Army
 survey of 1,986 women, none fitted to test photos). Scale comes from the stated height via the
@@ -720,7 +716,7 @@ the customer watching a spinner forever.
 or type measurements in — never a dead end, and never raw server text.
 
 **How it works.** All failures funnel through `showPhotoError()`, which renders a fixed
-customer-facing message and logs the technical reason to the console. Vendor error strings and
+customer-facing message and logs the technical reason to the console. Server error strings and
 internal details cannot reach the page.
 
 **One caveat worth reading.** That single-panel design initially swallowed a failure it had no
@@ -791,160 +787,6 @@ thumbnail across the site consistent with the product page without each of the e
 needing to know preferences exist — threading a colour through each of them by hand is exactly how
 they would drift apart. The single deliberate exception is the cart, which passes the colour that was
 actually added: that is a record of a decision, not a suggestion.
-
----
-
-## Plugging in a photo-measurement API
-
-The bundled MediaPipe provider is free and runs locally, but it is not accurate enough to be the
-basis of a size guarantee (see the numbers in
-[Photo-based measurement](#5-photo-based-measurement-m2--providers)). The system was built so a
-commercial vendor can replace it without touching the intake flow, the shape profiler, the fit
-checker or the UI.
-
-**The entire swap surface is one class, one registry line, and one environment variable.** That claim
-has been proven end to end twice with throwaway providers, including verifying that the on-screen
-privacy notice updates itself to name the new processor.
-
-### Step 1 — write the provider class
-
-Create `backend/py_src/providers/your_vendor_provider.py`. Two methods and one property:
-
-```python
-import os
-import requests                       # add to requirements.txt if you need it
-
-from py_src.modules.m2_sizing_integration import Measurements, SizingProvider
-from py_src.utils.errors import ModuleError
-
-
-class YourVendorProvider(SizingProvider):
-    """Body measurement via <vendor>."""
-
-    def __init__(self):
-        # Read your own credentials. There is no shared config module to thread
-        # through -- each provider owns its own configuration.
-        self.api_key = os.environ["YOUR_VENDOR_API_KEY"]
-
-    def extract_measurements(self, photo_ref: str, height_cm: float = None) -> Measurements:
-        """Required. Measure from a stored reference (URI / object ID)."""
-        ...
-
-    def extract_from_image(
-        self,
-        image_bytes: bytes,
-        content_type: str,
-        height_cm: float = None,
-        usual_top_size: str = None,
-        usual_bottom_size: str = None,
-    ) -> Measurements:
-        """
-        Optional but used by the live upload endpoint. The bytes have already
-        been validated (MIME allowlist, magic-byte sniff, 10 MB cap) before
-        reaching you. Raise ModuleError with a customer-safe message on failure.
-        """
-        response = requests.post(
-            "https://api.yourvendor.com/v1/measure",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            files={"image": ("photo", image_bytes, content_type)},
-            data={"height_cm": height_cm},
-            timeout=30,
-        )
-        if not response.ok:
-            raise ModuleError("We couldn't measure that photo. Please try another.", "M2")
-
-        body = response.json()
-        return Measurements(
-            # CONVERT TO CENTIMETRES HERE. This codebase is cm end to end.
-            bust=body["chest_cm"],
-            waist=body["waist_cm"],
-            hips=body["hip_cm"],
-            height=height_cm,
-            unit="cm",
-            confidence_scores={"bust": 0.9, "waist": 0.9, "hips": 0.9},
-            provider="yourvendor",
-            provider_version="v1",
-        )
-
-    @property
-    def disclosure(self) -> dict:
-        """
-        Drives the privacy notice the customer sees before uploading. It must
-        describe what this provider ACTUALLY does -- the notice is rendered
-        from here rather than hardcoded in the page precisely so it cannot go
-        stale after a vendor swap.
-        """
-        return {
-            "processor_name": "YourVendor, Inc. (third-party processor)",
-            "sends_image_offsite": True,
-            "stores_image": False,
-            "derives_from_image": True,
-            "retention": "Your photo is sent to YourVendor to estimate measurements "
-                         "and is deleted immediately after processing. Only the "
-                         "resulting measurements are saved to your account.",
-        }
-```
-
-### Step 2 — register it
-
-In `backend/py_src/modules/m2_sizing_integration.py`:
-
-```python
-SIZING_PROVIDERS = {
-    "mock": MockSizingProvider,
-    "mediapipe": _mediapipe_provider,
-    "yourvendor": YourVendorProvider,      # <- add this line
-}
-```
-
-### Step 3 — run the contract suite
-
-This is the point of the exercise. `tests/test_sizing_provider_contract.py` encodes every assumption
-the rest of the application makes about a sizing provider. Add your class to `PROVIDERS_UNDER_TEST`
-at the top of that file and run:
-
-```bash
-pytest tests/test_sizing_provider_contract.py -v
-```
-
-It checks that you return a `Measurements` object with all four required fields numeric and inside
-the supported ranges; that **units are centimetres** (by far the most common real-world integration
-bug — many vendors return inches); that the supplied height is honoured; that provenance and
-confidence scores are populated; that empty uploads are rejected; and that your `disclosure` declares
-all five required keys.
-
-Two of those tests deserve specific mention, because they enforce honesty rather than correctness:
-
-- `test_offsite_provider_says_so_in_plain_language` — if you set `sends_image_offsite: True`, your
-  retention text must actually say the image leaves the server.
-- `test_analysing_provider_actually_varies_with_the_image` — if you set `derives_from_image: True`,
-  feeding two different images must produce different measurements. This exists because the mock
-  provider once returned identical numbers for a photo of a woman and a photo of a car while the UI
-  claimed the measurements were "estimated from your photo". A provider cannot claim to analyse an
-  image it ignores.
-
-If it passes, the intake flow, shape profiler, fit checker and recommendation engine all work with it
-unchanged.
-
-### Step 4 — switch it on
-
-```bash
-YOUR_VENDOR_API_KEY=... SIZING_PROVIDER=yourvendor python -m uvicorn main:app --port 8000
-```
-
-An unrecognised `SIZING_PROVIDER` raises at startup rather than silently falling back to the mock — a
-typo that quietly served fake measurements in production would be far worse than a hard failure.
-
-### What you should also change
-
-The photo weighting in `mediapipe_sizing_provider.py` (`PHOTO_WEIGHT_WITH_STATED_SIZE = 0.25`, with
-the estimate held inside the customer's stated size band) exists because the local model is weak. A
-vendor that genuinely measures well should not be damped that way — reconsider both the weight and
-the band-holding rather than inheriting settings tuned for a different problem.
-
-Two things to confirm before going live: that the image is transmitted over TLS, and that you have a
-data-processing agreement with the vendor covering biometric-adjacent data. The disclosure block
-makes the customer-facing statement automatic; it does not make the contract exist.
 
 ---
 
@@ -1045,9 +887,8 @@ POST /intake/photo-measure                 multipart: session_id, height_cm, pho
 ```
 
 Render the notice from `/intake/photo-disclosure` rather than writing it into the
-theme. It reports what the configured provider actually does with the image, so
-the day a vendor API replaces on-server analysis, the disclosure starts naming
-that vendor by itself instead of quietly going stale.
+theme. It reports what the server actually does with the image, so the notice
+can never drift from the behaviour it describes.
 
 **Showing recommendations, new releases and fit advice:**
 
@@ -1184,9 +1025,8 @@ a full-body photograph.
 
 **Worker count and the pose model.** If you deploy with `SIZING_PROVIDER=mediapipe`, each worker
 loads its own copy of the model (~200 MB RAM) on first use. Four workers is roughly 800 MB before any
-traffic. Either size the instance accordingly, keep the worker count low, or move photo measurement
-to a hosted provider — which is the better answer for other reasons anyway. Bake the model into the
-image at build time rather than letting the first request download it.
+traffic. Size the instance accordingly and keep the worker count low. Bake the model into the image at build
+time rather than letting the first request download it.
 
 ### Configuration to set
 
@@ -1194,7 +1034,6 @@ image at build time rather than letting the first request download it.
 |---|---|
 | `SIZING_PROVIDER` | `mock` in production means fabricated measurements. Set it deliberately. |
 | `MEDIAPIPE_POSE_MODEL` | Point at a model baked into the image so there is no first-request download. |
-| Vendor API keys | Whatever your provider needs; never commit them. |
 
 ### Before you take real customers' photos
 
@@ -1205,7 +1044,7 @@ statements attached to it:
   written to be *accurate to what the code does*, not to be legally sufficient. **Have a lawyer review
   it.** Requirements differ by jurisdiction (Illinois BIPA, Texas CUBI, GDPR Art. 9, CCPA/CPRA).
 - BIPA specifically requires a publicly available written retention and destruction policy. There is
-  one in the FAQ; confirm it says what you actually do once a vendor is involved.
+  one in the FAQ; confirm it still says what you actually do whenever photo handling changes.
 - There is a known unresolved issue: step 1 requires photo consent *and* measurement consent together
   to proceed. Someone who only wants to type their measurements is still made to consent to photo
   processing. That is bundled consent, which is the pattern GDPR's "freely given" requirement targets.
@@ -1254,7 +1093,7 @@ on — a cross-boundary check nothing else would catch),
 else),
 `test_per_category_size_filter.py` (recommendations are filtered by the size the customer wears in
 *that* category, and colour preferences survive any casing),
-`test_sizing_provider_contract.py` (a reusable suite any new sizing vendor must pass, including
+`test_sizing_provider_contract.py` (the contract every sizing provider must meet, including
 declaring how it handles images), `test_image_validation.py` (the upload surface, including the
 HEIC-vs-MP4 container case), and `test_mediapipe_provider.py` and `test_anthropometry.py` (pose validation, outline
 measurement and the stated-size round-trip, driven by synthetic landmarks and masks so they need no

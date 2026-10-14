@@ -5,9 +5,9 @@
 
 const API_BASE = window.EH_API_BASE;
 
-// Ceiling on a photo-measurement request. The local pose model answers in about
-// a second, but a hosted vendor can take tens of seconds and could hang
-// outright -- fetch() has no default timeout, so without this the spinner would
+// Ceiling on a photo-measurement request. The pose model answers in about a
+// second, but a hosted server waking from sleep can take tens of seconds and a
+// stuck one could hang outright -- fetch() has no default timeout, so without this the spinner would
 // spin forever instead of showing the error panel.
 const PHOTO_SCAN_TIMEOUT_MS = 60000;
 // Photos are shrunk to this before upload (see shrinkPhotoForUpload). Above the
@@ -473,8 +473,8 @@ class IntakeFlow {
         ${derives ? '' : `
           <p class="disclosure-demo-warning">
             <strong>Demo mode — your photo is not analysed.</strong>
-            This build isn't connected to a measurement service yet, so it fills in the
-            same fixed sample measurements no matter what you upload. Any image, even
+            This build is running a demo estimator instead of photo analysis, so it fills
+            in the same fixed sample measurements no matter what you upload. Any image, even
             one that isn't a person, returns identical numbers. Treat the values as a
             placeholder and replace them with your real measurements.
           </p>
@@ -584,11 +584,10 @@ class IntakeFlow {
    * Show the single photo-measurement error panel.
    *
    * Every failure funnels through here on purpose -- unreadable file, no person
-   * detected, unusable pose, oversized upload, server down, and (once a paid
-   * vendor is configured) timeouts, rate limits and auth failures. The customer
-   * gets one consistent message and two ways forward; the underlying reason is
-   * logged for developers but never rendered, so vendor error text and internal
-   * details can't leak into the page.
+   * detected, unusable pose, oversized upload, server down or timed out. The
+   * customer gets one consistent message and two ways forward; the underlying
+   * reason is logged for developers but never rendered, so server error text
+   * and internal details can't leak into the page.
    */
   showPhotoError(technicalReason) {
     if (technicalReason) {
@@ -682,9 +681,10 @@ class IntakeFlow {
       formData.append('usual_top_size', document.getElementById('photoTopSize').value);
       formData.append('usual_bottom_size', document.getElementById('photoBottomSize').value);
 
-      // Abort rather than hang if the measurement service stops responding.
-      // A local model is fast, but a hosted vendor may not be -- and a request
-      // that never settles would leave the customer watching a spinner.
+      // Abort rather than hang if the server stops responding.
+      // The model is fast, but the server may be waking from sleep or stuck --
+      // and a request that never settles would leave the customer watching a
+      // spinner.
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), PHOTO_SCAN_TIMEOUT_MS);
 
