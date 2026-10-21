@@ -22,6 +22,8 @@ from py_src.constants import (
     SIZE_STEP_CM,
     FIT_SCORE_TOLERANCE_SIZE_STEPS,
     FIT_SCORE_DIMENSION_WEIGHTS,
+    TOP_SIZE_DIMENSION_BY_SHAPE,
+    DEFAULT_TOP_SIZE_DIMENSION,
     FIT_SCORE_DEFAULT_WEIGHTS,
     FIT_NOTE_RELEVANT_DIMENSIONS,
     FIT_SCORE_BOUNDARY_EDGE_CONFIDENCE,
@@ -67,6 +69,7 @@ class FitChecker:
         product: Dict[str, Any],
         session_id: Optional[str] = None,
         known_size: Optional[str] = None,
+        shape_class: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Check product fit for user based on measurements.
@@ -86,6 +89,11 @@ class FitChecker:
                 equally for every category, so its argmax can legitimately
                 point at a different size). Ignored if not one of this
                 product's available sizes.
+            shape_class: M3's shape class. Some shapes are sized on a
+                different measurement for the top half (apple: the waist);
+                passing it scores those categories on the same measurement
+                M3 sized them on, so the highest "% fit" can't contradict
+                known_size.
 
         Returns:
             Dict with:
@@ -128,6 +136,11 @@ class FitChecker:
         dimension_weights = FIT_SCORE_DIMENSION_WEIGHTS.get(
             product.get("category"), FIT_SCORE_DEFAULT_WEIGHTS
         )
+        # Top-half categories are scored on whatever M3 sized them on for
+        # this shape (see TOP_SIZE_DIMENSION_BY_SHAPE).
+        top_dimension = TOP_SIZE_DIMENSION_BY_SHAPE.get(shape_class, DEFAULT_TOP_SIZE_DIMENSION)
+        if dimension_weights.get(DEFAULT_TOP_SIZE_DIMENSION) == 1.0 and top_dimension != DEFAULT_TOP_SIZE_DIMENSION:
+            dimension_weights = {"bust": 0.0, "waist": 0.0, "hips": 0.0, top_dimension: 1.0}
         fit_scores = self._calculate_fit_scores(
             measurements,
             size_chart,

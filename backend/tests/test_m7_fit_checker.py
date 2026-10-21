@@ -1333,3 +1333,38 @@ class TestM7EdgeCases:
             # Should recommend this size with high confidence
             assert result["recommended_size"] == size, f"Should recommend {size} for exact match"
             assert result["confidence"] == 1.0, f"Perfect match should have confidence 1.0"
+
+
+class TestHighestFitMatchesTheProfileForEveryShape:
+    """
+    The guarantee FIT_SCORE_DIMENSION_WEIGHTS exists for: the size with the
+    highest "% fit" is the size the customer's profile shows. It held for every
+    shape except apple, whose tops M3 sizes on the waist while M7 scored them on
+    the bust -- an apple customer was recommended L with XS showing the higher
+    fit. Both now read TOP_SIZE_DIMENSION_BY_SHAPE.
+    """
+
+    @pytest.mark.parametrize("shape_class", ["balanced", "pear", "apple", "hourglass", "straight", "athletic"])
+    @pytest.mark.parametrize("category,key", [("Tops", "tops"), ("Dresses", "dresses"), ("Vests", "vests"),
+                                              ("Skirts", "skirts"), ("Trousers", "trousers")])
+    def test_best_fit_is_the_profile_size(self, shape_class, category, key):
+        from py_src.constants import STANDARD_SIZES
+        from py_src.guardrails.consent_tracker import ConsentTracker
+        from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
+        from py_src.modules.m7_fit_checker import FitChecker
+        consent = ConsentTracker()
+        consent.record_consent(user_id="u", photo_consent=True, measurement_consent=True)
+        checker = FitChecker(consent)
+        # Bodies whose bust, waist and hips fall in different sizes, so the
+        # driving measurement genuinely matters.
+        for m in ({"bust": 84, "waist": 84, "hips": 89, "height": 165},
+                  {"bust": 100, "waist": 72, "hips": 98, "height": 170},
+                  {"bust": 92, "waist": 95, "hips": 118, "height": 160}):
+            profile_size = BodyShapeProfiler()._recommend_sizes(shape_class, m["bust"], m["waist"], m["hips"])[key]
+            result = checker.check_fit("u", m, {"sku": "x", "category": category, "sizes": list(STANDARD_SIZES)},
+                                       known_size=profile_size, shape_class=shape_class)
+            scores = result["fit_scores"]
+            assert result["recommended_size"] == profile_size
+            assert scores[profile_size] >= max(scores.values()) - 1e-9, (
+                f"{shape_class}/{category}: profile says {profile_size} but "
+                f"{max(scores, key=scores.get)} scores higher ({m})")

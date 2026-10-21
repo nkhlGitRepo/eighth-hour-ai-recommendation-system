@@ -298,6 +298,7 @@ class NewReleasesFeed:
                         measurements,
                         product,
                         known_size=known_size,
+                        shape_class=(body_shape_profile or {}).get("shape_class"),
                     )
                     rec_size = fit_result.get("recommended_size")
                     availability = {

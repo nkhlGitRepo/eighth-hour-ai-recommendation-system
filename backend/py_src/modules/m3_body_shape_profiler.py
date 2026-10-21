@@ -16,7 +16,8 @@ from py_src.utils.logger import logger
 from py_src.utils.errors import ModuleError, GuardrailError
 from py_src.constants import (SIZE_BOUNDARIES, WAIST_SIZE_BOUNDARIES,
                               HIP_SIZE_BOUNDARIES, STANDARD_SIZES,
-                              SHAPE_THRESHOLDS)
+                              SHAPE_THRESHOLDS, TOP_SIZE_DIMENSION_BY_SHAPE,
+                              DEFAULT_TOP_SIZE_DIMENSION)
 
 
 # What each shape means, in the customer's terms. Shown after the sentence that
@@ -325,9 +326,11 @@ class BodyShapeProfiler:
         top_size = bust_size
         bottom_size = hip_size
 
-        # Apple shape: waist is prominent, use waist for tops
-        if shape_class == "apple":
-            top_size = waist_size
+        # Some shapes are sized on a different measurement for the top half
+        # (apple: the waist). Shared with M7's scoring -- see
+        # TOP_SIZE_DIMENSION_BY_SHAPE.
+        top_dimension = TOP_SIZE_DIMENSION_BY_SHAPE.get(shape_class, DEFAULT_TOP_SIZE_DIMENSION)
+        top_size = {"bust": bust_size, "waist": waist_size, "hips": hip_size}[top_dimension]
 
         return {
             "tops": top_size,
