@@ -597,15 +597,22 @@ class TestStatedSizesSteadyTheEstimate:
             label = f"height {height:.0f}"
             m = provider_with_landmarks(STANDING).extract_from_image(
                 b"x", "image/jpeg", height, stated, stated)
-            # Every shape class, because "apple" deliberately sizes tops from
-            # the waist instead of the bust -- the guarantee has to hold there
-            # too, not just on the common path.
+            # Every shape class. "apple" deliberately sizes tops from the
+            # WAIST, and the waist is no longer held to the chart for the
+            # bottom size (see anthropometry.waist_from_proportions) -- so for
+            # apple, tops follow the measured waist by design rather than the
+            # stated top size. That is M3's rule acting on a real waist, not
+            # photo noise moving a stated size; the noise guarantee is the bust.
             for shape_class in BODY_SHAPE_CLASSES:
                 sizes = profiler._recommend_sizes(
                     shape_class, m.bust, m.waist, m.hips)
-                assert sizes["tops"] == stated, (
+                expected_top = (profiler._recommend_sizes("apple", m.bust, m.waist, m.hips)["tops"]
+                                if shape_class == "apple" else stated)
+                assert sizes["tops"] == expected_top, (
                     f"{label}/{shape_class}: stated top {stated} but recommender "
                     f"said {sizes['tops']} (bust {m.bust}, waist {m.waist})")
+                assert profiler._recommend_sizes("balanced", m.bust, m.waist, m.hips)["tops"] == stated, (
+                    f"{label}: the bust left the stated top band ({m.bust})")
                 assert sizes["trousers"] == stated, (
                     f"{label}/{shape_class}: stated bottom {stated} but "
                     f"recommender said {sizes['trousers']} (hips {m.hips})")
@@ -864,3 +871,34 @@ class TestLargePhotosStayWithinMemory:
         array, width, height = MediaPipeSizingProvider()._decode(
             self._encoded((4000, 3000), fmt, orientation=6))
         assert height > width
+
+
+class TestWaistWithBothSizes:
+    """With both sizes stated, the waist comes from the photo's proportions,
+    not the chart's waist for the bottom size."""
+
+    def test_a_fuller_waist_reads_fuller_within_the_same_sizes(self):
+        defined = provider_with_landmarks(STANDING, body=(80, 62, 100)).extract_from_image(
+            b"x", "image/jpeg", 170.0, "M", "M")
+        full = provider_with_landmarks(STANDING, body=(80, 88, 100)).extract_from_image(
+            b"x", "image/jpeg", 170.0, "M", "M")
+        assert full.waist > defined.waist + 5
+
+    def test_waist_can_leave_the_bottom_size_band(self):
+        from py_src.constants import WAIST_SIZE_BOUNDARIES
+        full = provider_with_landmarks(STANDING, body=(80, 92, 100)).extract_from_image(
+            b"x", "image/jpeg", 170.0, "M", "M")
+        assert full.waist >= WAIST_SIZE_BOUNDARIES["M"][1]
+
+    def test_a_hidden_waist_is_estimated_and_flagged_for_checking(self):
+        hands_on_hips = provider_with_landmarks(shifted({
+            LEFT_ELBOW: (560, 470), RIGHT_ELBOW: (240, 470),
+            LEFT_WRIST: (420, 520), RIGHT_WRIST: (380, 520),
+            LEFT_INDEX: (405, 760), RIGHT_INDEX: (395, 760),
+            LEFT_PINKY: (405, 750), RIGHT_PINKY: (395, 750)}))
+        m = hands_on_hips.extract_from_image(b"x", "image/jpeg", 170.0, "M", "M")
+        assert "waist" in m.low_confidence_fields()
+
+    def test_a_clearly_visible_waist_is_not_flagged(self):
+        m = provider_with_landmarks(STANDING).extract_from_image(b"x", "image/jpeg", 170.0, "M", "M")
+        assert "waist" not in m.low_confidence_fields()

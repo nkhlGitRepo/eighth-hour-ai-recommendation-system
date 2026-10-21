@@ -60,7 +60,7 @@ const FAQ_GROUPS = [
       },
       {
         q: "How accurate are photo-based measurements?",
-        a: "They are automated estimates, not a professional fitting. Your photo is analysed on our own server, which measures the outline of your body at the bust, waist and hips. A single photo can't see how deep your body is, and loose clothing reads as wider than you are, so the estimate is anchored on the sizes you tell us you usually wear \u2014 the photo fine-tunes it within those sizes. You can review and edit every number before continuing, and it is still worth checking them against a tape measure before buying.",
+        a: "They are automated estimates, not a professional fitting. Your photo is analysed on our own server, which measures the outline of your body and reads it against the sizes you tell us you usually wear. In testing on 270 women in fitted clothing, the estimates were on average about 3 cm from their measured bust, waist and hips, and most were within 4 cm. Loose clothing hides your shape \u2014 especially your waist \u2014 so for the best result wear something fitted, like leggings and a fitted top. You can review and edit every number before continuing, and it is still worth checking them against a tape measure before buying.",
       },
       {
         q: "How do I withdraw consent or remove my measurements?",

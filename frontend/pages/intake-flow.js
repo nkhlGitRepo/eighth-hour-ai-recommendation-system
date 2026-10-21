@@ -732,7 +732,11 @@ class IntakeFlow {
       // profile has already been generated server-side, and pressing Continue
       // re-submits whatever is in these fields -- so any edit made here is
       // honored rather than silently overwritten by the scan's values.
-      const lowConfidence = data.low_confidence_fields || [];
+      // Only fields the customer can see and correct on the measurements
+      // screen. The API also scores the optional shoulder, which nobody enters
+      // or sees -- "not fully confident about: shoulder" gave them nothing to do.
+      const CHECKABLE = ['bust', 'waist', 'hips', 'height'];
+      const lowConfidence = (data.low_confidence_fields || []).filter(f => CHECKABLE.includes(f));
 
       if (this.photoDerivesFromImage === false) {
         // Demo mode: nothing examined the photo, so saying these were

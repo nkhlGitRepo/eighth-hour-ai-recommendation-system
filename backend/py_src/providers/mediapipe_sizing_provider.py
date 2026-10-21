@@ -37,6 +37,7 @@ from py_src.providers.anthropometry import (
     circumferences_from_breadths,
     combined_scale,
     silhouette_breadths,
+    waist_from_proportions,
 )
 from py_src.constants import (
     HIP_SIZE_BOUNDARIES,
@@ -161,6 +162,11 @@ MAX_PELVIS_SHOULDER_RATIO = 0.95
 # before it's treated as a broken scale rather than ordinary imprecision,
 # expressed as a fraction of the range's width.
 OUT_OF_RANGE_SLACK = 0.45
+
+# Confidence for a waist worked out without a clear view of it (arms against
+# the body, or the waist hidden): below the 0.75 review threshold, so the
+# customer is asked to check it.
+UNREAD_WAIST_CONFIDENCE = 0.6
 
 # Confidence assigned to a field that had to be clamped into range. Must sit
 # below the 0.75 low-confidence threshold so the customer is prompted to check
@@ -435,6 +441,19 @@ class MediaPipeSizingProvider(SizingProvider):
 
         anchored_fields = self._steady_with_stated_sizes(
             derived, usual_top_size, usual_bottom_size)
+        waist_needs_checking = False
+        if self._stated_size(usual_top_size) and self._stated_size(usual_bottom_size):
+            # The size chart predicts the waist badly (see
+            # anthropometry.waist_from_proportions); the photo's proportions,
+            # read against the bust and hips just anchored, do much better.
+            clear = breadths["quality"]["waist"] == "clear" and breadths["quality"]["hips"]
+            derived["waist"], used_photo = waist_from_proportions(
+                derived["bust"], derived["hips"],
+                breadths["waist"] if clear else None, breadths["hips"])
+            anchored_fields = sorted(set(anchored_fields) | {"waist"})
+            # Only validated where the waist's outline was clearly visible.
+            # Otherwise (arms against it, or hidden) ask the customer to check.
+            waist_needs_checking = not used_photo
         adjusted_fields = self._fit_to_supported_range(derived)
 
         confidences = self._confidence_scores(landmarks)
@@ -449,6 +468,8 @@ class MediaPipeSizingProvider(SizingProvider):
         # threshold is what makes the UI ask the customer to check it.
         for field in adjusted_fields:
             confidences[field] = ADJUSTED_FIELD_CONFIDENCE
+        if waist_needs_checking:
+            confidences["waist"] = min(confidences.get("waist", 1.0), UNREAD_WAIST_CONFIDENCE)
 
         logger.debug(
             "MediaPipe extraction complete",
@@ -795,7 +816,10 @@ class MediaPipeSizingProvider(SizingProvider):
         Blend the photo estimate toward the size chart, editing `derived` in
         place. Bust is anchored by the TOP size; waist and hips by the BOTTOM
         size (see the constants above for why they're separate, and for the
-        measured accuracy of each option).
+        measured accuracy of each option). With BOTH sizes the waist is not
+        held to the chart at all: extract_from_image derives it from the
+        anchored bust and hips and the photo's proportions instead (see
+        anthropometry.waist_from_proportions for why).
 
         Either size may be given on its own -- a customer who knows only their
         top size still gets a better bust estimate, with waist and hips left to
@@ -811,8 +835,9 @@ class MediaPipeSizingProvider(SizingProvider):
         if top:
             anchors["bust"] = top
         if bottom:
-            anchors["waist"] = bottom
             anchors["hips"] = bottom
+            if not top:
+                anchors["waist"] = bottom
 
         if not anchors:
             return []

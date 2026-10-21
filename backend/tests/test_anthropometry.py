@@ -211,3 +211,48 @@ class TestCircumferences:
         two = circumferences_from_breadths({"bust": 60, "waist": 50, "hips": 70})
         for field in one:
             assert two[field] == pytest.approx(2 * one[field], abs=0.1)
+
+
+class TestWaistFromProportions:
+    """
+    The waist from the stated bust and hips plus the photo's waist:hip width
+    ratio (fitted on BodyM; see anthropometry.py). These pin the behaviour the
+    model exists for, not its coefficients.
+    """
+
+    def test_a_narrower_waist_in_the_photo_reads_smaller(self):
+        wide, _ = A.waist_from_proportions(100, 105, waist_breadth=32, hip_breadth=38)
+        narrow, _ = A.waist_from_proportions(100, 105, waist_breadth=27, hip_breadth=38)
+        assert narrow < wide
+
+    def test_scale_free(self):
+        """Doubling every width (a wrong scale) changes nothing -- only proportion counts."""
+        a = A.waist_from_proportions(100, 105, waist_breadth=30, hip_breadth=38)
+        b = A.waist_from_proportions(100, 105, waist_breadth=60, hip_breadth=76)
+        assert a == b
+
+    def test_not_held_to_the_chart(self):
+        """The tester: 107/90/107 with the hips of an M/L. The chart's waist for
+        those sizes is ~78-84 and held her ~8 cm low; a full-waisted outline must
+        be able to read well above it."""
+        from py_src.constants import STANDARD_SIZE_CHART
+        waist, used_photo = A.waist_from_proportions(107, 107, waist_breadth=33.5, hip_breadth=38)
+        assert used_photo
+        assert waist > STANDARD_SIZE_CHART["L"]["waist"] + 2
+
+    def test_loose_clothing_cannot_push_past_real_proportions(self):
+        capped, _ = A.waist_from_proportions(100, 105, waist_breadth=38 * A.WAIST_HIP_RATIO_CAP, hip_breadth=38)
+        beyond, _ = A.waist_from_proportions(100, 105, waist_breadth=38 * 1.2, hip_breadth=38)
+        assert beyond == capped
+
+    def test_a_very_defined_waist_is_not_floored(self):
+        """Loose clothing only raises the ratio, so a low one is a real waist."""
+        defined, _ = A.waist_from_proportions(96, 104, waist_breadth=19, hip_breadth=38)
+        less, _ = A.waist_from_proportions(96, 104, waist_breadth=24, hip_breadth=38)
+        assert defined < less
+
+    def test_without_the_waist_in_view_falls_back_to_bust_and_hips(self):
+        waist, used_photo = A.waist_from_proportions(100, 105)
+        assert not used_photo
+        assert 55 < waist < 105
+        assert A.waist_from_proportions(110, 115)[0] > waist

@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Get Your Style Profile — Eighth Hour</title>
-  <link rel="stylesheet" href="../../css/style.css?v=20261020" />
-  <link rel="stylesheet" href="intake-flow.css?v=20261020" />
+  <link rel="stylesheet" href="../../css/style.css?v=20261021" />
+  <link rel="stylesheet" href="intake-flow.css?v=20261021" />
 </head>
 <body>
   <header data-site-header></header>
@@ -149,9 +149,10 @@
           <!--
             Framing guide: silhouettes rather than photos, so they show the
             framing and pose without anyone's body standing in for "correct".
-            The three mistakes are the ones that genuinely stop a photo being
-            measured; everything else (feet cropped, arms relaxed by the sides)
-            is accepted.
+            A red cross is a photo that can't be measured (turned sideways, too
+            close); amber is one that is measured but may be less accurate (hands
+            on hips cover the sides of the body; loose clothing hides the waist). Feet cropped and arms relaxed
+            by the sides are accepted.
           -->
           <div class="framing-guide">
             <p class="photo-tips-heading">How to frame your photo</p>
@@ -172,8 +173,8 @@
                 </svg>
                 <figcaption><strong>Like this</strong>Head to feet, facing the camera, arms a little away from your sides</figcaption>
               </figure>
-              <figure class="framing-example is-bad">
-                <svg viewBox="0 0 100 170" role="img" aria-label="Avoid: hands on hips, which covers the waist and hips">
+              <figure class="framing-example is-caution">
+                <svg viewBox="0 0 100 170" role="img" aria-label="Works, but may be less accurate: hands on hips cover the sides of the hips and waist">
                   <rect x="4" y="4" width="92" height="162" rx="6" class="frame" />
                   <g class="person">
                   <circle cx="50" cy="22" r="9" />
@@ -184,9 +185,9 @@
                   <polyline points="61,39 77,60 60,74" class="arm" />
                   </g>
                   <circle cx="84" cy="16" r="9" class="badge" />
-                  <path d="M80.5 12.5 L87.5 19.5 M87.5 12.5 L80.5 19.5" class="badge-mark" />
+                  <path d="M84 11 L84 17.5 M84 20.5 L84 21" class="badge-mark" />
                 </svg>
-                <figcaption><strong>Hands on hips</strong>Your arms hide your waist and hips</figcaption>
+                <figcaption><strong>Hands on hips</strong>Still works, but your hands cover the sides of your hips and waist, so it may be less accurate</figcaption>
               </figure>
               <figure class="framing-example is-bad">
                 <svg viewBox="0 0 100 170" role="img" aria-label="Avoid: standing side-on to the camera">
@@ -223,6 +224,47 @@
                 <figcaption><strong>Too close</strong>Step back until your hips and legs are in the shot</figcaption>
               </figure>
             </div>
+
+            <!--
+              Clothing is a separate lesson from framing: a loose garment hides
+              the waist (the outline measures the garment), so it is accepted
+              but flagged as less accurate -- an amber note, not a rejection.
+            -->
+            <p class="photo-tips-heading framing-subheading">What to wear</p>
+            <div class="framing-examples framing-clothing">
+              <figure class="framing-example is-good">
+                <svg viewBox="0 0 100 170" role="img" aria-label="Best: fitted clothing, so the outline of the waist and hips is visible">
+                  <rect x="4" y="4" width="92" height="162" rx="6" class="frame" />
+                  <g class="person">
+                    <circle cx="50" cy="22" r="9" />
+                    <path d="M37 36 Q50 31 63 36 L59 66 Q57 70 59 74 Q63 81 62 88 L38 88 Q37 81 41 74 Q43 70 41 66 Z" />
+                    <line x1="44" y1="86" x2="45" y2="152" class="limb" />
+                    <line x1="56" y1="86" x2="55" y2="152" class="limb" />
+                    <line x1="39" y1="39" x2="23" y2="88" class="arm" />
+                    <line x1="61" y1="39" x2="77" y2="88" class="arm" />
+                  </g>
+                  <circle cx="84" cy="16" r="9" class="badge" />
+                  <path d="M79.5 16.5 L83 20 L89 12.5" class="badge-mark" />
+                </svg>
+                <figcaption><strong>Fitted clothing</strong>Leggings and a fitted top let us see your waist</figcaption>
+              </figure>
+              <figure class="framing-example is-caution">
+                <svg viewBox="0 0 100 170" role="img" aria-label="Works, but less accurate: loose clothing hides the waist">
+                  <rect x="4" y="4" width="92" height="162" rx="6" class="frame" />
+                  <g class="person">
+                    <circle cx="50" cy="22" r="9" />
+                    <path d="M37 36 Q50 31 63 36 L70 128 Q50 134 30 128 Z" />
+                    <line x1="45" y1="126" x2="45" y2="152" class="limb" />
+                    <line x1="55" y1="126" x2="55" y2="152" class="limb" />
+                    <line x1="39" y1="39" x2="23" y2="88" class="arm" />
+                    <line x1="61" y1="39" x2="77" y2="88" class="arm" />
+                  </g>
+                  <circle cx="84" cy="16" r="9" class="badge" />
+                  <path d="M84 11 L84 17.5 M84 20.5 L84 21" class="badge-mark" />
+                </svg>
+                <figcaption><strong>Loose clothing</strong>Still works, but hides your waist, so that estimate is less accurate</figcaption>
+              </figure>
+            </div>
           </div>
 
           <div class="photo-tips">
@@ -233,8 +275,13 @@
               <li><strong>Face the camera</strong>, standing straight — not turned or
                   leaning.</li>
               <li><strong>Arms relaxed, a little away from your sides</strong> — not on
-                  your hips or crossed in front of you.</li>
-              <li>Reasonably fitted clothing, even lighting, just you in the shot.</li>
+                  your hips or crossed in front of you. We read your waist from the gap
+                  between your arms and your body.</li>
+              <li><strong>Fitted clothing makes the biggest difference to accuracy.</strong>
+                  Loose or flowing clothes hide your shape — especially your waist — so
+                  we can't see it and the estimate is less accurate. We'll still measure
+                  the photo, and you can correct anything afterwards.</li>
+              <li>Even lighting, just you in the shot.</li>
             </ul>
             <p class="photo-tips-footnote">
               A phone propped up a few steps away, camera at about waist height,
@@ -265,8 +312,9 @@
             </p>
             <p class="measurement-help" style="margin-bottom: 0.9rem;">
               Your photo is measured against these. A photo can't see body depth, so on
-              its own it can be well off — your usual sizes keep the estimate grounded,
-              and the photo fine-tunes it. Tops and bottoms are asked separately because
+              its own it can be well off — your usual sizes keep your bust and hips
+              grounded, the photo fine-tunes them, and your waist is worked out from
+              your shape in the photo. Tops and bottoms are asked separately because
               many people are different sizes above and below the waist.
             </p>
 
@@ -283,7 +331,7 @@
               <option value="XL">XL</option>
               <option value="XXL">XXL</option>
                 </select>
-                <span class="measurement-help">Used for your bust estimate</span>
+                <span class="measurement-help">Used for your bust and waist</span>
               </div>
               <div class="photo-field">
                 <label for="photoBottomSize">Bottoms</label>
@@ -297,7 +345,7 @@
               <option value="XL">XL</option>
               <option value="XXL">XXL</option>
                 </select>
-                <span class="measurement-help">Used for waist and hips</span>
+                <span class="measurement-help">Used for your hips and waist</span>
               </div>
             </div>
           </div>
@@ -338,17 +386,19 @@
           </div>
 
           <!--
-            Accuracy as measured on photos of people with published measurements,
-            with their usual sizes given: bust within 1.4 cm, hips within 2.1 cm,
-            waist off by 3-12 cm (mean 6.9). Keep this in step with any new
-            measurements rather than rounding it into a flat promise.
+            Accuracy measured on BodyM's two test sets -- 270 women in fitted
+            clothing, never used to calibrate anything: mean error bust 2.8-3.1,
+            waist 2.7-3.6, hips 2.6-3.0 cm; 63-77% within 4 cm. Loose clothing is
+            not in that data and reads the waist high. Keep this in step with any
+            new measurements rather than rounding it into a promise.
           -->
           <p class="photo-accuracy-note">
-            <strong>How accurate is this?</strong> In our testing, bust and hip
-            estimates were usually within about 2&nbsp;cm. The waist is harder to
-            judge from a photo &mdash; especially under looser clothing &mdash; and
-            was sometimes off by 10&nbsp;cm or more, so it's worth measuring your
-            waist with a tape. You can check and edit every number before continuing.
+            <strong>How accurate is this?</strong> In testing on 270 women in fitted
+            clothing, our estimates were on average about 3&nbsp;cm from their
+            measured bust, waist and hips, and most were within 4&nbsp;cm. Loose
+            clothing hides your shape &mdash; especially your waist &mdash; and makes
+            the estimate less accurate. You can check and edit every number before
+            continuing.
           </p>
 
           <div class="intake-actions">
@@ -502,11 +552,11 @@
 
   <footer data-site-footer></footer>
 
-  <script src="../../js/config.js?v=20261020"></script>
-  <script src="../../js/data.js?v=20261020"></script>
-  <script src="../../js/placeholder.js?v=20261020"></script>
-  <script src="../../js/site-chrome.js?v=20261020"></script>
-  <script src="../../js/auth.js?v=20261020"></script>
-  <script src="intake-flow.js?v=20261020"></script>
+  <script src="../../js/config.js?v=20261021"></script>
+  <script src="../../js/data.js?v=20261021"></script>
+  <script src="../../js/placeholder.js?v=20261021"></script>
+  <script src="../../js/site-chrome.js?v=20261021"></script>
+  <script src="../../js/auth.js?v=20261021"></script>
+  <script src="intake-flow.js?v=20261021"></script>
 </body>
 </html>

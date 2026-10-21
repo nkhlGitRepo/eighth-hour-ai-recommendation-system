@@ -532,22 +532,43 @@ for exactly the customers whose photo reads worst — several photos of one subj
 identical value. tanh is monotonic, so distinct photos stay distinct, and it saturates asymptotically
 so the band is approached but never crossed.
 
+**The waist is the exception.** The size chart pairs each hip size with a fashion-proportioned
+waist ~25 cm smaller, and most women's waists are fuller than that — held inside the chart's waist
+band, the estimate was biased ~8 cm low (11 cm low for a waist 0.84–0.90 of the hips, 17 cm above
+that). With both sizes stated, the waist instead comes from the anchored bust and hips plus the
+photo's **waist-to-hip width ratio** — a proportion, so no scale error reaches it — via a four-term
+model fitted on the BodyM dataset (`anthropometry.waist_from_proportions`). When the arms hide the
+waist, it falls back to the bust-and-hips term alone and asks the customer to check it. Loose
+clothing only ever widens the waist's outline, so the ratio is capped at the top of BodyM's range.
+
+BodyM: Ruiz, Liu, Maier et al., *Human Body Measurement Estimation with Adversarial Augmentation*
+(Amazon), [registry.opendata.aws/bodym](https://registry.opendata.aws/bodym/) — 2,505 people,
+front and side silhouettes, measured girths. Licensed Creative Commons Attribution; the registry
+lists CC BY-NC 4.0 while the linked text is CC BY 4.0. **Confirm which applies before relying on
+the fitted coefficients commercially.**
+
 Every field the provider returns is clamped into the supported range before being stored, including
 the optional ones. `shoulder` originally wasn't, which is how an out-of-range value reached the
 database (see the invariant note under [Guardrails](#10-guardrails)).
 
-**Measured, October 2026, as shipped (stated sizes required):**
+**Measured, October 2026, as shipped (stated sizes required).** BodyM's two test sets were never
+used to fit anything; the waist model was fitted on its training split only:
 
-| test | result |
+| BodyM test set (fitted clothing) | bust | waist | hips | within 4 cm |
+|---|---|---|---|---|
+| A — 41 women, 682 photos, controlled | 3.1 cm | 2.7 cm (was 6.4) | 2.6 cm | 71–76% |
+| B — 229 women, 547 photos, in the wild | 2.8 cm | 3.6 cm (was 6.9) | 3.0 cm | 63–77% |
+
+| other checks | result |
 |---|---|
-| 203 catalog photos of fit models whose worn size is known | 2.0 cm mean error vs that size's chart row; size preserved 115/115 |
-| subjects with published measurements (6 photos) | 3.2 cm mean error |
+| 203 catalog photos of fit models whose worn size is known | size preserved 115/115 |
 | standard photos and feet-cropped / knees-up variants | 40 of 42 accepted |
 | rotated (EXIF), mirrored, 4× size, 300 px, PNG with alpha, greyscale, dark | ≤ 1.8 cm drift |
 
-Photo alone — no longer reachable in the app — the outline method reads loose clothing as body: on
-the catalog's loose silk pieces it over-reads the waist by ~19 cm. That is the inherent limit of one
-frontal photo, and why the sizes are required. The earlier, skeleton-based figures, measured
+Limits, stated plainly: loose clothing hides the waist (on the catalog's loose silk pieces the
+outline reads it as the garment), which is why the photo step asks for fitted clothing and flags
+the waist when it can't be seen; and BodyM has no one with a waist under ~0.72 of their hips, so
+for very defined, fashion-model proportions the waist model extrapolates and can read high. The earlier, skeleton-based figures, measured
 against 8 people not used in any calibration (65 Wikimedia Commons photos):
 
 | condition | mean absolute error |

@@ -309,3 +309,73 @@ def circumferences_from_breadths(breadths: dict) -> dict:
         "waist": round(breadths["waist"] * WAIST_CIRCUMFERENCE_PER_BREADTH, 1),
         "hips": round(breadths["hips"] * HIP_CIRCUMFERENCE_PER_BREADTH, 1),
     }
+
+
+# --- Waist from proportions --------------------------------------------------
+#
+# The waist is the measurement the size chart predicts worst: it pairs each
+# hip size with a fashion-proportioned waist ~25 cm smaller, while most women's
+# waists are fuller relative to their hips. Held inside the chart's waist band
+# for the stated bottom size, the estimate was biased ~8 cm low.
+#
+# What a front photo does measure reliably is PROPORTION: the waist's width
+# relative to the hips' in the same photo, which no scale error can distort.
+# Combined with the bust and hips the stated sizes pin down, it predicts the
+# waist far better than either alone.
+#
+# Fitted on the BodyM dataset's training split -- 1,962 front silhouettes of
+# 711 women with measured waists -- using this module's own silhouette_breadths,
+# so the coefficients describe the widths this code actually reads. Then
+# checked, untouched, on BodyM's two test sets:
+#
+#                                      waist error (cm)   within 2 cm
+#   test A (41 women, controlled)      6.4 -> 2.7          14% -> 46%
+#   test B (229 women, in the wild)    6.9 -> 3.6          13% -> 35%
+#
+# BodyM: Ruiz, Liu, Maier, et al., "Human Body Measurement Estimation with
+# Adversarial Augmentation" (Amazon), registry.opendata.aws/bodym. Licensed
+# Creative Commons Attribution (the registry lists CC BY-NC 4.0, the linked
+# text CC BY 4.0 -- confirm which before relying on it commercially).
+#
+# BodyM photos are of fitted clothing. Loose clothing hides the waist, widening
+# its outline and raising the estimate, so the photo guidance asks for fitted
+# clothing. Loose clothing only ever pushes the ratio UP, so it is capped at the
+# top of the range seen in BodyM -- a garment can't push the estimate past real
+# proportions -- but not floored: a ratio below the range is a genuinely
+# defined waist, and flooring it threw that away.
+#
+# Known limit: BodyM has no one with a waist under ~0.72 of their hips (fashion-
+# model proportions), so for very defined waists the model extrapolates and can
+# read a few cm high. Across BodyM's range it is 2-4 cm at every proportion,
+# where the chart-held waist was 11 cm low at a waist 0.84-0.90 of the hips and
+# 17 cm low above that.
+WAIST_MODEL_INTERCEPT = -59.2689
+WAIST_MODEL_PER_BUST_CM = 0.3096
+WAIST_MODEL_PER_HIPS_CM = 0.6958
+WAIST_MODEL_PER_WAIST_HIP_RATIO = 55.888
+WAIST_HIP_RATIO_CAP = 0.9417   # 99th percentile in BodyM training
+
+# Same fit without the photo, for when the arms hide the waist: still much
+# better than the chart's waist (3.5 cm against 8.1 cm in cross-validation).
+WAIST_PRIOR_INTERCEPT = -32.2979
+WAIST_PRIOR_PER_BUST_CM = 0.6706
+WAIST_PRIOR_PER_HIPS_CM = 0.4912
+
+
+def waist_from_proportions(bust_cm, hips_cm, waist_breadth=None, hip_breadth=None):
+    """
+    Waist circumference (cm) from the bust and hips (cm) the stated sizes give,
+    and the photo's waist and hip breadths when both were readable.
+
+    Returns:
+        (waist_cm, used_photo)
+    """
+    if waist_breadth and hip_breadth:
+        ratio = min(waist_breadth / hip_breadth, WAIST_HIP_RATIO_CAP)
+        return round(WAIST_MODEL_INTERCEPT
+                     + WAIST_MODEL_PER_BUST_CM * bust_cm
+                     + WAIST_MODEL_PER_HIPS_CM * hips_cm
+                     + WAIST_MODEL_PER_WAIST_HIP_RATIO * ratio, 1), True
+    return round(WAIST_PRIOR_INTERCEPT
+                 + WAIST_PRIOR_PER_BUST_CM * bust_cm
+                 + WAIST_PRIOR_PER_HIPS_CM * hips_cm, 1), False
