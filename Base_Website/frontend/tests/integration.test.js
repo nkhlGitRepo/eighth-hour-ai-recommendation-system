@@ -380,9 +380,25 @@ async function testPhotoMeasurement(runner) {
     runner.assert(response.ok, `Expected 200, got ${response.status}: ${data && data.detail}`);
     const m = data.measurements;
     runner.assertEquals(m.height, 170, 'Stated height should be kept');
-    const sizes = data.shape_profile.size_recommendation_by_category;
+    // As in the storefront: the customer reviews the numbers and confirms
+    // them. (A field the photo couldn't see clearly -- here the waist, with
+    // arms against it -- is flagged, and the profile waits for this step.)
+    const confirm = await customer.json('POST', '/intake/confirm', {
+      session_id: sessionId,
+      manual_overrides: { bust: m.bust, waist: m.waist, hips: m.hips, height: m.height },
+    });
+    runner.assert(confirm.response.ok, `Confirm failed (${confirm.response.status})`);
+    const sizes = confirm.data.shape_profile.size_recommendation_by_category;
     runner.assertEquals(sizes.tops, 'S', 'Stated top size should be kept');
     runner.assertEquals(sizes.skirts, 'S', 'Stated bottom size should be kept');
+  });
+
+  await runner.test('A waist the photo could not see is flagged for checking', async () => {
+    const sessionId = await customer.consentedSession();
+    const { data } = await customer.photoScan(sessionId, { top: 'S', bottom: 'S' });
+    // The sample photo's arms rest against the waist.
+    runner.assert((data.low_confidence_fields || []).includes('waist'),
+      `Expected the waist to be flagged, got ${JSON.stringify(data.low_confidence_fields)}`);
   });
 }
 

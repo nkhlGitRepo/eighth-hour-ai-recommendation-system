@@ -821,6 +821,17 @@ button:disabled:hover,
 
 .framing-example .badge { fill: #c0392b; }
 .framing-example.is-good .badge { fill: var(--color-accent); }
+.framing-example.is-caution .badge { fill: #b7791f; }
+.framing-example.is-caution { border-color: #e8c98f; }
+
+/* The clothing pair sits under the framing examples: two across, at the same
+   tile size as the four above. */
+.photo-tips-heading.framing-subheading { margin-top: 1.25rem; }
+.framing-clothing { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 50%; }
+
+@media (max-width: 560px) {
+  .framing-clothing { max-width: none; }
+}
 
 .framing-example .badge-mark {
   fill: none;
