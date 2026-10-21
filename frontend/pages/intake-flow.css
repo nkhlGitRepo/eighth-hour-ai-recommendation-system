@@ -725,6 +725,23 @@ button:disabled:hover,
   screen doesn't read as a wall of alerts, but the leading clause of each item
   is bolded because the framing rule alone accounts for most failed uploads.
 */
+/* Accuracy note above the Scan button: quiet, but readable -- it's the last
+   thing the customer sees before scanning. */
+.photo-accuracy-note {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-surface);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.photo-accuracy-note strong {
+  color: var(--color-text);
+}
+
 /* Framing guide: one correct silhouette and the three mistakes that actually
    stop a photo being measured. Four across on a desktop, two on a phone. */
 .framing-guide {
