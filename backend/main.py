@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import hashlib
+import hmac
 import json
 import os
 import time
@@ -334,6 +335,27 @@ def get_bearer_token(authorization: Optional[str] = Header(None)) -> str:
     return token
 
 
+def require_catalog_sync_token(x_catalog_sync_token: Optional[str] = Header(None)) -> None:
+    """
+    FastAPI dependency for /catalog/sync, which replaces the whole catalog.
+
+    It used to take requests from anyone, so a single anonymous POST could
+    empty the live catalog or fill it with invented products. Now the caller
+    must send X-Catalog-Sync-Token matching the server's CATALOG_SYNC_TOKEN,
+    and a server without one has sync switched off entirely -- the safe state,
+    since nothing on the storefront pushes a catalog. Read per request rather
+    than at import so the secret can be rotated with a restart, not a deploy.
+    """
+    expected = os.environ.get("CATALOG_SYNC_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(status_code=403, detail="Catalog sync is disabled on this server")
+    supplied = (x_catalog_sync_token or "").strip()
+    # Constant-time comparison, so response timing doesn't leak how much of a
+    # guess was right.
+    if not supplied or not hmac.compare_digest(supplied.encode(), expected.encode()):
+        raise AuthError("Missing or invalid catalog sync token")
+
+
 def get_current_user_id(token: str = Depends(get_bearer_token)) -> str:
     """FastAPI dependency: resolves the bearer token to a user_id, or
     raises AuthError (-> 401) if it's missing, malformed, or expired."""
@@ -461,12 +483,13 @@ async def retrieve_recommendations(query: RetrievalQuery):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post("/catalog/sync")
+@app.post("/catalog/sync", dependencies=[Depends(require_catalog_sync_token)])
 async def sync_catalog(products: List[CatalogProduct]):
     """
-    Sync catalog products from the website.
+    Replace the catalog with the products sent.
 
-    This endpoint allows the website to push product updates to the backend.
+    Requires the X-Catalog-Sync-Token header (see require_catalog_sync_token);
+    off unless the server sets CATALOG_SYNC_TOKEN.
     """
     try:
         product_dicts = [p.dict() for p in products]

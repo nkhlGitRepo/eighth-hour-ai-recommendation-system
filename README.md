@@ -193,6 +193,7 @@ logging in on one does not log you in on the other. Pick one and stay on it.
 |---|---|---|
 | `SIZING_PROVIDER` | `mediapipe` | Which sizing backend to use. `mediapipe` analyses the photo; `mock` returns the same fixed measurements for every image and tells the customer so. Both an unknown name and a selected-but-uninstalled `mediapipe` fail at startup rather than silently falling back. |
 | `MEDIAPIPE_POSE_MODEL` | auto-downloaded | Path to a `.task` pose model, if you'd rather supply your own than let it fetch one. |
+| `CATALOG_SYNC_TOKEN` | unset (sync off) | Secret a caller must send as the `X-Catalog-Sync-Token` header to use `POST /catalog/sync`, which replaces the whole catalog. Unset, the endpoint refuses every request (403); a missing or wrong header gets 401. Use a long random value, e.g. `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 
 ---
 
