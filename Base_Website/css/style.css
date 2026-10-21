@@ -69,6 +69,12 @@
 /* ---------------------------------------------------------------- reset -- */
 *, *::before, *::after { box-sizing: border-box; }
 
+/* The hidden attribute always wins. Any class that sets display -- e.g.
+   .photo-scanning { display: flex } -- otherwise overrides it, which left the
+   "Estimating your measurements..." spinner showing on the photo step from the
+   moment it opened. Elements are shown and hidden with the attribute site-wide. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: var(--font-body);
