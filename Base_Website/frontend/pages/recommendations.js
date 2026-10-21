@@ -183,6 +183,7 @@ class RecommendationsPage {
           <div class="name">${rec.name}</div>
           <div class="price">$${rec.price.toFixed(2)}</div>
           <p class="card-reason">Suits your ${this.sessionData?.shapeProfile?.shape_class || 'body'} shape</p>
+          ${rec.size_note ? `<p class="card-size-note">${rec.size_note}</p>` : ''}
         </a>
       `)
       .join('');

@@ -599,6 +599,9 @@ form button:not([class]) {
 }
 .product-card .name { font-size: 0.95rem; margin-bottom: 4px; }
 .product-card .price { font-size: 0.95rem; }
+/* "Your size is XXS. This piece comes in XS–L, so XS is the closest fit
+   available." -- shown when a recommended piece doesn't come in her size. */
+.card-size-note { margin: 6px 0 0; font-size: 0.8rem; color: var(--color-muted); }
 .badge-best {
   display: inline-block;
   font-size: 0.68rem;

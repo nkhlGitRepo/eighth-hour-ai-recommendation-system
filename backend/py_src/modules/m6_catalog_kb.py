@@ -225,6 +225,19 @@ class CatalogKB:
 
         return "; ".join(hints) if hints else "versatile fit"
 
+    @staticmethod
+    def _stocked_in_her_size(item, safe_query):
+        """
+        Whether the item is in stock in the size she wears for ITS category.
+        `size` is the fallback for a category the profile has no entry for;
+        with no size known at all, nothing is excluded.
+        """
+        by_category = safe_query.get("sizes_by_category") or {}
+        wanted = by_category.get(item.get("category"), safe_query.get("size"))
+        if not wanted:
+            return True
+        return bool(item["sizes_in_stock"].get(wanted)) and item["in_stock"]
+
     def _apply_hard_filters(self, candidates, safe_query, active_filters):
         """
         Apply only the named hard filters, in a fixed order, to a candidate
@@ -259,16 +272,7 @@ class CatalogKB:
             # ones she could actually buy and kept the ones she couldn't.
             # `size` remains the fallback for any category the profile has no
             # entry for, and for callers that only pass a single size.
-            by_category = safe_query.get("sizes_by_category") or {}
-            default_size = safe_query.get("size")
-
-            def stocked_in_her_size(item):
-                wanted = by_category.get(item.get("category"), default_size)
-                if not wanted:
-                    return True     # no size known for this category: don't exclude
-                return bool(item["sizes_in_stock"].get(wanted)) and item["in_stock"]
-
-            candidates = [item for item in candidates if stocked_in_her_size(item)]
+            candidates = [item for item in candidates if self._stocked_in_her_size(item, safe_query)]
 
         if "preferred_colors" in active_filters and safe_query.get("preferred_colors"):
             preferred_colors = safe_query["preferred_colors"]
@@ -344,9 +348,18 @@ class CatalogKB:
             # fallback (max 0.85), so a single score naturally produces the
             # same two-tier ordering without a separate tiebreak key -- see
             # shape_affinity_score() above.
+            #
+            # If the size filter had to be relaxed, pieces she can buy in her
+            # own size still come first, so the cut to k can't drop them in
+            # favour of pieces that don't come in her size (M5 tells her which
+            # those are and what the closest size is).
+            size_relaxed = "size" in relaxed
             results = sorted(
                 candidates,
-                key=lambda item: shape_affinity_score(shape_class, item),
+                key=lambda item: (
+                    size_relaxed and self._stocked_in_her_size(item, safe_query),
+                    shape_affinity_score(shape_class, item),
+                ),
                 reverse=True,
             )[:k]
 

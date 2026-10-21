@@ -304,7 +304,14 @@ class NewReleasesFeed:
                     availability = {
                         "recommended_size": rec_size,
                         "available_sizes": product.get("sizes", []),
+                        "customer_size": fit_result.get("customer_size"),
+                        "closest_available": fit_result.get("closest_available", False),
                     }
+                    # Not her size: say so, in the same words as the product page.
+                    if fit_result.get("closest_available"):
+                        availability["size_note"] = self.fit_checker.closest_available_note(
+                            fit_result["customer_size"], list(fit_result["fit_scores"]), rec_size
+                        )
                 except (ModuleError, GuardrailError) as err:
                     logger.warn(
                         f"Fit check failed for {product.get('sku')}: {str(err)}",

@@ -13,6 +13,7 @@ Guardrails applied:
 from typing import Optional, List, Dict, Any
 from py_src.modules.m1_intake_orchestrator import IntakeSession
 from py_src.modules.m6_catalog_kb import CatalogKB
+from py_src.modules.m7_fit_checker import FitChecker
 from py_src.guardrails.consent_tracker import ConsentTracker
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.utils.logger import logger
@@ -23,16 +24,25 @@ from py_src.constants import CATEGORY_TO_SIZE_PROFILE_KEY
 class RecommendationEngine:
     """Generates personalized recommendations from completed intake sessions."""
 
-    def __init__(self, catalog: CatalogKB, consent_tracker: ConsentTracker = None):
+    def __init__(
+        self,
+        catalog: CatalogKB,
+        consent_tracker: ConsentTracker = None,
+        fit_checker: Optional[FitChecker] = None,
+    ):
         """
         Initialize recommendation engine.
 
         Args:
             catalog: CatalogKB instance for product retrieval
             consent_tracker: Optional ConsentTracker for consent verification
+            fit_checker: Optional FitChecker for each card's size -- pass the
+                one /fit-check uses, so a card and its product page can't
+                disagree
         """
         self.catalog = catalog
         self.consent_tracker = consent_tracker or ConsentTracker()
+        self.fit_checker = fit_checker or FitChecker(self.consent_tracker)
         logger.info("M5 RecommendationEngine initialized")
 
     def generate_recommendations(
@@ -96,6 +106,7 @@ class RecommendationEngine:
             user_id=session.user_id,
             consent_tracker=self.consent_tracker,
         )
+        recommendations = self._advise_sizes(session, recommendations)
 
         # Log results
         AuditLogger.log_event(
@@ -118,6 +129,53 @@ class RecommendationEngine:
         )
 
         return recommendations
+
+    def _advise_sizes(self, session, recommendations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Give each card the size we'd recommend in it -- M7's answer with M3's
+        category size, the same call /fit-check makes, so a card and its
+        product page always agree.
+
+        When too few pieces come in her size, M6 relaxes the size filter and
+        returns pieces that don't. Those keep their place in the list but are
+        never passed off as her size: each gets the best-fitting size it does
+        come in, plus a size_note saying her actual size and that this is the
+        closest available. Pieces in her size are listed first.
+
+        Returns copies -- M6 hands back its own catalog entries.
+        """
+        measurements = session.body_measurements.to_dict() if session.body_measurements else None
+        if not measurements:
+            return recommendations
+        shape_profile = session.shape_profile or {}
+        sizes_by_key = shape_profile.get("size_recommendation_by_category", {}) or {}
+
+        advised = []
+        for item in recommendations:
+            item = dict(item)
+            profile_key = CATEGORY_TO_SIZE_PROFILE_KEY.get(item.get("category"))
+            try:
+                advice = self.fit_checker.size_advice(
+                    measurements,
+                    item,
+                    known_size=sizes_by_key.get(profile_key) if profile_key else None,
+                    shape_class=shape_profile.get("shape_class"),
+                )
+            except ModuleError as err:
+                logger.warn("No size advice for recommendation", {"sku": item.get("sku"), "error": str(err)})
+                advised.append(item)
+                continue
+            item["recommended_size"] = advice["recommended_size"]
+            item["customer_size"] = advice["customer_size"]
+            item["closest_available"] = advice["closest_available"]
+            if advice["closest_available"]:
+                item["size_note"] = self.fit_checker.closest_available_note(
+                    advice["customer_size"], list(advice["fit_scores"]), advice["recommended_size"]
+                )
+            advised.append(item)
+
+        # Stable, so M6's ranking holds within each group.
+        return sorted(advised, key=lambda item: bool(item.get("closest_available")))
 
     def _validate_session(self, session) -> None:
         """Validate that session is complete and has required data."""

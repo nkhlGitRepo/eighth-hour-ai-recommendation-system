@@ -900,9 +900,17 @@ class IntakeFlow {
     const profile = this.shapeProfile;
     const comparisons = this.shapeComparisons(profile);
 
+    // Labels are spelled out rather than derived from the engine's key names,
+    // which turned "coOrds" into "co Ords". Any key not listed still gets a
+    // readable lowercase label.
+    const SIZE_CATEGORY_LABELS = {
+      tops: 'tops', skirts: 'skirts', dresses: 'dresses',
+      trousers: 'trousers', vests: 'vests', coOrds: 'co-ords',
+    };
     const sizesByCategory = profile.size_recommendation_by_category || {};
     const sizesArray = Object.entries(sizesByCategory).map(([category, size]) => ({
-      category: category.replace(/([A-Z])/g, ' $1').trim(),
+      category: SIZE_CATEGORY_LABELS[category]
+        || category.replace(/([A-Z])/g, ' $1').trim().toLowerCase(),
       size
     }));
 

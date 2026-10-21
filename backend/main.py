@@ -168,8 +168,8 @@ intake_orchestrator = IntakeOrchestrator(
     catalog=catalog,
     sizing=sizing_integration,
 )
-recommendation_engine = RecommendationEngine(catalog, consent_tracker)
 fit_checker = FitChecker(consent_tracker)
+recommendation_engine = RecommendationEngine(catalog, consent_tracker, fit_checker=fit_checker)
 recommendation_history = RecommendationHistory(consent_tracker=consent_tracker)
 new_releases_feed = NewReleasesFeed(
     catalog=catalog,
