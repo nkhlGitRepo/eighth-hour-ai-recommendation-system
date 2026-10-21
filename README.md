@@ -350,21 +350,23 @@ that determines whether a top fits them.
 part of the system consults, so the size you're told on your profile is the same size used to filter
 your recommendations and to score how a garment will fit.
 
-**How it works.** `SIZE_CHART_SOURCE` holds Eighth Hour's official published chart — the measurement
-*range* each size is cut for, XXS through XXL — and everything else is derived from it.
+**How it works.** `SIZE_CHART_SOURCE` holds Eighth Hour's size guide as revised in October 2026 — the
+measurement *range* each size is cut for, XXS through XXL — and everything else is derived from it.
+(The storefront's own size drawer still showed the earlier guide when the engine switched; the two
+agree again once the site is updated.)
 `STANDARD_SIZE_CHART` takes each row's midpoint; the three `*_SIZE_BOUNDARIES` tables build contiguous
 lookup bands by meeting adjacent sizes at the midpoint of the gap between them, opening the outermost
 bands out to the supported measurement range so every body maps somewhere. Nothing else in the
 codebase writes a size range down.
 
-The published rows are narrow — the bust steps about 5.7 cm per size, against the 8 cm of the uniform
+The published rows are narrow — the bust steps about 5.4 cm per size, against the 8 cm of the uniform
 grid this replaced — so the derived bands are correspondingly tight:
 
 | | XXS | XS | S | M | L | XL | XXL |
 |---|---|---|---|---|---|---|---|
-| **bust** | 70–85.05 | 85.05–90.25 | 90.25–95.25 | 95.25–100.9 | 100.9–107.9 | 107.9–113.6 | 113.6–150 |
-| **waist** | 55–64.75 | 64.75–69.75 | 69.75–74.85 | 74.85–80 | 80–88.3 | 88.3–94.6 | 94.6–130 |
-| **hips** | 80–90.25 | 90.25–95.25 | 95.25–100.3 | 100.3–107.3 | 107.3–114.9 | 114.9–120 | 120–160 |
+| **bust** | 70–87.6 | 87.6–92.65 | 92.65–97.75 | 97.75–102.85 | 102.85–108.55 | 108.55–113.65 | 113.65–150 |
+| **waist** | 55–68.55 | 68.55–73.6 | 73.6–78.7 | 78.7–83.75 | 83.75–89.5 | 89.5–94.55 | 94.55–130 |
+| **hips** | 80–92.65 | 92.65–97.75 | 97.75–102.85 | 102.85–107.9 | 107.9–113.65 | 113.65–119.95 | 119.95–160 |
 
 XXS and XXL open out to the validator's limits rather than stopping where the chart does, so a body
 outside the published range still maps to the nearest size the shop actually stocks instead of failing

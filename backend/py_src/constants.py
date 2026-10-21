@@ -55,18 +55,24 @@ MEASUREMENT_RANGES = {
 # the size they actually wear. Real charts have uneven bands that widen with
 # size, as below.
 #
-# Transcribed from the official Eighth Hour size guide, which publishes XXS
-# through XXL. Bust and hips leave a gap between adjacent rows; waist M and L
-# meet exactly at 80cm, so 80.0 resolves to L and 79.99 to M -- deterministic
-# either way, and preserved as published rather than nudged apart.
+# Transcribed from Eighth Hour's size guide, revised October 2026 (the brand's
+# "0. Size Guide" sheet, tab "updated oct '26", centimetre tables). Tops,
+# bottoms and dresses give each size the same bust, waist and hips, and the
+# sheet's inch tables convert to these figures. It replaced the earlier guide
+# (XXS bust 81.2-83.8, waist 61-63.5, hips 86.3-89, ...), which the storefront
+# still showed when this was written -- so until the site's own size drawer is
+# updated, a customer can read one range there and be sized on another.
+#
+# Every band leaves a gap before the next size; the lookup bands below meet at
+# the middle of each gap.
 SIZE_CHART_SOURCE = {
-    "XXS": {"bust": (81.2, 83.8),   "waist": (61, 63.5),    "hips": (86.3, 89)},
-    "XS":  {"bust": (86.3, 89),     "waist": (66, 68.5),    "hips": (91.5, 94)},
-    "S":   {"bust": (91.5, 94),     "waist": (71, 73.5),    "hips": (96.5, 99)},
-    "M":   {"bust": (96.5, 99),     "waist": (76.2, 80),    "hips": (101.6, 105.4)},
-    "L":   {"bust": (102.8, 106.6), "waist": (80, 87.6),    "hips": (109.2, 114.3)},
-    "XL":  {"bust": (109.2, 111.7), "waist": (89, 94),      "hips": (115.5, 118)},
-    "XXL": {"bust": (115.5, 118),   "waist": (95.2, 100.3), "hips": (122, 124.5)},
+    "XXS": {"bust": (83.8, 86.3),   "waist": (64.7, 67.3),  "hips": (88.9, 91.4)},
+    "XS":  {"bust": (88.9, 91.4),   "waist": (69.8, 72.3),  "hips": (93.9, 96.5)},
+    "S":   {"bust": (93.9, 96.5),   "waist": (74.9, 77.4),  "hips": (99, 101.6)},
+    "M":   {"bust": (99, 101.6),    "waist": (80, 82.5),    "hips": (104.1, 106.6)},
+    "L":   {"bust": (104.1, 107.9), "waist": (85, 88.9),    "hips": (109.2, 113)},
+    "XL":  {"bust": (109.2, 113),   "waist": (90.1, 93.9),  "hips": (114.3, 119.3)},
+    "XXL": {"bust": (114.3, 120.6), "waist": (95.2, 101.6), "hips": (120.6, 127)},
 }
 
 _CHART_DIMENSIONS = ("bust", "waist", "hips")
