@@ -100,8 +100,10 @@ class FitChecker:
               - fit_scores: {size: confidence (0-1)} for each available size
               - recommended_size: Size with highest confidence (or
                 known_size, when given and available)
-              - fit_notes: List of specific fit guidance
+              - fit_notes: List of specific fit guidance, led by the
+                closest-available line when that applies
               - confidence: Confidence in recommendation (0-1)
+              - customer_size, closest_available: see size_advice
 
         Raises:
             GuardrailError: If user has not consented to measurements
@@ -117,6 +119,104 @@ class FitChecker:
         # Callers may pass a full Measurements.to_dict() payload (unit,
         # confidence_scores, provider, ...) rather than a clean measurements
         # dict -- strip it down before validating/using it.
+        measurements = extract_physical_measurements(measurements)
+
+        advice = self.size_advice(measurements, product, known_size, shape_class)
+        size_chart = advice["size_chart"]
+        fit_scores = advice["fit_scores"]
+        recommended_size = advice["recommended_size"]
+
+        # Generate fit notes. Deliberately NOT dimension_weights (that's
+        # the SIZE/SCORE calculation above, unaffected by this) -- see
+        # FIT_NOTE_RELEVANT_DIMENSIONS for why note guidance uses a wider
+        # set of relevant dimensions for whole-body categories.
+        note_dimensions = FIT_NOTE_RELEVANT_DIMENSIONS.get(
+            product.get("category"), {"bust", "waist", "hips"}
+        )
+        fit_notes = self._generate_fit_notes(
+            measurements,
+            size_chart,
+            fit_scores,
+            recommended_size,
+            note_dimensions,
+        )
+        if advice["closest_available"]:
+            fit_notes.insert(0, self.closest_available_note(
+                advice["customer_size"], list(fit_scores), recommended_size
+            ))
+
+        # Where the hem will actually land on this customer. Sized on
+        # circumference, so it is independent of everything above -- a garment
+        # can be a flawless fit through the body and still sit at a different
+        # point on the leg than the photograph shows.
+        length_note = self._generate_length_note(measurements.get("height"), product)
+        if length_note:
+            fit_notes.append(length_note)
+
+        # Calculate overall confidence -- already rounded to 2 decimals in
+        # _calculate_fit_scores, so this is guaranteed to equal
+        # fit_scores[recommended_size] exactly.
+        confidence = fit_scores[recommended_size]
+
+        result = {
+            "product_sku": product["sku"],
+            "fit_scores": fit_scores,
+            "recommended_size": recommended_size,
+            "fit_notes": fit_notes,
+            "confidence": confidence,
+            "customer_size": advice["customer_size"],
+            "closest_available": advice["closest_available"],
+        }
+
+        # Audit log
+        AuditLogger.log_event(
+            "FIT_CHECK_COMPLETED",
+            user_id,
+            {
+                "product_sku": product["sku"],
+                "recommended_size": recommended_size,
+                "confidence": confidence,
+                "session_id": session_id,
+            },
+        )
+
+        logger.debug(
+            "Fit check completed",
+            {
+                "user_id": user_id,
+                "product_sku": product["sku"],
+                "recommended_size": recommended_size,
+            },
+        )
+
+        return result
+
+    def size_advice(
+        self,
+        measurements: Dict[str, float],
+        product: Dict[str, Any],
+        known_size: Optional[str] = None,
+        shape_class: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Which size of this product to recommend -- the sizing half of
+        check_fit, without its consent check, audit entry or fit notes, so a
+        caller that has already cleared consent (M5's recommendation cards)
+        gets exactly the answer the product page will give.
+
+        Args: as check_fit.
+
+        Returns:
+            Dict with:
+              - fit_scores, recommended_size: as check_fit
+              - customer_size: her own size for this product's category
+                (known_size, or the best size on the full standard chart);
+                None with a custom per-product chart, whose labels needn't
+                be the standard sizes
+              - closest_available: True when the product doesn't come in
+                customer_size, so recommended_size is only the closest fit
+              - size_chart: the chart the scores were computed against
+        """
         measurements = extract_physical_measurements(measurements)
 
         # Validate inputs
@@ -162,72 +262,84 @@ class FitChecker:
         # reintroduce the exact bug this whole scoring model fixes
         # (recommending a size that a completely unrelated size scores
         # higher than), just for a different reason.
+        #
+        # When the product doesn't come in her size at all (an XXS customer,
+        # an XS-L piece), the recommendation is the stocked size that fits
+        # best, and closest_available tells the caller to say so rather than
+        # present it as her size.
+        customer_size = self._customer_size(
+            measurements, dimension_weights, known_size, use_boundaries
+        )
+        closest_available = customer_size is not None and customer_size not in fit_scores
         if known_size and use_boundaries and known_size in fit_scores:
             recommended_size = known_size
+        elif closest_available:
+            recommended_size = self._closest_stocked_size(fit_scores, customer_size)
         else:
             recommended_size = max(
                 fit_scores.items(),
                 key=lambda x: x[1]
             )[0]
 
-        # Generate fit notes. Deliberately NOT dimension_weights (that's
-        # the SIZE/SCORE calculation above, unaffected by this) -- see
-        # FIT_NOTE_RELEVANT_DIMENSIONS for why note guidance uses a wider
-        # set of relevant dimensions for whole-body categories.
-        note_dimensions = FIT_NOTE_RELEVANT_DIMENSIONS.get(
-            product.get("category"), {"bust", "waist", "hips"}
-        )
-        fit_notes = self._generate_fit_notes(
-            measurements,
-            size_chart,
-            fit_scores,
-            recommended_size,
-            note_dimensions,
-        )
-
-        # Where the hem will actually land on this customer. Sized on
-        # circumference, so it is independent of everything above -- a garment
-        # can be a flawless fit through the body and still sit at a different
-        # point on the leg than the photograph shows.
-        length_note = self._generate_length_note(measurements.get("height"), product)
-        if length_note:
-            fit_notes.append(length_note)
-
-        # Calculate overall confidence -- already rounded to 2 decimals in
-        # _calculate_fit_scores, so this is guaranteed to equal
-        # fit_scores[recommended_size] exactly.
-        confidence = fit_scores[recommended_size]
-
-        result = {
-            "product_sku": product["sku"],
+        return {
             "fit_scores": fit_scores,
             "recommended_size": recommended_size,
-            "fit_notes": fit_notes,
-            "confidence": confidence,
+            "customer_size": customer_size,
+            "closest_available": closest_available,
+            "size_chart": size_chart,
         }
 
-        # Audit log
-        AuditLogger.log_event(
-            "FIT_CHECK_COMPLETED",
-            user_id,
-            {
-                "product_sku": product["sku"],
-                "recommended_size": recommended_size,
-                "confidence": confidence,
-                "session_id": session_id,
-            },
+    def _customer_size(self, measurements, dimension_weights, known_size, use_boundaries):
+        """
+        Her size for a category, on the standard chart: M3's answer when the
+        caller passes it, otherwise the best-scoring size across the WHOLE
+        chart (not just the sizes this product comes in) -- which is what
+        reveals that a product doesn't come in her size.
+        """
+        if not use_boundaries:
+            return None
+        if known_size in self.SIZE_ORDER:
+            return known_size
+        every_size = self._calculate_fit_scores(
+            measurements, self.STANDARD_SIZE_CHART, list(self.SIZE_ORDER),
+            dimension_weights, True,
+        )
+        return max(every_size.items(), key=lambda x: x[1])[0]
+
+    def _closest_stocked_size(self, fit_scores, customer_size):
+        """
+        The best-fitting size the product comes in. Ties (two stocked sizes
+        scoring the same) go to the one nearer her own size on the chart.
+        """
+        order = {size: index for index, size in enumerate(self.SIZE_ORDER)}
+        target = order[customer_size]
+        return max(
+            fit_scores,
+            key=lambda size: (fit_scores[size], -abs(order.get(size, target) - target)),
         )
 
-        logger.debug(
-            "Fit check completed",
-            {
-                "user_id": user_id,
-                "product_sku": product["sku"],
-                "recommended_size": recommended_size,
-            },
+    def closest_available_note(self, customer_size, stocked_sizes, recommended_size):
+        """
+        What to tell a customer whose size this piece doesn't come in: her
+        actual size, the sizes it does come in, and that the recommendation
+        is the closest available -- not her size.
+        """
+        return (
+            f"Your size is {customer_size}. This piece comes in "
+            f"{self._describe_sizes(stocked_sizes)}, so {recommended_size} is "
+            f"the closest fit available."
         )
 
-        return result
+    def _describe_sizes(self, sizes):
+        """'XS–L' for an unbroken run, 'XS, S and L' with a gap, 'M only' for one."""
+        ordered = sorted(sizes, key=lambda s: self.SIZE_ORDER.index(s) if s in self.SIZE_ORDER else len(self.SIZE_ORDER))
+        if len(ordered) == 1:
+            return f"{ordered[0]} only"
+        positions = [self.SIZE_ORDER.index(s) for s in ordered if s in self.SIZE_ORDER]
+        if len(positions) == len(ordered) and positions == list(range(positions[0], positions[-1] + 1)):
+            return f"{ordered[0]}–{ordered[-1]}"
+        return ", ".join(ordered[:-1]) + f" and {ordered[-1]}"
+
 
     def _validate_measurements(self, measurements: Dict[str, float]) -> None:
         """Validate measurement dict has required fields with valid values."""

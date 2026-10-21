@@ -129,6 +129,8 @@ class NewReleasesPage {
     const product = PRODUCTS.find(p => p.slug === item.sku);
     const matchPercent = Math.round((item.match_score || 0) * 100);
     const recommendedSize = item.availability && item.availability.recommended_size;
+    // Not her size: the closest-available line replaces "Recommended size".
+    const sizeNote = item.availability && item.availability.size_note;
 
     return `
       <a href="../../product.html?slug=${item.sku}" class="product-link">
@@ -140,7 +142,8 @@ class NewReleasesPage {
         <p style="margin: 0 0 0.5rem 0; color: #666; font-size: 0.85rem;">${item.category}</p>
         ${product ? `<p style="margin: 0 0 0.75rem 0; color: #333; font-weight: 600;">$${product.price.toFixed(2)}</p>` : ''}
         <p style="margin: 0 0 0.5rem 0; font-size: 0.85rem; color: #0066cc;">${item.reason || ''}</p>
-        ${recommendedSize ? `<p style="margin: 0; font-size: 0.8rem; color: #666;">Recommended size: ${recommendedSize}</p>` : ''}
+        ${sizeNote ? `<p class="card-size-note">${sizeNote}</p>`
+          : recommendedSize ? `<p style="margin: 0; font-size: 0.8rem; color: #666;">Recommended size: ${recommendedSize}</p>` : ''}
       </a>
     `;
   }

@@ -634,6 +634,15 @@ bust with waist and hips still reported as guidance. For apple shapes the top-ha
 on the waist instead, the same measurement M3 sizes them on (`TOP_SIZE_DIMENSION_BY_SHAPE`, shared by
 both) — otherwise an apple customer was recommended one size while another showed the higher fit.
 
+**When a piece doesn't come in her size.** The launch pieces are cut XS–L (a couple XS–M) while the
+size guide runs XXS–XXL. Rather than leave an XXS or XXL customer without advice, the fit check
+recommends the best-fitting size the piece does come in and says so: "Your size is XXS. This piece
+comes in XS–L, so XS is the closest fit available." The response carries `customer_size` and
+`closest_available`, and the product page labels the size "Closest Available Size". The same answer
+reaches recommendation cards (M5 calls M7's `size_advice`, the sizing half of the fit check, and adds
+the line as `size_note`) and New Releases (`availability.size_note`). When too few pieces come in her
+size and M6 relaxes the size filter, pieces in her size still rank first.
+
 ### 8. New releases feed (M9)
 
 **What it does.** Shows newly launched pieces filtered to the customer's stored profile, so a launch

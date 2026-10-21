@@ -57,6 +57,7 @@ class HomeRecommendationsLoader {
         </div>
         <div class="name">${product.name}</div>
         <div class="price">$${product.price.toFixed(2)}</div>
+        ${product.size_note ? `<p class="card-size-note">${product.size_note}</p>` : ''}
       </a>
     `;
   }

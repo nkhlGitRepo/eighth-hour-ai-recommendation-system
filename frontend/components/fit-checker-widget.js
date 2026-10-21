@@ -63,7 +63,10 @@ class FitCheckerWidget {
 
     // Every product, including Co-ord Sets, has exactly one size field
     // for the customer to fill in -- always show a single recommendation.
-    const sizeBlockHtml = this.renderSizeBlock('Recommended Size', 'How each size fits you:', this.fitResult);
+    // When the piece doesn't come in her size, the size shown is the closest
+    // one it does come in -- say so here as well as in the first fit note.
+    const sizeLabel = this.fitResult.closest_available ? 'Closest Available Size' : 'Recommended Size';
+    const sizeBlockHtml = this.renderSizeBlock(sizeLabel, 'How each size fits you:', this.fitResult);
 
     container.innerHTML = `
       <div class="fit-checker-container">
