@@ -3,6 +3,7 @@
 import pytest
 from py_src.modules.m3_body_shape_profiler import BodyShapeProfiler
 from py_src.modules.m6_catalog_kb import CatalogKB
+from py_src.constants import MIN_RECOMMENDATIONS
 from tests.fixtures import MEASUREMENTS, PRODUCTS
 
 
@@ -84,14 +85,31 @@ class TestIntegration:
         for result in results:
             assert result["fabric"] == "Cotton"
 
-    def test_workflow_validate_size_availability(self):
-        """Should check size availability before recommending."""
-        profile = self.profiler.profile(MEASUREMENTS["pear"])
-        size_rec = profile["size_recommendation_by_category"]
-        top_size = size_rec["tops"]
-        results = self.catalog.retrieve({"shape_class": profile["shape_class"], "size": top_size})
-        for result in results:
-            assert top_size in result["sizes_in_stock"]
+    @pytest.mark.parametrize("shape", sorted(k for k in MEASUREMENTS if not k.startswith("invalid")))
+    def test_workflow_validate_size_availability(self, shape):
+        """
+        Should check size availability before recommending.
+
+        Checked for every fixture body rather than one, and against whichever
+        size the chart gives it: the pear used to be an XS top and became XXS
+        when the size guide was revised, and this test silently depended on
+        that size being one the fixture catalog stocks. When nothing stocks her
+        size, M6 relaxes the size filter by design (a last resort), so the
+        strict filter is checked directly and the relaxed path only when it
+        can't apply.
+        """
+        profile = self.profiler.profile(MEASUREMENTS[shape])
+        top_size = profile["size_recommendation_by_category"]["tops"]
+        query = {"shape_class": profile["shape_class"], "size": top_size}
+        stocked = [p for p in PRODUCTS if top_size in p["sizes"]]
+
+        strict = self.catalog.retrieve(query, min_results=0)
+        assert all(top_size in r["sizes_in_stock"] for r in strict)
+        assert len(strict) == min(len(stocked), 10), "strict filter dropped stocked products"
+
+        if len(stocked) >= MIN_RECOMMENDATIONS:
+            for result in self.catalog.retrieve(query):
+                assert top_size in result["sizes_in_stock"]
 
     def test_workflow_recommendations_have_complete_data(self):
         """Recommendations should have all required fields."""
@@ -126,11 +144,15 @@ class TestIntegration:
             results = self.catalog.retrieve({"shape_class": profile["shape_class"]})
             assert len(results) > 0, f"{shape} should have recommendations"
 
-    def test_workflow_recommendations_match_size(self):
-        """Size recommendations from M3 should match available sizes."""
-        profile = self.profiler.profile(MEASUREMENTS["pear"])
+    @pytest.mark.parametrize("shape", sorted(k for k in MEASUREMENTS if not k.startswith("invalid")))
+    def test_workflow_recommendations_match_size(self, shape):
+        """Size recommendations from M3 should match available sizes (see above
+        for why this runs over every body and uses the strict filter)."""
+        profile = self.profiler.profile(MEASUREMENTS[shape])
         top_size = profile["size_recommendation_by_category"]["tops"]
-        results = self.catalog.retrieve({"shape_class": profile["shape_class"], "size": top_size})
+        results = self.catalog.retrieve(
+            {"shape_class": profile["shape_class"], "size": top_size}, min_results=0
+        )
         for result in results:
             assert top_size in result["sizes"], f"Size {top_size} not in {result['sizes']}"
 
@@ -270,7 +292,7 @@ class TestPhase1IntakeFlow:
         assert shape_class is not None
 
         # Verify profiler is available for Phase 2 recommendations
-        assert orchestrator.profiler.PROFILE_VERSION == "2.0.0"
+        assert orchestrator.profiler.PROFILE_VERSION == "2.1.0"
 
     def test_phase1_preference_capture_via_intake(self):
         """M4 preference capture through intake flow."""

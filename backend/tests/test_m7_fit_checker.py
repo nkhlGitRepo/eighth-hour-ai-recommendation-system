@@ -278,13 +278,19 @@ class TestM7AlgorithmAccuracy:
         assert result["recommended_size"] in ["XS", "S"]
 
     def test_larger_user_recommends_larger_size(self, fit_checker, test_product):
-        """User with larger measurements should recommend larger sizes with higher scores."""
+        """
+        User with larger measurements should recommend larger sizes with higher scores.
+
+        The body sits halfway between the chart's L and XL on every dimension,
+        so it is "larger" by the published chart rather than by numbers typed
+        against an older one: the previous 105/82/110 was an all-L body on the
+        first guide, but its 82 cm waist is an M on the October 2026 guide.
+        """
         large_measurements = {
-            "bust": 105.0,  # Larger than L (96)
-            "waist": 82.0,
-            "hips": 110.0,
-            "height": 175.0,
+            d: (STANDARD_SIZE_CHART["L"][d] + STANDARD_SIZE_CHART["XL"][d]) / 2
+            for d in ("bust", "waist", "hips")
         }
+        large_measurements["height"] = 175.0
         result = fit_checker.check_fit("test_user", large_measurements, test_product)
 
         # XL should score higher than M (both available in test_product)
@@ -819,20 +825,29 @@ class TestM7AgreesWithM3Sizing:
         Shape Profile said "S" for skirts, but the fit-checker's blended
         average argmax'd to "M". known_size must win.
         """
-        measurements = {"bust": 96.0, "waist": 84.0, "hips": 92.0, "height": 165.0}
+        # Bust and waist an M, hips an XS, taken from the chart itself so the
+        # disagreement survives a revision of the size guide (the earlier
+        # 96/84/92 blended to S, not M, on the October 2026 guide).
+        measurements = {
+            "bust": STANDARD_SIZE_CHART["M"]["bust"],
+            "waist": STANDARD_SIZE_CHART["M"]["waist"],
+            "hips": STANDARD_SIZE_CHART["XS"]["hips"],
+            "height": 165.0,
+        }
+        known = "XS"   # what hips alone say, as M3 sizes a bottoms category
 
         unblended = fit_checker.check_fit("test_user", measurements, test_product)
-        assert unblended["recommended_size"] == "M", (
-            "Sanity check: blended argmax should pick M for this body "
-            f"(got {unblended['recommended_size']}) -- otherwise this test isn't "
-            "exercising the disagreement it's meant to cover"
+        assert unblended["recommended_size"] != known, (
+            "Sanity check: blended argmax should differ from the hips-only size "
+            f"(both {known}) -- otherwise this test isn't exercising the "
+            "disagreement it's meant to cover"
         )
 
         result = fit_checker.check_fit(
-            "test_user", measurements, test_product, known_size="S"
+            "test_user", measurements, test_product, known_size=known
         )
-        assert result["recommended_size"] == "S"
-        assert result["confidence"] == result["fit_scores"]["S"]
+        assert result["recommended_size"] == known
+        assert result["confidence"] == result["fit_scores"][known]
 
     def test_known_size_ignored_when_not_a_stocked_size(self, fit_checker, test_product):
         """A category size M3 computed is meaningless if this specific

@@ -46,7 +46,7 @@ class BodyShapeProfiler:
     # Bump whenever the classification or size rules change. Stored profiles
     # from an older version are recomputed when loaded (refresh_if_outdated),
     # so a customer is never left with a label the current rules would not give.
-    PROFILE_VERSION = "2.0.0"
+    PROFILE_VERSION = "2.1.0"
 
     def __init__(self):
         logger.info("M3 initialized", {"version": self.PROFILE_VERSION})

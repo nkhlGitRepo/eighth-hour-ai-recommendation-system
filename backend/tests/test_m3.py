@@ -16,7 +16,7 @@ class TestBodyShapeProfiler:
 
     def test_initialization(self):
         """Profiler should initialize."""
-        assert self.profiler.PROFILE_VERSION == "2.0.0"
+        assert self.profiler.PROFILE_VERSION == "2.1.0"
 
     def test_classify_pear_shape_correctly(self):
         """PEAR (FFIT triangle): hips distinctly fuller than the bust."""
@@ -99,7 +99,7 @@ class TestBodyShapeProfiler:
     def test_profile_returns_versioned_data(self):
         """Profile should include version."""
         profile = self.profiler.profile(MEASUREMENTS["pear"])
-        assert profile["profile_version"] == "2.0.0"
+        assert profile["profile_version"] == "2.1.0"
 
     def test_ratios_are_computed_correctly(self):
         """Ratios should be computed correctly."""
