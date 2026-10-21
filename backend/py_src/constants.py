@@ -265,6 +265,16 @@ FIT_SCORE_DIMENSION_WEIGHTS = {
 }
 FIT_SCORE_DEFAULT_WEIGHTS = {"bust": 1 / 3, "waist": 1 / 3, "hips": 1 / 3}
 
+# Which measurement sizes the top half of the body (tops, dresses, vests,
+# co-ord sets), by shape. M3 picks those sizes off it and M7 scores those
+# categories on it, so the size on the profile and the size with the highest
+# "% fit" stay the same calculation for every shape. Apple shapes are sized on
+# the waist -- the measurement that decides whether a top closes on them.
+# (M7 used to score these categories on the bust regardless, so an apple
+# customer was recommended one size while another showed the higher % fit.)
+TOP_SIZE_DIMENSION_BY_SHAPE = {"apple": "waist"}
+DEFAULT_TOP_SIZE_DIMENSION = "bust"
+
 # Which measurement dimensions are relevant for M7's *fit-note guidance
 # text* ("runs small in the bust", "snug in the hips", ...) per category --
 # deliberately separate from FIT_SCORE_DIMENSION_WEIGHTS above, which

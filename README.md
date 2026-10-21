@@ -14,7 +14,7 @@ Everything runs locally. There are no paid APIs, no external calls at runtime, a
 leaves the machine. Photo measurement uses a pose model that runs on your own CPU, and the uploaded
 image is held in memory and discarded — never written to disk.
 
-**Status:** 1,131 tests — 1,127 passing, 4 skipped by design (they need the real pose model, which
+**Status:** 1,179 tests — 1,175 passing, 4 skipped by design (they need the real pose model, which
 deadlocks under pytest; see [Testing](#testing)). The recommendation, sizing, fit-checking and
 history modules are complete. Photo measurement works but is deliberately weighted low — see
 [Photo-based measurement](#5-photo-based-measurement-m2--providers) for the honest accuracy numbers.
@@ -627,7 +627,9 @@ purely because the denominator was bigger.
 
 Dimensions are weighted per category, which fixed a real complaint: a skirt was advising "runs small
 in the bust". Skirts and trousers score on hips, tops and vests on bust, dresses and co-ord sets on
-bust with waist and hips still reported as guidance.
+bust with waist and hips still reported as guidance. For apple shapes the top-half categories score
+on the waist instead, the same measurement M3 sizes them on (`TOP_SIZE_DIMENSION_BY_SHAPE`, shared by
+both) — otherwise an apple customer was recommended one size while another showed the higher fit.
 
 ### 8. New releases feed (M9)
 
@@ -719,8 +721,9 @@ overwritten.
 
 **What it does.** Upload a photo, see a preview, add your height and your usual sizes (required),
 and get measurements back — with a legal notice shown before any upload control is usable. A framing
-guide of four silhouettes (one correct, three mistakes that genuinely stop a photo being measured)
-sits above the tips.
+guide of silhouettes sits above the tips: one correct pose, two mistakes that stop a photo being
+measured (turned sideways, too close), and two that are accepted but may be less accurate (hands on
+hips, loose clothing) — clothing shown as a fitted-vs-loose pair, since it is the biggest factor.
 
 **How it works.** The privacy notice is rendered from `GET /intake/photo-disclosure` rather than
 hardcoded, so it always describes what the *configured provider* actually does with the image; the
@@ -1082,7 +1085,7 @@ statements attached to it:
 ```bash
 cd backend
 source venv/bin/activate
-python -m pytest tests/ -q                    # all 1,131
+python -m pytest tests/ -q                    # all 1,179
 python -m pytest tests/test_m7_fit_checker.py -q
 ```
 
@@ -1148,7 +1151,7 @@ backend/
     enrich_catalog_from_source.py  Pull length/fit/model data out of the cache
     migrate_stored_size_profiles.py  Recompute saved sizes after a chart change
     verify_pose_provider.py   Exercise the pose model outside pytest
-  tests/                      1,131 tests
+  tests/                      1,179 tests
 Base_Website/
   serve.py                    no-cache dev server
   diagnose.html               session troubleshooting page

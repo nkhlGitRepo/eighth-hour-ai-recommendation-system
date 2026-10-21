@@ -1251,6 +1251,7 @@ async def check_product_fit(session_id: str, product_sku: str):
             product=product,
             session_id=session_id,
             known_size=known_size,
+            shape_class=(session.shape_profile or {}).get("shape_class"),
         )
 
         # Save to history (M8) - non-critical, don't fail the fit check if save fails.
