@@ -42,6 +42,10 @@ services:
       # Where the API's own address sends a browser (it has no page of its own).
       - key: STOREFRONT_URL
         value: https://nkhlgitrepo.github.io/eighth-hour-ai-recommendation-system/
+    # POST /catalog/sync stays switched off (403) while CATALOG_SYNC_TOKEN is
+    # unset, which is right for now: nothing pushes a catalog. If something
+    # ever needs it, set a long random value in the Render dashboard -- never
+    # here, since this file is public.
     #   - key: DATABASE_PATH
     #     value: /var/data/intake_sessions.db
     # disk:

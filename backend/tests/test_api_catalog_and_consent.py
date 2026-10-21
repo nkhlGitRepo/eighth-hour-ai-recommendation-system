@@ -9,6 +9,9 @@ from fastapi.testclient import TestClient
 
 from main import app
 
+SYNC_TOKEN = "test-catalog-sync-token"
+SYNC_HEADERS = {"X-Catalog-Sync-Token": SYNC_TOKEN}
+
 
 @pytest.fixture(scope="module")
 def client():
@@ -47,6 +50,12 @@ class TestCatalogStats:
         assert "colors" in body and isinstance(body["colors"], list)
 
 
+@pytest.fixture
+def sync_token(monkeypatch):
+    """Switch catalog sync on for one test, the way a deployment would."""
+    monkeypatch.setenv("CATALOG_SYNC_TOKEN", SYNC_TOKEN)
+
+
 class TestCatalogSync:
     def test_sync_replaces_catalog(self, client):
         products = [{
@@ -58,7 +67,7 @@ class TestCatalogSync:
             "colors": ["Ebony"],
             "sizes": ["M"],
         }]
-        r = client.post("/catalog/sync", json=products)
+        r = client.post("/catalog/sync", json=products, headers=SYNC_HEADERS)
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "synced"
@@ -76,7 +85,7 @@ class TestCatalogSync:
             "category": "Tops",
             "fabric": "Cotton",
         }]
-        r = client.post("/catalog/sync", json=bad_products)
+        r = client.post("/catalog/sync", json=bad_products, headers=SYNC_HEADERS)
         assert r.status_code == 422
 
     def test_sync_does_not_carry_silhouette_or_launched_at(self, client):
@@ -100,14 +109,14 @@ class TestCatalogSync:
             "colors": ["Ebony"],
             "sizes": ["M"],
         }]
-        client.post("/catalog/sync", json=products)
+        client.post("/catalog/sync", json=products, headers=SYNC_HEADERS)
 
         r = client.post("/retrieve", json={"shape_class": "balanced", "k": 10})
         item = next(p for p in r.json() if p["sku"] == "sync-no-metadata")
         assert item["launched_at"] is None
 
     def test_sync_empty_list_clears_catalog(self, client):
-        r = client.post("/catalog/sync", json=[])
+        r = client.post("/catalog/sync", json=[], headers=SYNC_HEADERS)
         assert r.status_code == 200
         assert r.json()["item_count"] == 0
 
@@ -115,17 +124,74 @@ class TestCatalogSync:
         assert stats["total_items"] == 0
 
     @pytest.fixture(autouse=True)
-    def _restore_real_catalog(self, client):
+    def _restore_real_catalog(self, client, sync_token):
         """These tests mutate the shared process-global catalog via /catalog/sync.
         Restore the real products.json afterward so later test files (which
-        assume the real catalog is loaded) aren't affected."""
+        assume the real catalog is loaded) aren't affected. Depends on
+        sync_token so the token is still set when this teardown runs."""
         yield
         import json
         import os
         products_file = os.path.join(os.path.dirname(__file__), "..", "products.json")
         with open(products_file) as f:
             products = json.load(f)
-        client.post("/catalog/sync", json=products)
+        client.post("/catalog/sync", json=products, headers=SYNC_HEADERS)
+
+
+class TestCatalogSyncIsLocked:
+    """
+    /catalog/sync replaces the whole catalog, so it must never take an
+    anonymous request. Every refusal below is checked against the catalog
+    itself, not just the status code: a 401 that still swapped the products
+    would be the same hole with a different number on it.
+    """
+
+    PRODUCTS = [{
+        "slug": "intruder-item",
+        "name": "Intruder Item",
+        "category": "Tops",
+        "fabric": "Cotton",
+        "price": 1.0,
+        "sizes": ["M"],
+    }]
+
+    def _total(self, client):
+        return client.get("/catalog/stats").json()["total_items"]
+
+    def test_off_when_the_server_sets_no_token(self, client, monkeypatch):
+        monkeypatch.delenv("CATALOG_SYNC_TOKEN", raising=False)
+        before = self._total(client)
+        r = client.post("/catalog/sync", json=self.PRODUCTS, headers=SYNC_HEADERS)
+        assert r.status_code == 403
+        assert self._total(client) == before
+
+    def test_blank_server_token_counts_as_off(self, client, monkeypatch):
+        # An empty env var must not turn "" into a valid credential.
+        monkeypatch.setenv("CATALOG_SYNC_TOKEN", "   ")
+        before = self._total(client)
+        r = client.post("/catalog/sync", json=self.PRODUCTS, headers={"X-Catalog-Sync-Token": ""})
+        assert r.status_code == 403
+        assert self._total(client) == before
+
+    def test_rejects_a_request_without_the_header(self, client, sync_token):
+        before = self._total(client)
+        r = client.post("/catalog/sync", json=self.PRODUCTS)
+        assert r.status_code == 401
+        assert self._total(client) == before
+
+    def test_rejects_a_wrong_token(self, client, sync_token):
+        before = self._total(client)
+        r = client.post("/catalog/sync", json=self.PRODUCTS, headers={"X-Catalog-Sync-Token": "guess"})
+        assert r.status_code == 401
+        assert self._total(client) == before
+
+    def test_rejects_an_empty_list_without_the_token(self, client, sync_token):
+        # The cheapest attack -- wipe the catalog -- is refused too.
+        before = self._total(client)
+        r = client.post("/catalog/sync", json=[])
+        assert r.status_code == 401
+        assert self._total(client) == before
+        assert before > 0
 
 
 class TestRetrieve:
