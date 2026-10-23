@@ -13,12 +13,14 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.signed_in_client import SignedInClient
+
 from main import app
 
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app) as c:
+    with SignedInClient(app) as c:
         yield c
 
 
@@ -347,7 +349,7 @@ class TestIntakeResume:
         assert body["user_id"] == real_user_id
 
     def test_no_resumable_session_returns_404(self, client):
-        user_id = unique_user()  # never created any session
+        user_id = client.new_account()  # never created any session
         r = client.post("/intake/resume", json={"user_id": user_id})
         assert r.status_code == 404
 

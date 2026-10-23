@@ -58,7 +58,9 @@ class RecommendationsPage {
         ? `${API_BASE}/recommendations/${this.sessionId}?k=20&user_id=${userId}`
         : `${API_BASE}/recommendations/${this.sessionId}?k=20`;
 
-      const response = await fetch(url);
+      // The API only shows someone their own history-linked picks.
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(url, token ? { headers: { Authorization: `Bearer ${token}` } } : {});
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));

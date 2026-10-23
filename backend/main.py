@@ -404,6 +404,27 @@ def get_intake_user_id(
     return get_current_user_id(get_bearer_token(authorization))
 
 
+def get_optional_user_id(authorization: Optional[str] = Header(None)) -> Optional[str]:
+    """The signed-in demo account, or None when no token is sent (a bad token
+    is still a 401)."""
+    if not authorization:
+        return None
+    return get_current_user_id(get_bearer_token(authorization))
+
+
+def require_own_account(user_id: str, signed_in: Optional[str]) -> None:
+    """
+    The demo endpoints that take a user id act only for that user's own
+    signed-in account. They used to trust the id they were given, so anyone
+    could read or write another person's consent, history and feedback by
+    naming them.
+    """
+    if signed_in is None:
+        raise AuthError("Sign in to see your own profile")
+    if user_id != signed_in:
+        raise HTTPException(status_code=403, detail="You can only see or change your own profile")
+
+
 # =========================================================================
 # ENDPOINTS
 # =========================================================================
@@ -555,7 +576,7 @@ async def get_catalog_stats():
 
 
 @app.post("/consent")
-async def record_consent(consent: ConsentRecord):
+async def record_consent(consent: ConsentRecord, signed_in: str = Depends(get_current_user_id)):
     """
     Record user consent for data processing.
 
@@ -575,6 +596,7 @@ async def record_consent(consent: ConsentRecord):
       "last_updated": 1691111111
     }
     """
+    require_own_account(consent.user_id, signed_in)
     try:
         consent_tracker.record_consent(
             consent.user_id,
@@ -588,8 +610,9 @@ async def record_consent(consent: ConsentRecord):
 
 
 @app.get("/consent/{user_id}")
-async def get_consent(user_id: str):
+async def get_consent(user_id: str, signed_in: str = Depends(get_current_user_id)):
     """Get user's current consent status."""
+    require_own_account(user_id, signed_in)
     return consent_tracker.get_consent_summary(user_id)
 
 
@@ -1124,7 +1147,7 @@ async def submit_intake_preferences(request: IntakePreferencesRequest):
 
 
 @app.post("/intake/resume")
-async def resume_intake_session(request: IntakeResumeRequest):
+async def resume_intake_session(request: IntakeResumeRequest, signed_in: str = Depends(get_current_user_id)):
     """
     Resume an incomplete intake session.
 
@@ -1141,6 +1164,7 @@ async def resume_intake_session(request: IntakeResumeRequest):
       "created_at": 1691111111.0
     }
     """
+    require_own_account(request.user_id, signed_in)
     try:
         session = intake_orchestrator.resume_session(user_id=request.user_id)
         return {
@@ -1168,6 +1192,7 @@ async def get_session_recommendations(
     user_id: Optional[str] = None,
     category_filter: Optional[List[str]] = Query(None),
     occasion_filter: Optional[str] = None,
+    signed_in: Optional[str] = Depends(get_optional_user_id),
 ):
     """
     Get personalized recommendations for a completed intake session.
@@ -1193,6 +1218,9 @@ async def get_session_recommendations(
       ]
     }
     """
+    # Named for a user (her picks are then logged to her history): only her own.
+    if user_id is not None:
+        require_own_account(user_id, signed_in)
     try:
         # Retrieve the completed session
         session = intake_orchestrator.get_session(session_id)
@@ -1797,7 +1825,7 @@ async def store_admin_delete_customer(
 
 
 @app.get("/history/{user_id}")
-async def get_user_history(user_id: str, limit: int = 20):
+async def get_user_history(user_id: str, limit: int = 20, signed_in: str = Depends(get_current_user_id)):
     """
     Get fit check history for a user.
 
@@ -1821,6 +1849,7 @@ async def get_user_history(user_id: str, limit: int = 20):
       ...
     ]
     """
+    require_own_account(user_id, signed_in)
     try:
         history = recommendation_history.get_user_history(user_id, limit=limit)
         return history
@@ -1834,7 +1863,7 @@ async def get_user_history(user_id: str, limit: int = 20):
 
 
 @app.get("/history/session/{session_id}")
-async def get_session_checks(user_id: str, session_id: str):
+async def get_session_checks(user_id: str, session_id: str, signed_in: str = Depends(get_current_user_id)):
     """
     Get fit checks from a specific session.
 
@@ -1858,6 +1887,7 @@ async def get_session_checks(user_id: str, session_id: str):
       ...
     ]
     """
+    require_own_account(user_id, signed_in)
     try:
         checks = recommendation_history.get_session_checks(user_id, session_id)
         return checks
@@ -1871,7 +1901,7 @@ async def get_session_checks(user_id: str, session_id: str):
 
 
 @app.get("/history/product/{product_sku}")
-async def get_product_trend(user_id: str, product_sku: str, limit: int = 10):
+async def get_product_trend(user_id: str, product_sku: str, limit: int = 10, signed_in: str = Depends(get_current_user_id)):
     """
     Get fit check history for a specific product (trend analysis).
 
@@ -1884,6 +1914,7 @@ async def get_product_trend(user_id: str, product_sku: str, limit: int = 10):
 
     Returns fit checks for this product over time, showing how assessment changes.
     """
+    require_own_account(user_id, signed_in)
     try:
         trend = recommendation_history.get_product_trend(user_id, product_sku, limit=limit)
         return trend
@@ -1897,7 +1928,7 @@ async def get_product_trend(user_id: str, product_sku: str, limit: int = 10):
 
 
 @app.get("/trends/{user_id}")
-async def get_user_trends(user_id: str):
+async def get_user_trends(user_id: str, signed_in: str = Depends(get_current_user_id)):
     """
     Get aggregate trend analysis for a user's fit preferences.
 
@@ -1916,6 +1947,7 @@ async def get_user_trends(user_id: str):
       }
     }
     """
+    require_own_account(user_id, signed_in)
     try:
         analysis = recommendation_history.analyze_user_trends(user_id)
         return analysis
@@ -1950,7 +1982,7 @@ class ProductFeedbackRequest(BaseModel):
 
 
 @app.post("/feedback/fit")
-async def submit_fit_feedback(request: FitFeedbackRequest):
+async def submit_fit_feedback(request: FitFeedbackRequest, signed_in: str = Depends(get_current_user_id)):
     """
     Submit feedback on how a recommended fit actually fit.
 
@@ -1974,6 +2006,7 @@ async def submit_fit_feedback(request: FitFeedbackRequest):
       "saved": true
     }
     """
+    require_own_account(request.user_id, signed_in)
     try:
         feedback = learning_loop.submit_fit_feedback(
             user_id=request.user_id,
@@ -1994,7 +2027,7 @@ async def submit_fit_feedback(request: FitFeedbackRequest):
 
 
 @app.post("/feedback/product")
-async def submit_product_feedback(request: ProductFeedbackRequest):
+async def submit_product_feedback(request: ProductFeedbackRequest, signed_in: str = Depends(get_current_user_id)):
     """
     Submit feedback on product satisfaction.
 
@@ -2017,6 +2050,7 @@ async def submit_product_feedback(request: ProductFeedbackRequest):
       "saved": true
     }
     """
+    require_own_account(request.user_id, signed_in)
     try:
         feedback = learning_loop.submit_product_feedback(
             user_id=request.user_id,
@@ -2037,7 +2071,7 @@ async def submit_product_feedback(request: ProductFeedbackRequest):
 
 
 @app.get("/feedback/summary/{user_id}")
-async def get_feedback_summary(user_id: str):
+async def get_feedback_summary(user_id: str, signed_in: str = Depends(get_current_user_id)):
     """
     Get aggregate feedback summary for a user.
 
@@ -2062,6 +2096,7 @@ async def get_feedback_summary(user_id: str):
       "total_feedback_records": 13
     }
     """
+    require_own_account(user_id, signed_in)
     try:
         summary = learning_loop.get_user_feedback_summary(user_id)
         return summary

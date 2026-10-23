@@ -330,7 +330,10 @@ class IntakeFlow {
 
       await fetch(`${API_BASE}/consent`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+        },
         body: JSON.stringify({
           user_id: this.userId,
           photo_consent: photoConsent,
@@ -809,7 +812,9 @@ class IntakeFlow {
 
   async loadRecommendations() {
     try {
-      const response = await fetch(`${API_BASE}/recommendations/${this.sessionId}?k=4&user_id=${this.userId}`);
+      const response = await fetch(`${API_BASE}/recommendations/${this.sessionId}?k=4&user_id=${this.userId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+      });
       if (!response.ok) throw new Error('Failed to load recommendations');
       const data = await response.json();
       this.recommendations = data.recommendations || [];

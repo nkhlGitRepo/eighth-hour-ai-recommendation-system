@@ -197,7 +197,10 @@ class FitCheckerWidget {
       // Submit feedback to M10 backend
       const response = await fetch(`${API_BASE}/feedback/fit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+        },
         body: JSON.stringify({
           user_id: userId,
           fit_check_id: this.fitResult.check_id || `${this.sessionId}-${this.productSku}`,

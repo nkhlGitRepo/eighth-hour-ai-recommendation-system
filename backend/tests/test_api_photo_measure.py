@@ -7,6 +7,8 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.signed_in_client import SignedInClient
+
 from main import app
 from py_src.guardrails.image_validation import MAX_IMAGE_BYTES
 
@@ -43,7 +45,7 @@ def demo_estimator():
 
 @pytest.fixture(scope="module")
 def client(demo_estimator):
-    with TestClient(app) as c:
+    with SignedInClient(app) as c:
         yield c
 
 

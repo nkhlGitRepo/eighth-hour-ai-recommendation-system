@@ -7,12 +7,14 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.signed_in_client import SignedInClient
+
 from main import app
 
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app) as c:
+    with SignedInClient(app) as c:
         yield c
 
 
@@ -172,8 +174,13 @@ class TestRecommendationsEndpoint:
         user_id = unique_user()
         session_id, real_user_id = complete_intake(client, user_id)
 
-        r = client.get(f"/recommendations/{session_id}", params={"user_id": "someone-else-entirely"})
+        # Signed in, but naming a session that isn't theirs.
+        someone_else = client.new_account()
+        r = client.get(f"/recommendations/{session_id}", params={"user_id": someone_else})
         assert r.status_code == 403
+        # Not signed in at all.
+        r = client.get(f"/recommendations/{session_id}", params={"user_id": "someone-else-entirely"})
+        assert r.status_code == 401
 
     def test_omitting_user_id_is_still_allowed(self, client):
         """Backward compatible: user_id remains optional."""

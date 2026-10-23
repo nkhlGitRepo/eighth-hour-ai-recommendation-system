@@ -24,6 +24,8 @@ from py_src.constants import STANDARD_SIZE_CHART
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.signed_in_client import SignedInClient
+
 from main import app
 from py_src.constants import HIP_SIZE_BOUNDARIES, SIZE_BOUNDARIES, STANDARD_SIZES
 
@@ -38,7 +40,7 @@ def _size_for(measurement, boundaries):
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app) as c:
+    with SignedInClient(app) as c:
         yield c
 
 
@@ -331,8 +333,8 @@ class TestLearningLoopEndToEnd:
         assert body["total_feedback_records"] == 2
 
     def test_feedback_rejected_without_consent(self, client):
-        """A user_id that never went through intake has no consent on record."""
-        user_id = f"no-consent-{uuid.uuid4().hex[:8]}"
+        """An account that never went through intake has no consent on record."""
+        user_id = client.new_account()
 
         r = client.post("/feedback/fit", json={
             "user_id": user_id,

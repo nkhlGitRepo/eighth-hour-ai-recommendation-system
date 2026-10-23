@@ -243,6 +243,21 @@
 .mystyle-ticks { display: flex; flex-direction: column; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
 .mystyle-ticks li { position: relative; padding: 1rem 1.2rem 1rem 3.2rem; background: var(--ms-white); border-radius: 0.4rem; font-size: 1.32rem; line-height: 1.45; }
 .mystyle-ticks li::before { content: "\2713"; position: absolute; left: 1.2rem; top: 1rem; }
+/* How her size fits, area by area */
+.mystyle-areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+.mystyle-areas li { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 1rem 0.6rem; background: var(--ms-white); border-radius: 0.4rem; text-align: center; }
+.mystyle-areas span { color: var(--ms-muted); font-size: 1.2rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.mystyle-areas strong { font-size: 1.4rem; }
+.mystyle-areas li.is-snug strong, .mystyle-areas li.is-roomy strong { color: var(--ms-caution); }
+/* Tips for You */
+.mystyle-tips { display: flex; flex-direction: column; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+.mystyle-tips li { padding: 1rem 1.2rem; background: var(--ms-white); border-left: 0.3rem solid var(--ms-forest); border-radius: 0.4rem; font-size: 1.32rem; line-height: 1.5; }
+/* Signed out, or no profile yet: what My Style would show her */
+.mystyle-fit__invite { text-align: center; }
+.mystyle-fit__invite-title { margin: 0 0 0.8rem; font-size: 1.76rem; font-weight: 600; }
+.mystyle-fit__invite p { margin: 0 0 1.6rem; font-size: 1.4rem; line-height: 1.5; }
+.mystyle-fit__invite .mystyle-btn { text-transform: uppercase; letter-spacing: 0.08em; }
+.mystyle-fit__invite .mystyle-fit__invite-note { margin: 1.2rem 0 0; color: var(--ms-muted); font-size: 1.28rem; }
 .mystyle-fit__feedback { margin-top: 2rem; text-align: center; font-size: 1.36rem; }
 .mystyle-fit__feedback p { margin: 0 0 1rem; }
 .mystyle-fit__choices { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.8rem; }
