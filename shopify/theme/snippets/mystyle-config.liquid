@@ -15,7 +15,7 @@
     rootUrl: {{ mystyle_root | json }},
     pageUrl: {{ routes.all_products_collection_url | append: '?view=mystyle' | json }},
     tokenUrl: {{ routes.all_products_collection_url | append: '?view=mystyle-token' | json }},
-    defaultUnit: {% if localization.country.iso_code == 'US' %}"in"{% else %}"cm"{% endif %},
+    defaultUnit: "in",
     launch: {% render 'mystyle-launch-data' %}
   };
 </script>

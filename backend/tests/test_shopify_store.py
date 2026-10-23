@@ -200,6 +200,11 @@ class TestCatalogMapping:
         assert wrap["sizes_in_stock"]["L"] is True               # Chalk White L still in stock
         assert wrap["category"] == "Dresses"
 
+    def test_store_colours_take_the_brand_spelling(self):
+        """The store says "Bark brown" where the brand's colour list says
+        "Bark Brown"; customers see the brand's."""
+        assert to_engine_product(PRODUCTS[1], LaunchData(LAUNCH))["colors"] == ["Bark Brown"]
+
     def test_brand_style_tags_become_quiz_values(self):
         yoke = to_engine_product(PRODUCTS[1], LaunchData(LAUNCH))
         assert yoke["silhouettes"] == ["flowing", "a_line"]

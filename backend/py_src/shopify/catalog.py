@@ -92,6 +92,10 @@ class LaunchData:
     def color_names(self):
         return [c["name"] for c in self.colors]
 
+    def brand_spelling(self, color):
+        """A store colour in the brand's spelling ("Forest green" -> "Forest Green")."""
+        return next((c["name"] for c in self.colors if c["name"].casefold() == color.casefold()), color)
+
 
 def _option_index(options, *names):
     for index, option in enumerate(options[:3]):
@@ -134,6 +138,7 @@ def to_engine_product(raw, launch: LaunchData):
     colors, sizes, stocked = [], [], {}
     for variant in variants:
         color, size = option_value(variant, color_at), option_value(variant, size_at)
+        color = launch.brand_spelling(color) if color else color
         if color and color not in colors:
             colors.append(color)
         if size:

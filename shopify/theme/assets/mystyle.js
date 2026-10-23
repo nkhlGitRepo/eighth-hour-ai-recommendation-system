@@ -49,6 +49,24 @@
     } catch (e) { return null; }
   }
   function capitalize(text) { return String(text || '').replace(/^./, function (c) { return c.toUpperCase(); }); }
+
+  // The engine works in cm; everything she reads is in the unit she measures in
+  // (inches on this US store, unless she switches the quiz to cm).
+  function unitPref() { return saved('mystyle:unit') || C.defaultUnit || 'in'; }
+  function length(cm, unit) {
+    if (unit !== 'in') return (Math.round(cm * 10) / 10) + ' cm';
+    if (cm >= 120) {   // a height (hers or the fit model's): feet and inches
+      var inches = Math.round(cm / 2.54);
+      return Math.floor(inches / 12) + ' ft ' + (inches % 12) + ' in';
+    }
+    var halves = Math.round(cm / 2.54 * 2);
+    if (!halves) return 'under ½ in';
+    return (Math.floor(halves / 2) || '') + (halves % 2 ? '½' : '') + ' in';
+  }
+  function inUnit(text, unit) {
+    unit = unit || unitPref();
+    return String(text || '').replace(/(\d+(?:\.\d+)?) ?cm\b/g, function (m, cm) { return length(parseFloat(cm), unit); });
+  }
   function signInUrl() {
     var back = window.location.pathname + window.location.search;
     return C.loginUrl + (C.loginUrl.indexOf('?') === -1 ? '?' : '&') + 'return_url=' + encodeURIComponent(back);
@@ -183,8 +201,8 @@
         li.innerHTML = section.innerHTML;
         var item = card.item;
         var note = item.size_note || (item.recommended_size ? 'Your size: ' + item.recommended_size : '');
-        if (item.reason) li.appendChild(el('<p class="mystyle-card__reason">' + esc(item.reason) + '</p>'));
-        if (note) li.appendChild(el('<p class="mystyle-card__size' + (item.closest_available ? ' is-closest' : '') + '">' + esc(note) + '</p>'));
+        if (item.reason) li.appendChild(el('<p class="mystyle-card__reason">' + esc(inUnit(item.reason)) + '</p>'));
+        if (note) li.appendChild(el('<p class="mystyle-card__size' + (item.closest_available ? ' is-closest' : '') + '">' + esc(inUnit(note)) + '</p>'));
         if (item.in_stock_in_size === false) li.appendChild(el('<p class="mystyle-card__stock">Sold out in this size</p>'));
         list.appendChild(li);
       });
@@ -288,7 +306,7 @@
         '<button type="button" class="mystyle-link" data-select-size>Select ' + esc(size) + '</button>' +
       '</div>' +
       (fit.in_stock_in_size === false ? '<p class="mystyle-fit__stock">' + esc(size) + ' is sold out right now.</p>' : '') +
-      '<ul class="mystyle-fit__notes">' + fit.fit_notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' +
+      '<ul class="mystyle-fit__notes">' + fit.fit_notes.map(function (n) { return '<li>' + esc(inUnit(n)) + '</li>'; }).join('') + '</ul>' +
       '<details class="mystyle-fit__details"><summary>How each size fits you</summary><ul class="mystyle-bars">' + bars + '</ul></details>' +
       '<div class="mystyle-fit__feedback" data-feedback><span>Bought it? How did it fit?</span>' +
         '<button type="button" data-fit="too_tight">Too tight</button>' +
@@ -334,7 +352,7 @@
   function MyStylePage(root) {
     this.root = root;
     this.view = root.querySelector('[data-mystyle-view]');
-    this.unit = saved('mystyle:unit') || (C.defaultUnit || 'in');
+    this.unit = unitPref();
     this.session = null;
     this.profile = null;
     this.photoNote = null;
@@ -383,7 +401,7 @@
         '<p class="mystyle-step">Step 1 of 4</p>' +
         '<h2>Before we start</h2>' +
         '<label class="mystyle-check"><input type="checkbox" name="photo" required> <span><strong>I consent to photo capture and measurement extraction.</strong> If you use a photo, we use it only to estimate your measurements. Your photo is not stored.</span></label>' +
-        '<label class="mystyle-check"><input type="checkbox" name="measurements" required> <span><strong>I consent to using my measurements for personalised recommendations.</strong> Your measurements help us find your size and the styles that suit you.</span></label>' +
+        '<label class="mystyle-check"><input type="checkbox" name="measurements" required> <span><strong>I consent to using my measurements for personalized recommendations.</strong> Your measurements help us find your size and the styles that suit you.</span></label>' +
         '<p class="mystyle-muted">You can delete your style profile at any time from this page.</p>' +
         '<p class="mystyle-error" data-mystyle-error hidden></p>' +
         '<button class="button" type="submit">Continue</button>' +
@@ -550,7 +568,7 @@
     this.show(
       '<div class="mystyle-panel" data-step="shape">' +
         '<p class="mystyle-step">Step 3 of 4</p>' +
-        shapeHtml(shape) +
+        shapeHtml(shape, false, this.unit) +
         '<div class="mystyle-actions"><button type="button" class="button button--secondary" data-back>Edit measurements</button>' +
         '<button type="button" class="button" data-next>Continue to style</button></div>' +
       '</div>');
@@ -576,7 +594,7 @@
       '<form class="mystyle-panel" data-step="style">' +
         (this.profile ? '' : '<p class="mystyle-step">Step 4 of 4</p>') +
         '<h2>Your style</h2>' +
-        '<fieldset><legend>Colours you love</legend><div class="mystyle-swatches">' + colours + '</div></fieldset>' +
+        '<fieldset><legend>Colors you love</legend><div class="mystyle-swatches">' + colours + '</div></fieldset>' +
         '<fieldset><legend>Silhouettes</legend><div class="mystyle-pills">' + options('silhouette', SILHOUETTES, current.preferred_silhouettes) + '</div></fieldset>' +
         '<fieldset><legend>Occasions</legend><div class="mystyle-pills">' + options('occasion', OCCASIONS, current.occasions) + '</div></fieldset>' +
         '<p class="mystyle-error" data-mystyle-error hidden></p>' +
@@ -617,8 +635,8 @@
     };
     this.show(
       '<div class="mystyle-panel" data-step="profile">' +
-        shapeHtml(profile.shape_profile, true) +
-        '<dl class="mystyle-style"><div><dt>Colours</dt><dd>' + esc(list(style.preferred_colors)) + '</dd></div>' +
+        shapeHtml(profile.shape_profile, true, this.unit) +
+        '<dl class="mystyle-style"><div><dt>Colors</dt><dd>' + esc(list(style.preferred_colors)) + '</dd></div>' +
         '<div><dt>Silhouettes</dt><dd>' + esc(list(style.preferred_silhouettes, SILHOUETTES)) + '</dd></div>' +
         '<div><dt>Occasions</dt><dd>' + esc(list(style.occasions, OCCASIONS)) + '</dd></div></dl>' +
         '<div class="mystyle-actions">' +
@@ -655,26 +673,30 @@
       .catch(function (err) { self.view.querySelector('[data-new]').innerHTML = '<li class="mystyle-empty">' + esc(err.message) + '</li>'; });
   };
 
-  function shapeHtml(shape, compact) {
+  function shapeHtml(shape, compact, unit) {
     shape = shape || {};
     var c = shape.comparisons_cm || {};
     var diff = function (value, fuller, smaller) {
       if (value == null) return '';
-      return value === 0 ? 'the same' : Math.abs(value) + ' cm ' + (value > 0 ? fuller : smaller);
+      return value === 0 ? 'the same' : length(Math.abs(value), unit) + ' ' + (value > 0 ? fuller : smaller);
     };
     var comparisons = [
       ['Bust vs hips', c.bust_minus_hips == null ? '' : (c.bust_minus_hips === 0 ? 'Even' :
-        (c.bust_minus_hips > 0 ? 'Bust ' : 'Hips ') + Math.abs(c.bust_minus_hips) + ' cm fuller')],
+        (c.bust_minus_hips > 0 ? 'Bust ' : 'Hips ') + length(Math.abs(c.bust_minus_hips), unit) + ' fuller')],
       ['Waist vs bust', diff(c.bust_minus_waist, 'smaller', 'larger')],
       ['Waist vs hips', diff(c.hips_minus_waist, 'smaller', 'larger')]
     ].filter(function (row) { return row[1]; });
     var sizes = Object.keys(shape.size_recommendation_by_category || {}).map(function (key) {
+      var size = String(shape.size_recommendation_by_category[key]);
+      var halves = size.split('/');
+      if (halves.length === 2 && halves[0] === halves[1]) size = halves[0];   // co-ords "XS/XS" -> "XS"
       return '<li><span>' + esc(SIZE_LABELS[key] || key.replace(/([A-Z])/g, ' $1').toLowerCase()) + '</span><strong>' +
-        esc(shape.size_recommendation_by_category[key]) + '</strong></li>';
+        esc(size) + '</strong></li>';
     }).join('');
+    var summary = inUnit(shape.shape_summary, unit);
     return '<h2>' + (compact ? 'Your style profile' : 'Your shape profile') + '</h2>' +
       '<p class="mystyle-shape"><strong>' + esc(capitalize(shape.shape_class)) + '</strong></p>' +
-      (shape.shape_summary ? '<p>' + esc(shape.shape_summary) + '</p>' : '') +
+      (summary ? '<p>' + esc(summary) + '</p>' : '') +
       (comparisons.length && !compact ? '<ul class="mystyle-compare">' + comparisons.map(function (r) {
         return '<li><span>' + esc(r[0]) + '</span><strong>' + esc(r[1]) + '</strong></li>'; }).join('') + '</ul>' : '') +
       '<h3>Your sizes</h3><ul class="mystyle-sizes">' + sizes + '</ul>' +
