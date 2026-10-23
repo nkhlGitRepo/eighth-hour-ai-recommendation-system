@@ -17,7 +17,7 @@ import main
 from main import app
 from py_src.shopify import profile_token, theme_auth
 from py_src.shopify.catalog import LaunchData, to_engine_product, to_engine_products
-from py_src.shopify.rate_limit import ClientLimiter, RateLimited
+from py_src.shopify.rate_limit import ClientLimiter, PhotoScanLimiter, RateLimited
 from py_src.utils.errors import AuthError
 from py_src.constants import STANDARD_SIZE_CHART
 
@@ -100,6 +100,7 @@ def configured(monkeypatch):
     monkeypatch.setenv("MYSTYLE_THEME_SECRET", THEME_SECRET)
     monkeypatch.setenv("MYSTYLE_SERVER_KEY", SERVER_KEY)
     monkeypatch.setattr(main, "store_customer_limiter", ClientLimiter())
+    monkeypatch.setattr(main, "photo_scan_limiter", PhotoScanLimiter())
 
 
 @pytest.fixture(scope="module")
@@ -133,7 +134,7 @@ class TestCustomerToken:
         lambda: token("42", issued_at=int(time.time()) - theme_auth.TOKEN_MAX_AGE_S - 5),
         lambda: token("42", issued_at=int(time.time()) + theme_auth.FUTURE_SKEW_S + 60),
         lambda: token("42", store="some-other-store"),
-        lambda: token("42")[:-1] + "0",
+        lambda: (lambda t: t[:-1] + ("1" if t.endswith("0") else "0"))(token("42")),   # always a changed signature
         lambda: "garbage",
         lambda: "",
     ])
@@ -373,3 +374,44 @@ class TestClientLimiter:
             limiter.check("ip", "c", now=3)
         limiter.check("other-ip", "c", now=3)      # limits are per client
         limiter.check("ip", "c", now=3700)         # an hour later it clears
+
+    def test_one_customer_cannot_take_a_connection_s_whole_allowance(self):
+        limiter = ClientLimiter(requests_per_minute=100, customers_per_hour=10, customer_requests_per_minute=3)
+        for _ in range(3):
+            limiter.check("ip", "a", now=100)
+        with pytest.raises(RateLimited):
+            limiter.check("other-ip", "a", now=101)    # per customer, wherever she connects from
+        limiter.check("ip", "b", now=101)              # others on the connection are unaffected
+        limiter.check("ip", "a", now=170)              # a minute later it clears
+
+    def test_a_shared_connection_carries_many_shoppers(self):
+        """An office, campus or mobile carrier: hundreds of real customers
+        behind one address, each browsing normally."""
+        limiter = ClientLimiter()
+        for i in range(250):
+            for second in (0, 30):
+                limiter.check("shared", f"shopper-{i}", now=i * 14 + second)
+        with pytest.raises(RateLimited):
+            for i in range(250, 400):
+                limiter.check("shared", f"shopper-{i}", now=3500)
+
+
+class TestPhotoScanLimiter:
+    def test_per_customer_and_per_connection(self):
+        limiter = PhotoScanLimiter(per_customer=2, per_connection=3)
+        limiter.check("ip", "a", now=0)
+        limiter.check("ip", "a", now=1)
+        with pytest.raises(RateLimited):
+            limiter.check("ip", "a", now=2)            # her own hourly allowance
+        limiter.check("ip", "b", now=3)                # the connection's third
+        with pytest.raises(RateLimited):
+            limiter.check("ip", "c", now=4)            # the connection's allowance
+        limiter.check("other-ip", "c", now=4)
+        limiter.check("ip", "a", now=3700)             # an hour later it clears
+
+    def test_the_photo_endpoint_refuses_before_scanning(self, client, monkeypatch):
+        monkeypatch.setattr(main, "photo_scan_limiter", PhotoScanLimiter(per_customer=0))
+        r = client.post("/intake/photo-measure", headers=headers("3001"),
+                        data={"session_id": "s", "height_cm": "165"},
+                        files={"photo": ("p.jpg", b"not even a photo", "image/jpeg")})
+        assert r.status_code == 429
