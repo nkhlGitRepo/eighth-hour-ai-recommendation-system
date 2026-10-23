@@ -33,9 +33,16 @@ in the store's own type, header and product cards. Everything she reads is in in
   with her match, the reason and her size on each; guests see the pieces and an
   invitation to sign in.
 - **Fit Recommendation** under the size picker on every launch piece: her size and
-  confidence, how each size fits, fit and length notes, "Select M", and fit
-  feedback. When a piece doesn't come in her size: "Your size is XXS. This piece
-  comes in XS–L, so XS is the closest fit available."
+  confidence; **how that size fits her at each area** the garment is sized on
+  (roomy / relaxed / true to size / close / snug, from where she sits in the brand's
+  published range); how each size fits; fit and length notes; **Tips for You** —
+  which size to choose when she measures a different one at an area (weighing the
+  piece's cut and fabric), and a styling tip for her shape and the piece's
+  silhouette (`STYLING_TIPS` in `backend/py_src/constants.py`, copy the brand can
+  edit); "Select M"; and fit feedback. When a piece doesn't come in her size: "Your
+  size is XXS. This piece comes in XS–L, so XS is the closest fit available."
+  **Signed out** (e.g. arriving from an ad), it invites her to sign in and see her
+  fit, and the sign-in brings her back to the same product.
 - **Picked for you** on the home page, under "Shop by Category".
 - **The size drawer shows the October 2026 size guide**, generated from the engine's
   chart (it used to read each product's `custom.size_chart` field, which the live
