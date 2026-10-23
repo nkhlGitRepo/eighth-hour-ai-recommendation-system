@@ -178,8 +178,11 @@ EDITS = [
 def _edit_size_widget(path: Path):
     text = path.read_text()
     pattern = re.compile(r'<div class="unit-toggle">.*?<p class="note">Fit varies with each style\. Choose what feels right for you\.</p>', re.S)
-    if len(pattern.findall(text)) != 1:
+    # The table read the product's custom.size_chart field; without it, nothing does.
+    assign = "    assign size_chart = size_widget.metafields.custom.size_chart.value\n"
+    if len(pattern.findall(text)) != 1 or text.count(assign) != 1:
         raise SystemExit("sections/size-widget.liquid: the size table changed -- update shopify/build_theme.py")
+    text = text.replace(assign, "")
     path.write_text(pattern.sub("{%- render 'mystyle-size-guide', size_widget: size_widget -%}", text))
 
 
