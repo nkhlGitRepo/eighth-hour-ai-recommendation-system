@@ -42,6 +42,14 @@ history modules are complete. Photo measurement works but is deliberately weight
 - **Node.js 18+** — only if you want to run the front-end integration tests; not needed to use the site
 - No database server: persistence is SQLite, created automatically on first run
 
+This repository is public. After cloning, switch on the hooks that refuse secrets, the
+unreleased launch list and other private data at commit and push time
+(`.githooks/check_private_data.py`):
+
+```bash
+git config core.hooksPath .githooks
+```
+
 ### 1. Backend
 
 ```bash
@@ -193,6 +201,7 @@ logging in on one does not log you in on the other. Pick one and stay on it.
 |---|---|---|
 | `SIZING_PROVIDER` | `mediapipe` | Which sizing backend to use. `mediapipe` analyses the photo; `mock` returns the same fixed measurements for every image and tells the customer so. Both an unknown name and a selected-but-uninstalled `mediapipe` fail at startup rather than silently falling back. |
 | `MEDIAPIPE_POSE_MODEL` | auto-downloaded | Path to a `.task` pose model, if you'd rather supply your own than let it fetch one. |
+| `MYSTYLE_THEME_SECRET`, `MYSTYLE_SERVER_KEY` | unset (store integration off) | The Shopify store integration's secrets; see [shopify/README.md](shopify/README.md). Unset, every `/shopify/*` request is refused. Set them in the host's dashboard, never in a file here. |
 | `CATALOG_SYNC_TOKEN` | unset (sync off) | Secret a caller must send as the `X-Catalog-Sync-Token` header to use `POST /catalog/sync`, which replaces the whole catalog. Unset, the endpoint refuses every request (403); a missing or wrong header gets 401. Use a long random value, e.g. `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`. |
 
 ---
