@@ -993,6 +993,25 @@
 
   // ------------------------------------------------- New Releases
 
+  // The engine's rule for "new" (M9, NEW_RELEASES_WINDOW_DAYS in the API's
+  // constants): published within 30 days of today -- or, between drops,
+  // within 30 days of the newest launch, so the latest drop stays new until
+  // the next. Here for signed-out shoppers, who see the pieces without the
+  // API; by date, as the API counts. Newest first.
+  var NEW_WINDOW_DAYS = 30;
+  function newReleases(products) {
+    var day = 864e5;
+    var today = Date.parse(new Date().toISOString().slice(0, 10));
+    var dated = products.map(function (p) { return { p: p, t: Date.parse(String(p.published_at).slice(0, 10)) }; })
+      .filter(function (x) { return !isNaN(x.t) && x.t <= today; });
+    if (!dated.length) return [];
+    var anchor = dated.some(function (x) { return today - x.t <= NEW_WINDOW_DAYS * day; })
+      ? today : Math.max.apply(null, dated.map(function (x) { return x.t; }));
+    return dated.filter(function (x) { return anchor - x.t <= NEW_WINDOW_DAYS * day; })
+      .sort(function (a, b) { return b.t - a.t; })
+      .map(function (x) { return x.p; });
+  }
+
   function NewReleases(root) { Page.call(this, root); }
   NewReleases.prototype = Object.create(Page.prototype);
 
@@ -1009,7 +1028,7 @@
     };
     var newest = function () {
       return storeProducts().then(function (products) {
-        var items = products.filter(styleOf).sort(function (a, b) { return String(b.published_at).localeCompare(String(a.published_at)); })
+        var items = newReleases(products.filter(styleOf))
           .map(function (p) { return { handle: p.handle, category: productInfo[p.handle] && productInfo[p.handle].category }; });
         return renderCards(list, items, 'New pieces will appear here as the collection arrives.');
       });
