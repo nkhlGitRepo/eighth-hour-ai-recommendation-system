@@ -17,6 +17,11 @@ SHAPE_CATEGORY_AFFINITY = {
     "straight": {"Tops": 0.7, "Dresses": 0.7, "Skirts": 0.7, "Trousers": 0.7, "Vests": 0.7, "Co-ord Sets": 0.7},
     "balanced": {"Tops": 0.75, "Dresses": 0.75, "Skirts": 0.75, "Trousers": 0.75, "Vests": 0.75, "Co-ord Sets": 0.75},
 }
+# Jackets (the first Shopify drop includes one) cover the same half of the body
+# as tops and are chosen on the same terms, so they take the Tops affinity
+# rather than a separately invented number.
+for _affinity in SHAPE_CATEGORY_AFFINITY.values():
+    _affinity["Jackets"] = _affinity["Tops"]
 
 # Standard size ordering (XXS to XXL), matching the published size guide.
 #
@@ -269,6 +274,7 @@ FIT_SCORE_DIMENSION_WEIGHTS = {
     "Skirts": {"hips": 1.0, "waist": 0.0, "bust": 0.0},
     "Trousers": {"hips": 1.0, "waist": 0.0, "bust": 0.0},
 }
+FIT_SCORE_DIMENSION_WEIGHTS["Jackets"] = dict(FIT_SCORE_DIMENSION_WEIGHTS["Tops"])
 FIT_SCORE_DEFAULT_WEIGHTS = {"bust": 1 / 3, "waist": 1 / 3, "hips": 1 / 3}
 
 # Which measurement sizes the top half of the body (tops, dresses, vests,
@@ -395,6 +401,7 @@ FIT_NOTE_RELEVANT_DIMENSIONS = {
     "Skirts": {"waist", "hips"},
     "Trousers": {"waist", "hips"},
 }
+FIT_NOTE_RELEVANT_DIMENSIONS["Jackets"] = set(FIT_NOTE_RELEVANT_DIMENSIONS["Tops"])
 
 # New releases feed configuration
 NEW_RELEASES_MATCH_THRESHOLD = 0.65  # Minimum match score to include in feed
@@ -420,6 +427,8 @@ CATEGORY_TO_SIZE_PROFILE_KEY = {
     "Co-ord Sets": "tops",
     "Skirts": "skirts",
     "Trousers": "trousers",
+    # Sized on the bust like a top, so it shows the profile's tops size.
+    "Jackets": "tops",
 }
 
 # Recommendation engine: minimum recommendations M6 guarantees via

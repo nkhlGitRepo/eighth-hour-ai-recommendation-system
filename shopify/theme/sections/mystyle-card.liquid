@@ -1,0 +1,21 @@
+{%- comment -%}
+  MyStyle: one product card, the theme's own card-product, for assets/mystyle.js
+  to fetch with the Section Rendering API (/products/{handle}?section_id=mystyle-card).
+  Rendering it on the store means each card shows Shopify's own price and
+  availability for the shopper's market. Not placed on any template.
+{%- endcomment -%}
+{%- render 'card-product',
+  card_product: product,
+  media_aspect_ratio: 'portrait',
+  show_secondary_image: false,
+  lazy_load: false,
+  skip_styles: true,
+  section_id: section.id
+-%}
+
+{% schema %}
+{
+  "name": "My Style card",
+  "settings": []
+}
+{% endschema %}

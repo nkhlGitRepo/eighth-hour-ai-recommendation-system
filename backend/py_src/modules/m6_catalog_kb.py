@@ -126,14 +126,31 @@ class CatalogKB:
             "model_size": product.get("model_size"),
             "fit_flatterers": self._infer_fit_flatterers(product),
             "flatters_shapes": self._infer_flatters_shapes(product),
-            "silhouette_class": product.get("silhouette") or self._infer_silhouette(product),
-            "occasions": self._infer_occasions(product),
+            # A product may carry several silhouettes (the brand tags the yoke
+            # dress both "flowing" and "a_line"). silhouette_class keeps the
+            # first for callers that read a single value.
+            "silhouette_classes": self._silhouettes(product),
+            "silhouette_class": self._silhouettes(product)[0],
+            # The brand's own occasion tags when the product has them; the
+            # category-based guess only for products that don't.
+            "occasions": list(product.get("occasions") or []) or self._infer_occasions(product),
             "launched_at": product.get("launched_at"),
-            "in_stock": True,
-            "sizes_in_stock": {size: True for size in product.get("sizes", [])},
+            # Real stock when the source knows it (Shopify variants do); the
+            # local catalog file doesn't, so it keeps "everything in stock".
+            "in_stock": product.get("in_stock", True),
+            "sizes_in_stock": product.get("sizes_in_stock")
+            or {size: True for size in product.get("sizes", [])},
             "catalog_version": self.CATALOG_VERSION,
             "last_synced": self.last_synced,
         }
+
+    def _silhouettes(self, product):
+        """Explicit silhouettes (a list, or the older single field), else the
+        name-based guess -- always a non-empty list."""
+        explicit = [s for s in (product.get("silhouettes") or []) if isinstance(s, str) and s]
+        if explicit:
+            return explicit
+        return [product.get("silhouette") or self._infer_silhouette(product)]
 
     def _infer_silhouette(self, product):
         """Infer silhouette class from product name (fallback when the product
@@ -278,12 +295,17 @@ class CatalogKB:
             preferred_colors = safe_query["preferred_colors"]
             candidates = [
                 item for item in candidates
-                if any(c in preferred_colors for c in item["colors"])
+                # Ignore case: Shopify's colour option says "Forest green" where
+                # the brand's colour list says "Forest Green".
+                if any(c.casefold() in {p.casefold() for p in preferred_colors} for c in item["colors"])
             ]
 
         if "preferred_silhouettes" in active_filters and safe_query.get("preferred_silhouettes"):
             preferred_silhouettes = safe_query["preferred_silhouettes"]
-            candidates = [item for item in candidates if item["silhouette_class"] in preferred_silhouettes]
+            candidates = [
+                item for item in candidates
+                if any(s in preferred_silhouettes for s in item["silhouette_classes"])
+            ]
 
         if "occasions" in active_filters and safe_query.get("occasions"):
             occasions = safe_query["occasions"]

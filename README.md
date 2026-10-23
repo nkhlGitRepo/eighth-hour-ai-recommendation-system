@@ -828,6 +828,13 @@ actually added: that is a record of a decision, not a suggestion.
 
 ## Connecting to the Shopify storefront
 
+**Status (October 2026): built, in an unpublished copy of the eighth-hour.com
+theme — see [shopify/README.md](shopify/README.md).** It takes steps 1, 3 and 5
+below, with two differences: the theme signs the Shopify customer's id instead
+of an App Proxy (so there is no app to install), and the shopper's browser sends
+the store's products with each request instead of a catalog sync. The rest of
+this section is the reasoning, and the App Proxy upgrade path.
+
 This is the path from the local demo to the real eighth-hour.com. The short
 version: **nothing in this repo runs on Shopify.** Shopify serves Liquid templates
 and JavaScript; it does not execute Python. So the engine stays where it is, on

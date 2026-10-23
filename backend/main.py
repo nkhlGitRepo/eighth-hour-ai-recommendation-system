@@ -5,7 +5,7 @@ Runs on localhost:8000 by default.
 Website calls this API to get styling recommendations.
 """
 
-from fastapi import FastAPI, HTTPException, Query, Header, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Query, Header, Depends, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
@@ -43,6 +43,11 @@ from py_src.constants import (
     SIZE_CHART_SOURCE,
     STANDARD_SIZES,
 )
+from py_src.modules.m4_style_preference import PreferenceCapture
+from py_src.shopify import theme_auth
+from py_src.shopify import profile_token as profile_tokens
+from py_src.shopify.catalog import LaunchData, to_engine_products
+from py_src.shopify.rate_limit import ClientLimiter, RateLimited, client_address
 
 # Initialize FastAPI app
 app = FastAPI(title="AI Styling Engine", version="1.0.0")
@@ -59,6 +64,8 @@ ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+# The Shopify store's own pages call the API from the shopper's browser.
+ALLOWED_ORIGINS += [o for o in theme_auth.store_origins() if o not in ALLOWED_ORIGINS]
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +74,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(RateLimited)
+async def handle_rate_limited(request, exc: RateLimited):
+    return JSONResponse(status_code=429, content={"detail": str(exc)})
 
 
 @app.exception_handler(AuthError)
@@ -360,6 +372,36 @@ def get_current_user_id(token: str = Depends(get_bearer_token)) -> str:
     """FastAPI dependency: resolves the bearer token to a user_id, or
     raises AuthError (-> 401) if it's missing, malformed, or expired."""
     return auth_manager.get_current_user_id(token)
+
+
+# One per process, like the catalog: see py_src/shopify/rate_limit.
+store_customer_limiter = ClientLimiter()
+
+
+def get_store_customer(request: Request, x_mystyle_customer: Optional[str] = Header(None)) -> dict:
+    """
+    FastAPI dependency for the store's endpoints: the signed-in Shopify
+    customer the theme vouches for (py_src/shopify/theme_auth), or AuthError
+    (401) for a guest -- only signed-in customers can build a style profile.
+    """
+    if not x_mystyle_customer:
+        raise AuthError("Sign in to your account to use My Style")
+    store, customer_id = theme_auth.verify_customer_token(x_mystyle_customer)
+    user_id = theme_auth.user_id_for(store, customer_id)
+    store_customer_limiter.check(client_address(request), user_id)
+    return {"store": store, "customer_id": customer_id, "user_id": user_id}
+
+
+def get_intake_user_id(
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    x_mystyle_customer: Optional[str] = Header(None),
+) -> str:
+    """The photo step is shared: a store customer (signed token) or a demo
+    account (bearer token)."""
+    if x_mystyle_customer:
+        return get_store_customer(request, x_mystyle_customer)["user_id"]
+    return get_current_user_id(get_bearer_token(authorization))
 
 
 # =========================================================================
@@ -901,7 +943,7 @@ async def measure_from_photo(
     photo: UploadFile = File(...),
     usual_top_size: Optional[str] = Form(None),
     usual_bottom_size: Optional[str] = Form(None),
-    user_id: str = Depends(get_current_user_id),
+    user_id: str = Depends(get_intake_user_id),
 ):
     """
     Estimate body measurements from an uploaded photo, then generate the
@@ -1380,6 +1422,369 @@ async def get_new_releases(session_id: str, limit: int = 20):
     except Exception as err:
         logger.error("New releases feed failed", err)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =========================================================================
+# SHOPIFY STORE (theme integration)
+# =========================================================================
+#
+# Everything the store's theme calls. Identity always comes from the theme's
+# signed customer token (get_store_customer) -- never from a user id in the
+# request -- and the product list from the shopper's own browser
+# (py_src/shopify/catalog). Unlike the demo's endpoints, none of these ever
+# return a customer's measurements once she has entered them.
+
+
+class StoreCatalogPayload(BaseModel):
+    products: List[dict] = []
+    launch: dict = {}
+
+
+class StoreSessionRequest(BaseModel):
+    photo_consent: bool
+    measurement_consent: bool
+
+
+class StoreMeasurementsRequest(BaseModel):
+    session_id: str
+    bust: float
+    waist: float
+    hips: float
+    height: float
+
+
+class StorePreferencesRequest(StoreCatalogPayload):
+    session_id: str
+    preferred_colors: List[str] = []
+    preferred_silhouettes: List[str] = []
+    occasions: List[str] = []
+
+
+class StoreRecommendationsRequest(StoreCatalogPayload):
+    session_id: str
+    k: int = 10
+    category_filter: Optional[List[str]] = None
+    occasion_filter: Optional[str] = None
+
+
+class StoreNewReleasesRequest(StoreCatalogPayload):
+    session_id: str
+    limit: int = 20
+
+
+class StoreFitCheckRequest(BaseModel):
+    session_id: str
+    product: dict
+    launch: dict = {}
+
+
+class StoreFeedbackRequest(BaseModel):
+    fit_check_id: str
+    product_handle: str
+    feedback_type: str
+
+
+class StoreRestoreRequest(BaseModel):
+    profile_token: str
+
+
+class StoreAdminDeleteRequest(BaseModel):
+    store: str
+    customer_id: str
+
+
+class _ColourCatalog:
+    """
+    Just enough of a CatalogKB for PreferenceCapture: the colours on offer, one
+    spelling each. The first spelling wins, so callers list the brand's launch
+    colours ("Forest Green") ahead of the store's variant options ("Forest green").
+    """
+
+    def __init__(self, names):
+        self.by_color = {}
+        seen = set()
+        for name in names:
+            if name and name.casefold() not in seen:
+                seen.add(name.casefold())
+                self.by_color[name] = set()
+
+
+def _store_session(session_id: str, customer: dict):
+    """Her session, or 404 -- including for someone else's, so a session id
+    can't be probed."""
+    try:
+        session = intake_orchestrator.get_session(session_id)
+    except ModuleError:
+        session = None
+    if session is None or session.user_id != customer["user_id"]:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
+def _require_profile(session) -> None:
+    if not session.has_completed_profile():
+        raise HTTPException(status_code=409, detail="Finish your style profile first")
+
+
+def _store_profile(session, customer: dict, include_token: bool = False) -> dict:
+    """What the theme may see of her profile: shape, sizes, style choices --
+    no measurements. With include_token, the encrypted backup the theme keeps
+    in her browser (py_src/shopify/profile_token)."""
+    style = session.style_profile.to_dict() if session.style_profile else None
+    if style:
+        style.pop("user_id", None)
+    profile = {
+        "session_id": session.session_id,
+        "shape_profile": session.shape_profile,
+        "style_profile": style,
+    }
+    if include_token and session.body_measurements and session.style_profile:
+        profile["profile_token"] = profile_tokens.issue(
+            customer["store"], customer["customer_id"],
+            session.body_measurements.to_dict(), session.style_profile.to_dict(),
+        )
+    return profile
+
+
+def _store_catalog(payload: StoreCatalogPayload) -> CatalogKB:
+    return CatalogKB(to_engine_products(payload.products, LaunchData(payload.launch)))
+
+
+def _store_errors(action: str, err: Exception):
+    """One mapping for every store endpoint's failures."""
+    if isinstance(err, HTTPException):
+        raise err
+    if isinstance(err, (AuthError, RateLimited)):
+        raise err
+    if isinstance(err, GuardrailError):
+        raise HTTPException(status_code=403, detail=str(err))
+    if isinstance(err, ModuleError):
+        raise HTTPException(status_code=400, detail=err.message)
+    logger.error(f"Store {action} failed", err)
+    raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/shopify/session")
+async def store_create_session(request: StoreSessionRequest, customer: dict = Depends(get_store_customer)):
+    """Start a style profile, with the consent the quiz's first step records."""
+    try:
+        if not (request.photo_consent and request.measurement_consent):
+            raise HTTPException(status_code=400, detail="Both consents are needed to build a style profile")
+        session = intake_orchestrator.create_session(customer["user_id"])
+        intake_orchestrator.record_consent(session.session_id, photo_consent=True, measurement_consent=True)
+        return {"session_id": session.session_id}
+    except Exception as err:
+        _store_errors("session", err)
+
+
+@app.post("/shopify/measurements")
+async def store_confirm_measurements(request: StoreMeasurementsRequest, customer: dict = Depends(get_store_customer)):
+    """Her measurements, typed or checked after a photo scan -> her shape profile."""
+    try:
+        _store_session(request.session_id, customer)
+        session = intake_orchestrator.confirm_measurements(
+            request.session_id,
+            manual_overrides={"bust": request.bust, "waist": request.waist,
+                              "hips": request.hips, "height": request.height},
+        )
+        return {"session_id": session.session_id, "status": session.status,
+                "shape_profile": session.shape_profile}
+    except Exception as err:
+        _store_errors("measurements", err)
+
+
+@app.post("/shopify/preferences")
+async def store_capture_preferences(request: StorePreferencesRequest, customer: dict = Depends(get_store_customer)):
+    """Her style choices; completes the profile. Returns the profile and its
+    encrypted backup for her browser."""
+    try:
+        _store_session(request.session_id, customer)
+        launch = LaunchData(request.launch)
+        colours = launch.color_names() + [
+            c for product in to_engine_products(request.products, launch) for c in product["colors"]
+        ]
+        session = intake_orchestrator.capture_preferences(
+            request.session_id,
+            preferred_colors=request.preferred_colors,
+            preferred_silhouettes=request.preferred_silhouettes,
+            occasions=request.occasions,
+            preference_capture=PreferenceCapture(catalog=_ColourCatalog(colours)),
+        )
+        return {"status": session.status, "profile": _store_profile(session, customer, include_token=True)}
+    except Exception as err:
+        _store_errors("preferences", err)
+
+
+@app.get("/shopify/profile")
+async def store_get_profile(customer: dict = Depends(get_store_customer)):
+    """Her latest finished profile, or null (then the theme offers its backup
+    to /shopify/restore, or the quiz)."""
+    try:
+        session = session_repo.get_latest_completed_session_by_user(customer["user_id"])
+        return {"profile": _store_profile(session, customer) if session else None}
+    except Exception as err:
+        _store_errors("profile", err)
+
+
+@app.post("/shopify/restore")
+async def store_restore_profile(request: StoreRestoreRequest, customer: dict = Depends(get_store_customer)):
+    """Rebuild her profile from the encrypted backup in her browser, after the
+    API lost its database (free hosting wipes it on restart)."""
+    try:
+        existing = session_repo.get_latest_completed_session_by_user(customer["user_id"])
+        if existing:
+            return {"restored": False, "profile": _store_profile(existing, customer)}
+        payload = profile_tokens.read(request.profile_token, customer["store"], customer["customer_id"])
+        session = intake_orchestrator.create_session(customer["user_id"])
+        intake_orchestrator.record_consent(session.session_id, photo_consent=True, measurement_consent=True)
+        intake_orchestrator.confirm_measurements(session.session_id, manual_overrides=payload["measurements"])
+        preferences = payload["preferences"]
+        session = intake_orchestrator.capture_preferences(
+            session.session_id,
+            preferred_colors=preferences["colors"],
+            preferred_silhouettes=preferences["silhouettes"],
+            occasions=preferences["occasions"],
+            preference_capture=PreferenceCapture(catalog=_ColourCatalog(preferences["colors"])),
+        )
+        return {"restored": True, "profile": _store_profile(session, customer)}
+    except Exception as err:
+        _store_errors("restore", err)
+
+
+@app.post("/shopify/recommendations")
+async def store_recommendations(request: StoreRecommendationsRequest, customer: dict = Depends(get_store_customer)):
+    """Picked for you, from the products the theme sent."""
+    try:
+        session = _store_session(request.session_id, customer)
+        _require_profile(session)
+        engine = RecommendationEngine(_store_catalog(request), consent_tracker, fit_checker=fit_checker)
+        recommendations = engine.generate_recommendations(
+            session, k=max(1, min(request.k, 50)),
+            category_filter=request.category_filter, occasion_filter=request.occasion_filter,
+        )
+        return {"recommendations": [
+            {
+                "handle": item["slug"],
+                "name": item["name"],
+                "category": item["category"],
+                "recommended_size": item.get("recommended_size"),
+                "customer_size": item.get("customer_size"),
+                "closest_available": item.get("closest_available", False),
+                "size_note": item.get("size_note"),
+                "in_stock_in_size": item["sizes_in_stock"].get(item.get("recommended_size")),
+            }
+            for item in recommendations
+        ]}
+    except Exception as err:
+        _store_errors("recommendations", err)
+
+
+@app.post("/shopify/new-releases")
+async def store_new_releases(request: StoreNewReleasesRequest, customer: dict = Depends(get_store_customer)):
+    """New for you, from the products the theme sent."""
+    try:
+        session = _store_session(request.session_id, customer)
+        _require_profile(session)
+        feed = NewReleasesFeed(
+            catalog=_store_catalog(request), fit_checker=fit_checker, consent_tracker=consent_tracker,
+        ).generate_feed(
+            user_id=session.user_id,
+            body_shape_profile=session.shape_profile,
+            style_profile=session.style_profile.to_dict() if session.style_profile else None,
+            measurements=session.body_measurements.to_dict(),
+            limit=max(1, min(request.limit, 50)),
+        )
+        return {"items": [
+            {
+                "handle": item["sku"],
+                "name": item["name"],
+                "category": item["category"],
+                "match_score": item["match_score"],
+                "reason": item["reason"],
+                "availability": item["availability"],
+            }
+            for item in feed
+        ]}
+    except Exception as err:
+        _store_errors("new releases", err)
+
+
+@app.post("/shopify/fit-check")
+async def store_fit_check(request: StoreFitCheckRequest, customer: dict = Depends(get_store_customer)):
+    """Find my size, for the product page the theme is showing."""
+    try:
+        session = _store_session(request.session_id, customer)
+        _require_profile(session)
+        products = to_engine_products([request.product], LaunchData(request.launch))
+        if not products:
+            raise HTTPException(status_code=404, detail="This piece isn't part of My Style")
+        product = CatalogKB(products).get_item(products[0]["slug"])
+        profile_key = CATEGORY_TO_SIZE_PROFILE_KEY.get(product["category"])
+        known_size = (session.shape_profile or {}).get("size_recommendation_by_category", {}).get(profile_key)
+        fit = fit_checker.check_fit(
+            user_id=session.user_id,
+            measurements=session.body_measurements.to_dict(),
+            product=product,
+            session_id=session.session_id,
+            known_size=known_size,
+            shape_class=(session.shape_profile or {}).get("shape_class"),
+        )
+        check_id = None
+        try:
+            check_id = recommendation_history.save_fit_check(
+                user_id=session.user_id, session_id=session.session_id,
+                product_sku=product["sku"], fit_result=fit,
+            )
+        except Exception as err:
+            logger.warn("Store fit check not saved to history", {"error": str(err)})
+        return {**fit, "check_id": check_id,
+                "in_stock_in_size": product["sizes_in_stock"].get(fit["recommended_size"])}
+    except Exception as err:
+        _store_errors("fit check", err)
+
+
+@app.post("/shopify/feedback")
+async def store_fit_feedback(request: StoreFeedbackRequest, customer: dict = Depends(get_store_customer)):
+    """How a recommended size actually fitted."""
+    try:
+        return learning_loop.submit_fit_feedback(
+            user_id=customer["user_id"],
+            fit_check_id=request.fit_check_id,
+            product_sku=request.product_handle,
+            feedback_type=request.feedback_type,
+        )
+    except Exception as err:
+        _store_errors("feedback", err)
+
+
+@app.delete("/shopify/profile")
+async def store_delete_profile(customer: dict = Depends(get_store_customer)):
+    """"Delete my style profile": everything kept about her."""
+    try:
+        session_repo.delete_user_data(customer["user_id"])
+        return {"deleted": True}
+    except Exception as err:
+        _store_errors("profile deletion", err)
+
+
+@app.post("/shopify/admin/delete-customer")
+async def store_admin_delete_customer(
+    request: StoreAdminDeleteRequest,
+    x_mystyle_admin: Optional[str] = Header(None),
+):
+    """
+    For the store owner, on a customer's privacy request (Shopify only forwards
+    those to apps): delete everything kept about one store customer. Needs the
+    admin token derived from MYSTYLE_SERVER_KEY (X-MyStyle-Admin header).
+    """
+    try:
+        theme_auth.verify_admin_token(x_mystyle_admin)
+        if request.store not in theme_auth.STORES or not request.customer_id.isdigit():
+            raise HTTPException(status_code=400, detail="Unknown store or malformed customer id")
+        removed = session_repo.delete_user_data(theme_auth.user_id_for(request.store, request.customer_id))
+        return {"deleted": True, "removed": removed}
+    except Exception as err:
+        _store_errors("admin deletion", err)
 
 
 # =========================================================================

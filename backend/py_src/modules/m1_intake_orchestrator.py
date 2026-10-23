@@ -604,9 +604,14 @@ class IntakeOrchestrator:
         coverage_prefs: dict = None,
         lifestyle_context: dict = None,
         free_text_notes: str = "",
+        preference_capture=None,
     ) -> IntakeSession:
         """
         Capture user style preferences and complete intake flow.
+
+        preference_capture: optional PreferenceCapture to validate with instead
+            of this orchestrator's own -- a store's colours come from that
+            store's catalog, not the demo catalog the orchestrator was built with.
 
         Args:
             session_id: Intake session ID
@@ -634,7 +639,7 @@ class IntakeOrchestrator:
             )
 
         # Call M4 to capture and validate preferences
-        profile = self.preferences.capture_preferences(
+        profile = (preference_capture or self.preferences).capture_preferences(
             user_id=session.user_id,
             preferred_colors=preferred_colors,
             preferred_silhouettes=preferred_silhouettes,
