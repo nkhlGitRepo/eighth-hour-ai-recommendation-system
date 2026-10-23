@@ -140,14 +140,52 @@
   // ----------------------------------------------------------------- products
 
   var launchCategory = {};
+  var launchStyle = {};
   (C.launch && C.launch.styles || []).forEach(function (style) {
-    (style.skus || []).forEach(function (sku) { launchCategory[String(sku).toUpperCase()] = style.category; });
+    (style.skus || []).forEach(function (sku) {
+      launchCategory[String(sku).toUpperCase()] = style.category;
+      launchStyle[String(sku).toUpperCase()] = style;
+    });
   });
   function categoryOf(p) {
     var v = (p.variants || []).filter(function (v) { return launchCategory[String(v.sku || '').toUpperCase()]; })[0];
     return v ? launchCategory[String(v.sku).toUpperCase()] : '';
   }
   function isLaunchProduct(p) { return !!categoryOf(p); }
+
+  // The launch style a store product is, by the API's rule: every SKU on it
+  // belongs to that one style (else it isn't a My Style piece).
+  function styleOf(p) {
+    var style = null;
+    var variants = p.variants || [];
+    for (var i = 0; i < variants.length; i++) {
+      var s = launchStyle[String(variants[i].sku || '').toUpperCase()];
+      if (!s || (style && s !== style)) return null;
+      style = s;
+    }
+    return style;
+  }
+  function optionKey(value) { return String(value).trim().toLowerCase().replace(/[\s-]+/g, '_'); }
+
+  // What the quiz may offer: only colours, silhouettes and occasions that
+  // match a My Style piece she could buy now (a variant in stock), so every
+  // choice applies to something in the store.
+  function availableOptions(products) {
+    var found = { colours: {}, silhouettes: {}, occasions: {} };
+    products.forEach(function (p) {
+      var style = styleOf(p);
+      var inStock = (p.variants || []).filter(function (v) { return v.available; });
+      if (!style || !inStock.length) return;
+      var colourAt = -1;
+      (p.options || []).forEach(function (o, i) { if (/^colou?r$/i.test(o.name || '')) colourAt = i; });
+      inStock.forEach(function (v) {
+        if (colourAt >= 0 && v.options[colourAt]) found.colours[String(v.options[colourAt]).trim().toLowerCase()] = true;
+      });
+      (style.silhouettes || []).forEach(function (s) { found.silhouettes[optionKey(s)] = true; });
+      (style.occasions || []).forEach(function (o) { found.occasions[optionKey(o)] = true; });
+    });
+    return found;
+  }
 
   function slimProduct(p) {
     var tags = Array.isArray(p.tags) ? p.tags : String(p.tags || '').split(',');
@@ -333,7 +371,7 @@
   function initFit(box) {
     var product;
     try { product = JSON.parse(box.querySelector('[data-mystyle-product]').textContent); } catch (e) { return; }
-    if (!isLaunchProduct(product)) return;           // not a My Style piece
+    if (!styleOf(product)) return;                   // not a My Style piece
     var body = box.querySelector('[data-mystyle-fit-body]');
     box.hidden = false;
     var prompt = function (html) { body.innerHTML = '<p class="mystyle-fit__prompt">' + html + '</p>'; };
@@ -423,6 +461,10 @@
   function Page(root) {
     this.root = root;
     this.view = root.querySelector('[data-mystyle-view]');
+    // These pages redraw in place (each quiz step, then picks arriving). With
+    // the browser's scroll anchoring on, a step that grows after it is drawn
+    // pushed the page down past its own top.
+    document.documentElement.style.overflowAnchor = 'none';
   }
   Page.prototype.show = function (html) {
     this.view.innerHTML = html;
@@ -732,28 +774,41 @@
     this.view.querySelector('[data-next]').addEventListener('click', function () { self.showPreferences(); });
   };
 
-  // Step 4: style preferences
+  // Step 4: style preferences -- only options that apply to something in the store
   Quiz.prototype.showPreferences = function () {
+    var self = this;
+    this.card(4, '<h2>Your Style Preferences</h2><p class="mystyle-subtitle" data-status>Loading the collection…</p>');
+    storeProducts().then(function (products) { self.renderPreferences(availableOptions(products)); });
+  };
+
+  Quiz.prototype.renderPreferences = function (available) {
     var self = this;
     var current = (this.profile && this.profile.style_profile) || {};
     var picked = function (list, value) { return (list || []).some(function (v) { return String(v).toLowerCase() === String(value).toLowerCase(); }); };
-    var colours = (C.launch.colors || []).map(function (c) {
+    var colours = (C.launch.colors || []).filter(function (c) { return available.colours[String(c.name).toLowerCase()]; }).map(function (c) {
       return '<label class="mystyle-colour"><input type="checkbox" name="color" value="' + esc(c.name) + '"' + (picked(current.preferred_colors, c.name) ? ' checked' : '') + '>' +
         '<span><span class="mystyle-colour__swatch" style="background:' + esc(c.hex || '#ccc') + ';--ink:' + inkFor(c.hex) + '"></span>' +
         '<span class="mystyle-colour__name">' + esc(c.name) + '</span></span></label>';
     }).join('');
-    var options = function (name, list, chosen) {
-      return list.map(function (o) {
+    var options = function (name, list, chosen, offered) {
+      return list.filter(function (o) { return offered[o[0]]; }).map(function (o) {
         return '<label class="mystyle-option"><input type="checkbox" name="' + name + '" value="' + o[0] + '"' + (picked(chosen, o[0]) ? ' checked' : '') + '><span>' + o[1] + '</span></label>';
       }).join('');
     };
+    var group = function (legend, html, cls) {
+      return '<fieldset><legend>' + legend + '</legend>' +
+        (html ? '<div class="' + cls + '">' + html + '</div>' : '<p class="mystyle-check__note mystyle-none">None in the collection yet.</p>') + '</fieldset>';
+    };
+    var silhouettes = options('silhouette', SILHOUETTES, current.preferred_silhouettes, available.silhouettes);
+    var occasions = options('occasion', OCCASIONS, current.occasions, available.occasions);
     this.card(4,
       '<form data-form novalidate>' +
         '<h2>Your Style Preferences</h2>' +
         '<p class="mystyle-subtitle">Help us personalize recommendations by sharing your style preferences.</p>' +
-        '<fieldset><legend>Preferred Colors</legend><div class="mystyle-colours">' + colours + '</div></fieldset>' +
-        '<fieldset><legend>Preferred Silhouettes</legend><div class="mystyle-options">' + options('silhouette', SILHOUETTES, current.preferred_silhouettes) + '</div></fieldset>' +
-        '<fieldset><legend>Occasions</legend><div class="mystyle-options">' + options('occasion', OCCASIONS, current.occasions) + '</div></fieldset>' +
+        (colours || silhouettes || occasions ? '' : '<p class="mystyle-callout">Style choices will appear here as the new collection arrives. You can continue without them.</p>') +
+        group('Preferred Colors', colours, 'mystyle-colours') +
+        group('Preferred Silhouettes', silhouettes, 'mystyle-options') +
+        group('Occasions', occasions, 'mystyle-options') +
         '<p class="mystyle-error" data-error hidden></p>' +
         this.actions('Back', 'Get Recommendations') +
       '</form>');
@@ -922,19 +977,19 @@
       '<ul class="grid product-grid grid--2-col-tablet-down grid--5-col-desktop mystyle-grid" data-list></ul>');
     var list = this.view.querySelector('[data-list]');
     var banner = this.view.querySelector('[data-banner]');
-    var invite = function (text, action) {
-      banner.innerHTML = '<p class="mystyle-banner">' + text + ' <a href="' + esc(action[1]) + '">' + esc(action[0]) + '</a></p>';
+    var invite = function (action, text) {
+      banner.innerHTML = '<p class="mystyle-banner"><a href="' + esc(action[1]) + '">' + esc(action[0]) + '</a> ' + text + '</p>';
     };
     var newest = function () {
       return storeProducts().then(function (products) {
-        var items = products.slice().sort(function (a, b) { return String(b.published_at).localeCompare(String(a.published_at)); })
+        var items = products.filter(styleOf).sort(function (a, b) { return String(b.published_at).localeCompare(String(a.published_at)); })
           .map(function (p) { return { handle: p.handle, category: productInfo[p.handle] && productInfo[p.handle].category }; });
         return renderCards(list, items, 'New pieces will appear here as the collection arrives.');
       });
     };
-    if (!token) { invite('Sign in to see how each piece matches your shape and style.', ['Sign in', signInUrl()]); newest(); return; }
+    if (!token) { invite(['Sign in', signInUrl()], 'to see how each piece matches your shape and style.'); newest(); return; }
     loadProfile(function () { self.slow(); }).then(function (profile) {
-      if (!profile) { invite('Build your style profile to see your match and size for each piece.', ['Get your style profile', C.pageUrl]); return newest(); }
+      if (!profile) { invite(['Build your style profile', C.pageUrl], 'to see your match and size for each piece.'); return newest(); }
       self.view.querySelector('[data-subtitle]').textContent = 'Matched to your shape and style';
       return storeProducts().then(function (products) {
         return api('/shopify/new-releases', { method: 'POST', onSlow: function () { self.slow(); },

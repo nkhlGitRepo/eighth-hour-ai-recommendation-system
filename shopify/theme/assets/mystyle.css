@@ -18,7 +18,8 @@
   color: var(--ms-text);
 }
 .mystyle [hidden] { display: none !important; }
-.mystyle-page { padding-top: 4.8rem; padding-bottom: 6.4rem; }
+/* scroll-margin: when a step changes, its top clears the sticky header. */
+.mystyle-page { padding-top: 4.8rem; padding-bottom: 6.4rem; scroll-margin-top: 12rem; }
 
 /* ------------------------------------------------------------ shared bits */
 
@@ -165,7 +166,7 @@
 
 /* Complete */
 .mystyle-complete { text-align: center; }
-.mystyle-complete__tick { margin: 0 0 1.6rem; font-size: 4.8rem; line-height: 1; }
+.mystyle-complete .mystyle-complete__tick { margin: 0 0 1.6rem; font-size: 4.8rem; line-height: 1; }
 .mystyle-complete h2 { font-size: 2.88rem; }
 .mystyle-complete > p { margin: 0 0 3.2rem; font-size: 1.5rem; }
 .mystyle-preview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.6rem; margin: 0; padding: 0; list-style: none; text-align: left; }
@@ -177,7 +178,7 @@
 .mystyle-preview__price { font-size: 1.36rem; }
 .mystyle-preview a:hover .mystyle-preview__name { text-decoration: underline; }
 .mystyle-complete .mystyle-actions { margin-top: 3.2rem; }
-.mystyle-complete .mystyle-actions .mystyle-btn { flex: 1; }
+.mystyle-complete .mystyle-actions .mystyle-btn { flex: 1 1 auto; padding: 0 2rem; white-space: nowrap; }
 .mystyle-complete .mystyle-text-link { margin-top: 2.4rem; }
 
 /* ------------------------------------------------- product cards in grids */
@@ -208,6 +209,11 @@
 .mystyle-profile-card dt { margin: 0 0 0.4rem; font-size: 1.2rem; color: var(--ms-muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .mystyle-profile-card dd { margin: 0; font-size: 1.52rem; font-weight: 600; }
 .mystyle-side-links { margin: 1.6rem 0 0; font-size: 1.44rem; }
+/* Narrow screens: the profile in two columns, so the picks aren't pushed far down. */
+@media (max-width: 989px) {
+  .mystyle-profile-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.6rem 2rem; }
+  .mystyle-profile-card div { margin: 0; padding: 0; border: 0; }
+}
 .mystyle-recs__main .mystyle-page-header { margin-bottom: 3.2rem; }
 
 /* ------------------------------------------- product page: fit panel */

@@ -7,6 +7,19 @@
   record of her profile (assets/mystyle.js keeps them right as it changes).
   Usage: {% render 'mystyle-nav-link', variant: 'desktop' %} or 'drawer'.
 {%- endcomment -%}
+{%- if variant != 'drawer' -%}
+  {%- comment -%} Six items instead of three: keep the desktop menu on one line down to 990px, where the theme switches to its drawer. {%- endcomment -%}
+  <style>
+    @media screen and (min-width: 990px) and (max-width: 1399px) {
+      .header__inline-menu .list-menu--inline { flex-wrap: nowrap; column-gap: 2rem; }
+      .header__inline-menu .header__menu-item { padding-left: 0.8rem; padding-right: 0.8rem; font-size: 1.5rem; white-space: nowrap; }
+    }
+    @media screen and (min-width: 990px) and (max-width: 1149px) {
+      .header__inline-menu .list-menu--inline { column-gap: 1rem; }
+      .header__inline-menu .header__menu-item { padding-left: 0.5rem; padding-right: 0.5rem; font-size: 1.35rem; }
+    }
+  </style>
+{%- endif -%}
 {%- assign mystyle_links = 'style|My Style|mystyle,new|New Releases|mystyle-new,recommendations|My Recommendations|mystyle-recommendations' | split: ',' -%}
 {%- for entry in mystyle_links -%}
   {%- assign parts = entry | split: '|' -%}

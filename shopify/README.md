@@ -14,21 +14,40 @@ team decides when that theme goes live.
 
 ## What the working copy adds
 
-- **My Style page** at `/collections/all?view=mystyle`: for signed-in customers, the
-  style profile quiz (typed measurements in inches or cm, or a photo), then her
-  profile, **Picked for you** and **New for you**. Guests are asked to sign in.
-- **Find my size** under the size picker on every launch piece: her size, how each
-  size fits, fit and length notes, "Select M", and fit feedback. When a piece doesn't
-  come in her size: "Your size is XXS. This piece comes in XS–L, so XS is the
-  closest fit available."
+The pages follow the original MyStyle storefront (`Base_Website/` in this repo),
+in the store's own type, header and product cards. Everything she reads is in inches
+(she can switch the quiz to cm).
+
+- **Header links** after "Shop", on desktop and mobile: **My Style** (it reads
+  **Update Style** once she has a profile), **New Releases**, and **My
+  Recommendations** (shown once she has a profile).
+- **My Style** — `/collections/all?view=mystyle`: the five-step style profile
+  (Consent, Measurements — typed or from a photo — Shape Profile, Style Prefs,
+  Complete with a first look at her picks). Update Style opens it at Style Prefs
+  (`&step=style`) with her choices filled in. Guests are asked to sign in. The style
+  step offers **only colours, silhouettes and occasions found on a piece in stock**,
+  so every choice applies to something; more appear as pieces are uploaded.
+- **My Recommendations** — `/collections/all?view=mystyle-recommendations`:
+  category filters and her profile (shape, sizes, style choices) beside her picks.
+- **New Releases** — `/collections/all?view=mystyle-new`: the first-drop pieces
+  with her match, the reason and her size on each; guests see the pieces and an
+  invitation to sign in.
+- **Fit Recommendation** under the size picker on every launch piece: her size and
+  confidence, how each size fits, fit and length notes, "Select M", and fit
+  feedback. When a piece doesn't come in her size: "Your size is XXS. This piece
+  comes in XS–L, so XS is the closest fit available."
 - **Picked for you** on the home page, under "Shop by Category".
-- **My Style** at the end of the header menu (desktop and mobile).
 - **The size drawer shows the October 2026 size guide**, generated from the engine's
   chart (it used to read each product's `custom.size_chart` field, which the live
   theme also uses, so those fields are left alone).
 
 Everything lives in theme files: `shopify/theme/` (new files) plus six small, anchored
 edits to the brand's files, listed in `build_theme.py`.
+
+**Fit feedback** ("Share Your Fit Feedback") is saved against her anonymous id, the
+product and the size check. Nothing reads it yet — using it to adjust her sizes is a
+planned engine feature — and on the free hosting it's lost whenever the API
+restarts.
 
 ## How it works
 
@@ -93,8 +112,8 @@ test profile from the My Style page afterwards.
 Nothing to change: My Style reads the store's products live and picks up the first-drop
 pieces by SKU as they appear. Check:
 
-1. The nine styles show **Find my size** on their product pages.
-2. Picked for you / New for you show them on the My Style page.
+1. The nine styles show **Fit Recommendation** on their product pages.
+2. My Recommendations and New Releases show them, and their colours appear in the quiz.
 3. If a piece is uploaded with a SKU the sheet doesn't list, add it to its style in
    `shopify/private/mystyle-launch-data.liquid`, rebuild and push.
 
