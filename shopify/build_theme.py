@@ -158,20 +158,23 @@ def _edit_index_json(path: Path):
 EDITS = [
     ("layout/theme.liquid", "  </head>",
      "    {%- comment -%} MyStyle: keep its pages out of search results {%- endcomment -%}\n"
-     "    {%- if template.suffix == 'mystyle' or template.suffix == 'mystyle-token' -%}<meta name=\"robots\" content=\"noindex\">{%- endif -%}\n"
+     "    {%- if template.suffix contains 'mystyle' -%}<meta name=\"robots\" content=\"noindex\">{%- endif -%}\n"
      "  </head>"),
     ("layout/theme.liquid", "  </body>",
      "    {%- comment -%} MyStyle: settings and script, on the pages that use it {%- endcomment -%}\n"
-     "    {%- if template.name == 'product' or template.name == 'index' or template.suffix == 'mystyle' -%}{%- render 'mystyle-config' -%}{%- endif -%}\n"
+     "    {%- if template.name == 'product' or template.name == 'index' or template.suffix contains 'mystyle' -%}{%- render 'mystyle-config' -%}{%- endif -%}\n"
      "  </body>"),
     ("sections/main-product.liquid",
      "{% render 'product-variant-picker', product: product, block: block, product_form_id: product_form_id %}\n",
      "{% render 'product-variant-picker', product: product, block: block, product_form_id: product_form_id %}\n"
      "                {% render 'mystyle-find-my-size', product: product %}\n"),
-    ("snippets/header-dropdown-menu.liquid", "    {%- endfor -%}\n  </ul>\n</nav>",
-     "    {%- endfor -%}\n    {%- render 'mystyle-nav-link', variant: 'desktop' -%}\n  </ul>\n</nav>"),
-    ("snippets/header-drawer.liquid", "              {%- endfor -%}\n            </ul>\n          </nav>",
-     "              {%- endfor -%}\n              {%- render 'mystyle-nav-link', variant: 'drawer' -%}\n            </ul>\n          </nav>"),
+    # MyStyle's links straight after the menu's first item ("Shop").
+    ("snippets/header-dropdown-menu.liquid", "      {%- endif -%}\n    {%- endfor -%}\n  </ul>\n</nav>",
+     "      {%- endif -%}\n      {%- if forloop.first -%}{%- render 'mystyle-nav-link', variant: 'desktop' -%}{%- endif -%}\n"
+     "    {%- endfor -%}\n  </ul>\n</nav>"),
+    ("snippets/header-drawer.liquid", "                </li>\n              {%- endfor -%}\n            </ul>\n          </nav>",
+     "                </li>\n                {%- if forloop.first -%}{%- render 'mystyle-nav-link', variant: 'drawer' -%}{%- endif -%}\n"
+     "              {%- endfor -%}\n            </ul>\n          </nav>"),
 ]
 
 

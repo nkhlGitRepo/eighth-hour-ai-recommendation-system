@@ -3,12 +3,17 @@
  *
  * Config comes from snippets/mystyle-config.liquid (window.MyStyleConfig): the
  * API address, the signed-in customer's token (Liquid signs it server-side; a
- * guest has none), the sign-in URL and the brand's launch data.
+ * guest has none), the page addresses and the brand's launch data.
  *
  * What it drives, wherever the markup is on the page:
- *   [data-mystyle-page]   the My Style page: quiz, profile, Picked for you, New for you
- *   [data-mystyle-fit]    Find my size, on product pages
- *   [data-mystyle-picks]  Picked for you, on the home page
+ *   [data-mystyle-page="style"]            My Style: the five-step style profile
+ *                                          (the header calls it Update Style once
+ *                                          she has one)
+ *   [data-mystyle-page="recommendations"]  My Recommendations
+ *   [data-mystyle-page="new"]              New Releases
+ *   [data-mystyle-fit]                     Fit Recommendation, on product pages
+ *   [data-mystyle-picks]                   Picked for you, on the home page
+ *   [data-mystyle-nav]                     the header links (snippets/mystyle-nav-link)
  *
  * Products are read from the store itself (/products.json), in the shopper's
  * browser, and sent with each request -- so prices, stock and newly uploaded
@@ -23,9 +28,12 @@
 
   var SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'];
   var SIZE_LABELS = { tops: 'tops', skirts: 'skirts', dresses: 'dresses', trousers: 'trousers', vests: 'vests', coOrds: 'co-ords' };
+  var CATEGORY_ORDER = ['Tops', 'Skirts', 'Dresses', 'Vests', 'Trousers', 'Co-ord Sets', 'Jackets'];
   var SILHOUETTES = [['fitted', 'Fitted'], ['flowing', 'Flowing'], ['straight', 'Straight'], ['a_line', 'A-Line'], ['oversized', 'Oversized']];
   var OCCASIONS = [['work', 'Work'], ['casual', 'Casual'], ['evening', 'Evening'], ['weekend', 'Weekend']];
+  var STEPS = ['Consent', 'Measurements', 'Shape Profile', 'Style Prefs', 'Complete'];
   var RANGES_CM = { bust: [70, 150], waist: [55, 130], hips: [80, 160], height: [140, 210] };
+  var EXAMPLES = { in: { bust: 35, waist: 28, hips: 40, height: 65 }, cm: { bust: 88, waist: 70, hips: 102, height: 165 } };
   var PHOTO_LONGEST_SIDE_PX = 1600;
   var BACKUP_KEY = 'mystyle:profile:' + (C.customerId || 'guest');
   var SLOW_MS = 4000;
@@ -49,6 +57,10 @@
     } catch (e) { return null; }
   }
   function capitalize(text) { return String(text || '').replace(/^./, function (c) { return c.toUpperCase(); }); }
+  function withParam(url, param) { return url + (url.indexOf('?') === -1 ? '?' : '&') + param; }
+  function signInUrl() {
+    return withParam(C.loginUrl, 'return_url=' + encodeURIComponent(window.location.pathname + window.location.search));
+  }
 
   // The engine works in cm; everything she reads is in the unit she measures in
   // (inches on this US store, unless she switches the quiz to cm).
@@ -67,9 +79,24 @@
     unit = unit || unitPref();
     return String(text || '').replace(/(\d+(?:\.\d+)?) ?cm\b/g, function (m, cm) { return length(parseFloat(cm), unit); });
   }
-  function signInUrl() {
-    var back = window.location.pathname + window.location.search;
-    return C.loginUrl + (C.loginUrl.indexOf('?') === -1 ? '?' : '&') + 'return_url=' + encodeURIComponent(back);
+
+  // products.json prices are in the store's currency; show them in the
+  // shopper's, as the theme does.
+  function money(amount) {
+    var currency = window.Shopify && Shopify.currency || {};
+    var value = parseFloat(amount) * (parseFloat(currency.rate) || 1);
+    if (isNaN(value)) return '';
+    try {
+      return new Intl.NumberFormat(document.documentElement.lang || 'en-US', { style: 'currency', currency: currency.active || 'USD' }).format(value);
+    } catch (e) { return value.toFixed(2); }
+  }
+
+  // Ink that reads against a colour swatch, for the tick on a chosen one.
+  function inkFor(hex) {
+    var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+    if (!m) return '#ffffff';
+    var light = (0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16)) / 255;
+    return light > 0.6 ? '#121212' : '#ffffff';
   }
 
   // ---------------------------------------------------------------------- API
@@ -79,7 +106,7 @@
   var token = C.token || null;
 
   function freshToken() {
-    return fetch(C.tokenUrl + (C.tokenUrl.indexOf('?') === -1 ? '?' : '&') + '_=' + Date.now(), { credentials: 'same-origin' })
+    return fetch(withParam(C.tokenUrl, '_=' + Date.now()), { credentials: 'same-origin' })
       .then(function (r) { return r.text(); })
       .then(function (text) { token = (JSON.parse(text) || {}).token || null; return token; })
       .catch(function () { return null; });
@@ -112,10 +139,15 @@
 
   // ----------------------------------------------------------------- products
 
-  var launchSkus = {};
+  var launchCategory = {};
   (C.launch && C.launch.styles || []).forEach(function (style) {
-    (style.skus || []).forEach(function (sku) { launchSkus[String(sku).toUpperCase()] = true; });
+    (style.skus || []).forEach(function (sku) { launchCategory[String(sku).toUpperCase()] = style.category; });
   });
+  function categoryOf(p) {
+    var v = (p.variants || []).filter(function (v) { return launchCategory[String(v.sku || '').toUpperCase()]; })[0];
+    return v ? launchCategory[String(v.sku).toUpperCase()] : '';
+  }
+  function isLaunchProduct(p) { return !!categoryOf(p); }
 
   function slimProduct(p) {
     var tags = Array.isArray(p.tags) ? p.tags : String(p.tags || '').split(',');
@@ -131,10 +163,10 @@
       })
     };
   }
-  function isLaunchProduct(p) {
-    return (p.variants || []).some(function (v) { return launchSkus[String(v.sku || '').toUpperCase()]; });
-  }
 
+  // What the theme shows of a piece outside a product card (the quiz's
+  // preview): handle -> { title, image, price, category, published }.
+  var productInfo = {};
   var productsPromise = null;
   function storeProducts() {
     if (!productsPromise) {
@@ -143,7 +175,16 @@
           .then(function (r) { return r.ok ? r.json() : { products: [] }; })
           .then(function (data) {
             var products = data.products || [];
-            products.filter(isLaunchProduct).forEach(function (p) { found.push(slimProduct(p)); });
+            products.filter(isLaunchProduct).forEach(function (p) {
+              productInfo[p.handle] = {
+                title: p.title,
+                image: p.images && p.images[0] && p.images[0].src,
+                price: p.variants && p.variants[0] && p.variants[0].price,
+                category: categoryOf(p),
+                published: p.published_at
+              };
+              found.push(slimProduct(p));
+            });
             return products.length === 250 && page < 8 ? load(page + 1, found) : found;
           });
       })(1, []).catch(function () { return []; });
@@ -166,6 +207,10 @@
         return api('/shopify/restore', { method: 'POST', body: { profile_token: backup }, onSlow: onSlow })
           .then(function (r) { return r.profile; })
           .catch(function (err) { if (err.status === 401) saved(BACKUP_KEY, null); return null; });
+      }).then(function (profile) {
+        if (profile && profile.profile_token) saved(BACKUP_KEY, profile.profile_token);
+        updateNav(!!profile);
+        return profile;
       });
       profilePromise.catch(function () { profilePromise = null; });
     }
@@ -174,13 +219,34 @@
   function rememberProfile(profile) {
     if (profile && profile.profile_token) saved(BACKUP_KEY, profile.profile_token);
     profilePromise = Promise.resolve(profile);
+    updateNav(!!profile);
+  }
+  function forgetProfile() {
+    saved(BACKUP_KEY, null);
+    profilePromise = Promise.resolve(null);
+    updateNav(false);
   }
 
-  // -------------------------------------------------------------------- cards
+  // The header's links (snippets/mystyle-nav-link.liquid sets them from this
+  // browser's backup on every page; this keeps them right as she changes it).
+  function updateNav(hasProfile) {
+    document.querySelectorAll('[data-mystyle-nav="style"]').forEach(function (a) {
+      a.setAttribute('href', hasProfile ? withParam(C.pageUrl, 'step=style') : C.pageUrl);
+      var label = a.querySelector('[data-mystyle-nav-label]') || a;
+      label.textContent = hasProfile ? 'Update Style' : 'My Style';
+    });
+    document.querySelectorAll('[data-mystyle-nav="recommendations"]').forEach(function (a) {
+      (a.closest('li') || a).style.display = hasProfile ? '' : 'none';
+    });
+  }
+
+  // ------------------------------------------------------------- product cards
 
   // The theme's own product card, via the Section Rendering API, so a
   // recommendation looks exactly like any other product on the site and shows
-  // Shopify's own price for this shopper's market.
+  // Shopify's own price for this shopper's market. Each item: { handle, match,
+  // category, reason, size, sizeTone, soldOut }; the extra lines go inside the
+  // card's text column so they line up with its name and price.
   function renderCards(list, items, emptyText) {
     list.innerHTML = '';
     if (!items.length) {
@@ -195,47 +261,49 @@
     })).then(function (cards) {
       cards.forEach(function (card) {
         if (!card.html) return;                  // not available in this market
+        var item = card.item;
         var li = el('<li class="grid__item mystyle-card"></li>');
+        li.dataset.category = item.category || '';
         var doc = new DOMParser().parseFromString(card.html, 'text/html');
         var section = doc.querySelector('.shopify-section') || doc.body;
         li.innerHTML = section.innerHTML;
-        var item = card.item;
-        var note = item.size_note || (item.recommended_size ? 'Your size: ' + item.recommended_size : '');
-        if (item.reason) li.appendChild(el('<p class="mystyle-card__reason">' + esc(inUnit(item.reason)) + '</p>'));
-        if (note) li.appendChild(el('<p class="mystyle-card__size' + (item.closest_available ? ' is-closest' : '') + '">' + esc(inUnit(note)) + '</p>'));
-        if (item.in_stock_in_size === false) li.appendChild(el('<p class="mystyle-card__stock">Sold out in this size</p>'));
+        var info = (li.querySelector('.price') || li).closest('.card__information') || li;
+        var heading = info.querySelector('.card__heading');
+        if (item.match != null && heading) {
+          heading.parentNode.insertBefore(el('<p class="mystyle-card__match">' + Math.round(item.match * 100) + '% match</p>'), heading);
+        }
+        if (item.category && heading) heading.insertAdjacentElement('afterend', el('<p class="mystyle-card__category">' + esc(item.category) + '</p>'));
+        if (item.reason) info.appendChild(el('<p class="mystyle-card__reason">' + esc(inUnit(item.reason)) + '</p>'));
+        if (item.size) info.appendChild(el('<p class="mystyle-card__size' + (item.sizeTone ? ' is-' + item.sizeTone : '') + '">' + esc(inUnit(item.size)) + '</p>'));
+        if (item.soldOut) info.appendChild(el('<p class="mystyle-card__stock">Sold out in this size</p>'));
         list.appendChild(li);
       });
       if (!list.children.length) list.appendChild(el('<li class="mystyle-empty">' + esc(emptyText) + '</li>'));
     });
   }
 
-  function loadPicks(profile, list, k, onSlow) {
+  function getPicks(profile, k, onSlow) {
     return storeProducts().then(function (products) {
       return api('/shopify/recommendations', {
         method: 'POST', onSlow: onSlow,
         body: { session_id: profile.session_id, k: k, products: products, launch: C.launch }
       });
-    }).then(function (data) {
-      return renderCards(list, data.recommendations, 'Your picks will appear here as the new collection arrives.');
-    });
+    }).then(function (data) { return data.recommendations; });
   }
-  function loadNew(profile, list, limit, onSlow) {
-    return storeProducts().then(function (products) {
-      return api('/shopify/new-releases', {
-        method: 'POST', onSlow: onSlow,
-        body: { session_id: profile.session_id, limit: limit, products: products, launch: C.launch }
-      });
-    }).then(function (data) {
-      return renderCards(list, data.items.map(function (i) {
-        var a = i.availability || {};
-        return { handle: i.handle, reason: i.reason, recommended_size: a.recommended_size,
-                 closest_available: a.closest_available, size_note: a.size_note };
-      }), 'New pieces matched to you will appear here.');
-    });
+  function sizeLine(item, prefix) {
+    if (item.closest_available && item.size_note) return { size: item.size_note, sizeTone: 'closest' };
+    return { size: item.recommended_size ? prefix + item.recommended_size : '', sizeTone: '' };
+  }
+  function pickCard(profile, item) {
+    var line = sizeLine(item, 'Your size: ');
+    return {
+      handle: item.handle, category: item.category,
+      reason: 'Suits your ' + (profile.shape_profile.shape_class || 'body') + ' shape',
+      size: line.size, sizeTone: line.sizeTone, soldOut: item.in_stock_in_size === false
+    };
   }
 
-  // ------------------------------------------------------------ find my size
+  // ------------------------------------------------------ product page: fit
 
   function selectSize(scope, size) {
     var form = scope.closest('product-info, .product, main') || document;
@@ -268,18 +336,13 @@
     if (!isLaunchProduct(product)) return;           // not a My Style piece
     var body = box.querySelector('[data-mystyle-fit-body]');
     box.hidden = false;
+    var prompt = function (html) { body.innerHTML = '<p class="mystyle-fit__prompt">' + html + '</p>'; };
 
-    if (!token) {
-      body.innerHTML = '<p class="mystyle-fit__prompt"><a href="' + esc(signInUrl()) + '">Sign in</a> to see the size that fits you best.</p>';
-      return;
-    }
-    body.innerHTML = '<p class="mystyle-muted">Finding your size…</p>';
-    loadProfile(function () { body.innerHTML = '<p class="mystyle-muted">Waking up My Style — this can take up to a minute.</p>'; })
+    if (!token) { prompt('<a href="' + esc(signInUrl()) + '">Sign in</a> to see the size that fits you best.'); return; }
+    prompt('Finding your size…');
+    loadProfile(function () { prompt('Waking up My Style — this can take up to a minute.'); })
       .then(function (profile) {
-        if (!profile) {
-          body.innerHTML = '<p class="mystyle-fit__prompt"><a href="' + esc(C.pageUrl) + '">Build your style profile</a> to see the size that fits you best.</p>';
-          return null;
-        }
+        if (!profile) { prompt('<a href="' + esc(C.pageUrl) + '">Build your style profile</a> to see the size that fits you best.'); return null; }
         return api('/shopify/fit-check', {
           method: 'POST',
           body: { session_id: profile.session_id, product: slimProduct(product), launch: C.launch }
@@ -287,42 +350,48 @@
       })
       .catch(function (err) {
         if (err.status === 404) { box.hidden = true; return; }
-        body.innerHTML = '<p class="mystyle-muted">' + esc(err.message) + '</p>';
+        prompt(esc(err.message));
       });
   }
 
   function renderFit(box, body, fit) {
     var size = fit.recommended_size;
-    var label = fit.closest_available ? 'Closest available size' : 'Your size';
     var bars = SIZE_ORDER.filter(function (s) { return s in fit.fit_scores; }).map(function (s) {
       var pct = Math.round(fit.fit_scores[s] * 100);
-      return '<li class="' + (s === size ? 'is-recommended' : '') + '"><span>' + esc(s) + '</span>' +
+      return '<li' + (s === size ? ' class="is-recommended"' : '') + '><span>' + esc(s) + '</span>' +
         '<span class="mystyle-bar"><span style="width:' + pct + '%"></span></span><span>' + pct + '%</span></li>';
     }).join('');
     body.innerHTML =
-      '<div class="mystyle-fit__result">' +
-        '<span class="mystyle-fit__label">' + esc(label) + '</span>' +
+      '<div class="mystyle-fit__hero">' +
+        '<span class="mystyle-label">' + (fit.closest_available ? 'Closest available size' : 'Recommended size') + '</span>' +
         '<span class="mystyle-fit__size">' + esc(size) + '</span>' +
+        (fit.confidence != null ? '<span class="mystyle-pill">' + Math.round(fit.confidence * 100) + '% confidence</span>' : '') +
         '<button type="button" class="mystyle-link" data-select-size>Select ' + esc(size) + '</button>' +
       '</div>' +
       (fit.in_stock_in_size === false ? '<p class="mystyle-fit__stock">' + esc(size) + ' is sold out right now.</p>' : '') +
-      '<ul class="mystyle-fit__notes">' + fit.fit_notes.map(function (n) { return '<li>' + esc(inUnit(n)) + '</li>'; }).join('') + '</ul>' +
-      '<details class="mystyle-fit__details"><summary>How each size fits you</summary><ul class="mystyle-bars">' + bars + '</ul></details>' +
-      '<div class="mystyle-fit__feedback" data-feedback><span>Bought it? How did it fit?</span>' +
-        '<button type="button" data-fit="too_tight">Too tight</button>' +
-        '<button type="button" data-fit="perfect">Just right</button>' +
-        '<button type="button" data-fit="too_loose">Too loose</button></div>';
+      '<p class="mystyle-fit__sub">How each size fits you:</p>' +
+      '<ul class="mystyle-bars">' + bars + '</ul>' +
+      '<p class="mystyle-fit__sub">Fit Details</p>' +
+      '<ul class="mystyle-ticks">' + fit.fit_notes.map(function (n) { return '<li>' + esc(inUnit(n)) + '</li>'; }).join('') + '</ul>' +
+      '<div class="mystyle-fit__feedback" data-feedback>' +
+        '<button type="button" class="mystyle-btn mystyle-btn--secondary mystyle-btn--small" data-open>Share Your Fit Feedback</button></div>';
     body.querySelector('[data-select-size]').addEventListener('click', function () {
       if (!selectSize(box, size)) this.textContent = 'Choose ' + size + ' above';
     });
     var feedback = body.querySelector('[data-feedback]');
+    feedback.querySelector('[data-open]').addEventListener('click', function () {
+      feedback.innerHTML = '<p>Bought it? How did it fit?</p><div class="mystyle-fit__choices">' +
+        '<button type="button" class="mystyle-btn mystyle-btn--secondary mystyle-btn--small" data-fit="too_tight">Too tight</button>' +
+        '<button type="button" class="mystyle-btn mystyle-btn--secondary mystyle-btn--small" data-fit="perfect">Just right</button>' +
+        '<button type="button" class="mystyle-btn mystyle-btn--secondary mystyle-btn--small" data-fit="too_loose">Too loose</button></div>';
+    });
     feedback.addEventListener('click', function (e) {
       var choice = e.target.closest('[data-fit]');
       if (!choice || !fit.check_id) return;
       api('/shopify/feedback', { method: 'POST', body: {
         fit_check_id: fit.check_id, product_handle: fit.product_sku, feedback_type: choice.dataset.fit } })
-        .then(function () { feedback.innerHTML = '<span>Thanks — that helps us size the next piece.</span>'; })
-        .catch(function (err) { feedback.innerHTML = '<span>' + esc(err.message) + '</span>'; });
+        .then(function () { feedback.innerHTML = '<p>Thanks — that helps us size the next piece.</p>'; })
+        .catch(function (err) { feedback.innerHTML = '<p>' + esc(err.message) + '</p>'; });
     });
   }
 
@@ -342,118 +411,185 @@
         intro.innerHTML = 'Answer a few questions and we’ll pick pieces for your shape and style. <a href="' + esc(C.pageUrl) + '">Build your style profile</a>';
         return;
       }
-      intro.textContent = 'Chosen for your ' + (profile.shape_profile.shape_class || '') + ' shape and your style.';
-      return loadPicks(profile, list, Number(section.dataset.count) || 4);
+      intro.innerHTML = 'Chosen for your ' + esc(profile.shape_profile.shape_class || '') + ' shape and your style. <a href="' + esc(C.recommendationsUrl) + '">See all your recommendations</a>';
+      return getPicks(profile, Number(section.dataset.count) || 4).then(function (items) {
+        return renderCards(list, items.map(function (i) { return pickCard(profile, i); }), 'Your picks will appear here as the new collection arrives.');
+      });
     }).catch(function () { section.hidden = true; });
   }
 
-  // --------------------------------------------------------- the My Style page
+  // ------------------------------------------------------- page scaffolding
 
-  function MyStylePage(root) {
+  function Page(root) {
     this.root = root;
     this.view = root.querySelector('[data-mystyle-view]');
+  }
+  Page.prototype.show = function (html) {
+    this.view.innerHTML = html;
+    if (this.shown && this.root.getBoundingClientRect().top < 0) this.root.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    this.shown = true;
+  };
+  Page.prototype.notice = function (title, text, action) {
+    this.show('<div class="mystyle-notice"><h1>' + esc(title) + '</h1><p class="mystyle-subtitle">' + text + '</p>' +
+      (action ? '<a class="mystyle-btn" href="' + esc(action[1]) + '">' + esc(action[0]) + '</a>' : '') + '</div>');
+  };
+  Page.prototype.slow = function () {
+    var status = this.view.querySelector('[data-status]');
+    if (status) status.textContent = 'Waking up My Style — this can take up to a minute the first time.';
+  };
+  Page.prototype.error = function (err) {
+    var box = this.view.querySelector('[data-error]');
+    if (box) { box.textContent = err.message || String(err); box.hidden = false; }
+  };
+  var LOADING = '<div class="mystyle-notice"><p class="mystyle-subtitle" data-status>Loading your style profile…</p></div>';
+
+  // ------------------------------------------------- My Style: the quiz
+
+  function Quiz(root) {
+    Page.call(this, root);
     this.unit = unitPref();
     this.session = null;
     this.profile = null;
     this.photoNote = null;
   }
+  Quiz.prototype = Object.create(Page.prototype);
 
-  MyStylePage.prototype.slow = function () {
-    var status = this.root.querySelector('[data-mystyle-status]');
-    if (status) status.textContent = 'Waking up My Style — this can take up to a minute the first time.';
+  Quiz.prototype.card = function (step, inner, footer) {
+    var progress = '';
+    if (step) {
+      progress = '<div class="mystyle-progress"><ol>' + STEPS.map(function (label, i) {
+        return '<li' + (i < step ? ' class="is-active"' : '') + (i === step - 1 ? ' aria-current="step"' : '') + '>' +
+          '<span class="mystyle-progress__num">' + (i + 1) + '</span><span class="mystyle-progress__label">' + label + '</span></li>';
+      }).join('') + '</ol><div class="mystyle-progress__bar"><span style="width:' + (step / STEPS.length * 100) + '%"></span></div></div>';
+    }
+    this.show('<div class="mystyle-quiz">' + progress + '<div class="mystyle-quiz__screen">' + inner + '</div>' +
+      (footer === false ? '' : '<div class="mystyle-quiz__footer"><button type="button" class="mystyle-text-link" data-fresh>Start Fresh</button>' +
+        (this.profile ? '<span aria-hidden="true">·</span><button type="button" class="mystyle-text-link" data-delete>Delete my style profile</button>' : '') +
+      '</div>') + '</div>');
+    var self = this;
+    var fresh = this.view.querySelector('[data-fresh]');
+    if (fresh) fresh.addEventListener('click', function () { self.session = null; self.lastMeasurements = null; self.showConsent(); });
+    var del = this.view.querySelector('[data-delete]');
+    if (del) del.addEventListener('click', function () { self.deleteProfile(); });
   };
 
-  MyStylePage.prototype.show = function (html) {
-    this.view.innerHTML = html;
-    this.root.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  Quiz.prototype.actions = function (back, next, nextType) {
+    return '<div class="mystyle-actions">' +
+      (back ? '<button type="button" class="mystyle-btn mystyle-btn--secondary" data-back>' + back + '</button>' : '<span></span>') +
+      '<button type="' + (nextType || 'submit') + '" class="mystyle-btn" data-next>' + next + '</button></div>';
+  };
+  Quiz.prototype.onBack = function (handler) {
+    var back = this.view.querySelector('[data-back]');
+    if (back) back.addEventListener('click', handler.bind(this));
   };
 
-  MyStylePage.prototype.error = function (target, err) {
-    var box = this.view.querySelector(target || '[data-mystyle-error]');
-    if (box) { box.textContent = err.message || String(err); box.hidden = false; }
-  };
-
-  MyStylePage.prototype.start = function () {
+  Quiz.prototype.start = function () {
     var self = this;
     if (!token) {
-      this.show(
-        '<div class="mystyle-panel mystyle-center">' +
-          '<h2>Your personal style profile</h2>' +
-          '<p>Tell us your measurements — or use a photo — and we’ll find your size in every piece and pick styles for your shape.</p>' +
-          '<a class="button" href="' + esc(signInUrl()) + '">Sign in to start</a>' +
-          '<p class="mystyle-muted">A style profile is saved to your Eighth Hour account.</p>' +
-        '</div>');
+      this.card(0,
+        '<h2>Get Your Personalized Style Profile</h2>' +
+        '<p class="mystyle-subtitle">In 5 minutes, we’ll find your size in every piece and create recommendations tailored to your shape and style.</p>' +
+        '<div class="mystyle-actions mystyle-actions--center"><a class="mystyle-btn" href="' + esc(signInUrl()) + '">Sign in to start</a></div>' +
+        '<p class="mystyle-note">Your style profile is saved to your Eighth Hour account.</p>', false);
       return;
     }
-    this.show('<div class="mystyle-panel mystyle-center"><p class="mystyle-muted" data-mystyle-status>Loading your style profile…</p></div>');
+    this.show(LOADING);
     loadProfile(function () { self.slow(); }).then(function (profile) {
-      if (profile) self.showProfile(profile); else self.showConsent();
+      if (!profile) { self.showConsent(); return; }
+      self.profile = profile;
+      self.session = profile.session_id;
+      if (/(^|[?&])step=style(&|$)/.test(window.location.search)) self.showPreferences(); else self.showComplete();
     }).catch(function (err) {
-      self.show('<div class="mystyle-panel"><p class="mystyle-error">' + esc(err.message) + '</p></div>');
+      self.show('<div class="mystyle-notice"><p class="mystyle-error">' + esc(err.message) + '</p></div>');
     });
   };
 
-  // Step 1: consent
-  MyStylePage.prototype.showConsent = function () {
+  Quiz.prototype.deleteProfile = function () {
     var self = this;
-    this.show(
-      '<form class="mystyle-panel" data-step="consent">' +
-        '<p class="mystyle-step">Step 1 of 4</p>' +
-        '<h2>Before we start</h2>' +
-        '<label class="mystyle-check"><input type="checkbox" name="photo" required> <span><strong>I consent to photo capture and measurement extraction.</strong> If you use a photo, we use it only to estimate your measurements. Your photo is not stored.</span></label>' +
-        '<label class="mystyle-check"><input type="checkbox" name="measurements" required> <span><strong>I consent to using my measurements for personalized recommendations.</strong> Your measurements help us find your size and the styles that suit you.</span></label>' +
-        '<p class="mystyle-muted">You can delete your style profile at any time from this page.</p>' +
-        '<p class="mystyle-error" data-mystyle-error hidden></p>' +
-        '<button class="button" type="submit">Continue</button>' +
+    if (!window.confirm('Delete your style profile? Your measurements and style choices will be removed from Eighth Hour.')) return;
+    api('/shopify/profile', { method: 'DELETE' }).then(function () {
+      forgetProfile();
+      self.profile = null;
+      self.session = null;
+      self.showConsent();
+    }).catch(function (err) { window.alert(err.message); });
+  };
+
+  // Step 1: consent
+  Quiz.prototype.showConsent = function () {
+    var self = this;
+    this.card(1,
+      '<form data-form novalidate>' +
+        '<h2>Get Your Personalized Style Profile</h2>' +
+        '<p class="mystyle-subtitle">In 5 minutes, we’ll create recommendations tailored to your shape and style.</p>' +
+        '<div class="mystyle-box">' +
+          '<h3>Consent to Data Processing</h3>' +
+          '<label class="mystyle-check"><input type="checkbox" name="photo"><span>I consent to photo capture and measurement extraction</span></label>' +
+          '<p class="mystyle-check__note">If you use a photo, we use it only to estimate your measurements. Your photo is not stored.</p>' +
+          '<label class="mystyle-check"><input type="checkbox" name="measurements"><span>I consent to using my measurements for personalized recommendations</span></label>' +
+          '<p class="mystyle-check__note">Your measurements help us find the perfect fit and style for you.</p>' +
+        '</div>' +
+        '<p class="mystyle-error" data-error hidden></p>' +
+        this.actions(this.profile ? 'Back' : '', 'Continue') +
+        '<p class="mystyle-note">You can delete your style profile at any time.</p>' +
       '</form>');
-    this.view.querySelector('form').addEventListener('submit', function (e) {
+    var form = this.view.querySelector('[data-form]');
+    var next = form.querySelector('[data-next]');
+    var sync = function () { next.disabled = !(form.photo.checked && form.measurements.checked); };
+    sync();
+    form.addEventListener('change', sync);
+    this.onBack(function () { this.showComplete(); });
+    form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var button = this.querySelector('button');
-      button.disabled = true;
-      api('/shopify/session', { method: 'POST', body: { photo_consent: true, measurement_consent: true }, onSlow: function () { button.textContent = 'Waking up…'; } })
+      if (next.disabled) return;
+      next.disabled = true;
+      api('/shopify/session', { method: 'POST', body: { photo_consent: true, measurement_consent: true }, onSlow: function () { next.textContent = 'Waking up…'; } })
         .then(function (r) { self.session = r.session_id; self.showMeasurements(); })
-        .catch(function (err) { button.disabled = false; button.textContent = 'Continue'; self.error(null, err); });
+        .catch(function (err) { next.disabled = false; next.textContent = 'Continue'; self.error(err); });
     });
   };
 
   // Step 2: measurements (typed, or estimated from a photo then checked)
-  MyStylePage.prototype.toUnit = function (cm) { return this.unit === 'in' ? Math.round(cm / 2.54 * 2) / 2 : Math.round(cm * 10) / 10; };
-  MyStylePage.prototype.toCm = function (value) { return this.unit === 'in' ? value * 2.54 : value; };
-  MyStylePage.prototype.rangeText = function (field) {
+  Quiz.prototype.toUnit = function (cm) { return this.unit === 'in' ? Math.round(cm / 2.54 * 2) / 2 : Math.round(cm * 10) / 10; };
+  Quiz.prototype.toCm = function (value) { return this.unit === 'in' ? value * 2.54 : value; };
+  Quiz.prototype.rangeText = function (field) {
     var r = RANGES_CM[field];
     return this.unit === 'in' ? Math.ceil(r[0] / 2.54) + '–' + Math.floor(r[1] / 2.54) + ' in' : r[0] + '–' + r[1] + ' cm';
   };
 
-  MyStylePage.prototype.showMeasurements = function (values) {
+  Quiz.prototype.showMeasurements = function (values) {
     var self = this;
     values = values || this.lastMeasurements || {};
-    var field = function (name, label, hint) {
+    var unitName = this.unit === 'in' ? 'in' : 'cm';
+    var field = function (name, label, help) {
       var v = values[name] != null ? self.toUnit(values[name]) : '';
-      return '<label class="mystyle-field"><span>' + label + '</span>' +
-        '<input type="number" step="0.5" inputmode="decimal" name="' + name + '" value="' + esc(v) + '" required>' +
-        '<small>' + hint + ' (' + self.rangeText(name) + ')</small></label>';
+      return '<label class="mystyle-field"><span>' + label + ' (' + unitName + ')</span>' +
+        '<input type="number" step="0.5" inputmode="decimal" name="' + name + '" value="' + esc(v) + '" placeholder="e.g., ' + EXAMPLES[self.unit][name] + '">' +
+        '<small>' + help + ' (' + self.rangeText(name) + ')</small></label>';
     };
     var note = this.photoNote;
     this.photoNote = null;
-    this.show(
-      '<form class="mystyle-panel" data-step="measure" novalidate>' +
-        '<p class="mystyle-step">Step 2 of 4</p>' +
-        '<h2>Your measurements</h2>' +
-        '<div class="mystyle-units" role="group" aria-label="Units">' +
-          '<button type="button" data-unit="in"' + (this.unit === 'in' ? ' class="is-active"' : '') + '>inches</button>' +
-          '<button type="button" data-unit="cm"' + (this.unit === 'cm' ? ' class="is-active"' : '') + '>cm</button></div>' +
-        (note ? '<p class="mystyle-note is-' + note.tone + '">' + esc(note.text) + '</p>' : '') +
+    var updating = this.profile && !this.lastMeasurements && !values.bust;
+    this.card(2,
+      '<form data-form novalidate>' +
+        '<div class="mystyle-heading-row"><h2>Your Measurements</h2>' +
+          '<div class="mystyle-units" role="group" aria-label="Units">' +
+            '<button type="button" data-unit="in"' + (this.unit === 'in' ? ' class="is-active"' : '') + '>in</button>' +
+            '<button type="button" data-unit="cm"' + (this.unit === 'cm' ? ' class="is-active"' : '') + '>cm</button></div></div>' +
+        '<p class="mystyle-subtitle">Tell us your body measurements for an accurate fit.</p>' +
+        (updating ? '<p class="mystyle-callout">For your privacy, we never show the measurements you’ve saved. Enter them again to update your profile.</p>' : '') +
+        (note ? '<p class="mystyle-callout is-' + note.tone + '">' + esc(note.text) + '</p>' : '') +
         '<div class="mystyle-fields">' +
-          field('bust', 'Bust', 'Around the fullest part') +
-          field('waist', 'Waist', 'Around your natural waist') +
-          field('hips', 'Hips', 'Around the fullest part') +
+          field('bust', 'Bust', 'Measure around fullest part') +
+          field('waist', 'Waist', 'Measure natural waist') +
+          field('hips', 'Hips', 'Measure fullest part') +
           field('height', 'Height', 'Your total height') +
         '</div>' +
-        '<p class="mystyle-error" data-mystyle-error hidden></p>' +
-        '<button class="button" type="submit">See my shape profile</button>' +
-        '<p class="mystyle-alt">Don’t know your measurements? <button type="button" class="mystyle-link" data-photo>Use a photo instead</button></p>' +
+        '<p class="mystyle-error" data-error hidden></p>' +
+        this.actions('Back', 'Continue') +
+        '<p class="mystyle-note">Don’t know your exact measurements? <button type="button" class="mystyle-link" data-photo>Use photo measurement</button></p>' +
       '</form>');
-    var form = this.view.querySelector('form');
+    var form = this.view.querySelector('[data-form]');
     form.querySelectorAll('[data-unit]').forEach(function (b) {
       b.addEventListener('click', function () {
         var current = self.readMeasurements(form, true);
@@ -463,21 +599,22 @@
       });
     });
     form.querySelector('[data-photo]').addEventListener('click', function () { self.showPhoto(); });
+    this.onBack(function () { if (this.profile && this.profile.shape_profile) this.showShape(this.profile.shape_profile); else this.showConsent(); });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var values = self.readMeasurements(form, false);
       if (!values) return;
-      var button = form.querySelector('button[type="submit"]');
-      button.disabled = true;
-      api('/shopify/measurements', { method: 'POST', body: Object.assign({ session_id: self.session }, values), onSlow: function () { button.textContent = 'Waking up…'; } })
-        .then(function (r) { self.lastMeasurements = values; self.showShape(r.shape_profile); })
-        .catch(function (err) { button.disabled = false; button.textContent = 'See my shape profile'; self.error(null, err); });
+      var next = form.querySelector('[data-next]');
+      next.disabled = true;
+      api('/shopify/measurements', { method: 'POST', body: Object.assign({ session_id: self.session }, values), onSlow: function () { next.textContent = 'Waking up…'; } })
+        .then(function (r) { self.lastMeasurements = values; self.shape = r.shape_profile; self.showShape(r.shape_profile); })
+        .catch(function (err) { next.disabled = false; next.textContent = 'Continue'; self.error(err); });
     });
   };
 
   // Values in cm, or null (with the problem shown) when anything is missing or
   // out of range. lenient: keep whatever is there, for switching units.
-  MyStylePage.prototype.readMeasurements = function (form, lenient) {
+  Quiz.prototype.readMeasurements = function (form, lenient) {
     var out = {};
     var problems = [];
     var self = this;
@@ -489,40 +626,43 @@
       if (!lenient && (cm < r[0] || cm > r[1])) problems.push(capitalize(name) + ' should be ' + self.rangeText(name));
       out[name] = cm;
     });
-    if (problems.length) { this.error(null, { message: problems.join('. ') + '.' }); return null; }
+    if (problems.length) { this.error({ message: problems.join('. ') + '.' }); return null; }
     return out;
   };
 
-  MyStylePage.prototype.showPhoto = function () {
+  Quiz.prototype.showPhoto = function () {
     var self = this;
     var sizes = SIZE_ORDER.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
     var heightCm = this.lastMeasurements && this.lastMeasurements.height;
-    this.show(
-      '<form class="mystyle-panel" data-step="photo" novalidate>' +
-        '<p class="mystyle-step">Step 2 of 4</p>' +
-        '<h2>Measure from a photo</h2>' +
-        '<div class="mystyle-disclosure" data-disclosure><p class="mystyle-muted">Loading privacy information…</p></div>' +
+    var unitName = this.unit === 'in' ? 'in' : 'cm';
+    this.card(2,
+      '<form data-form novalidate>' +
+        '<h2>Measure From a Photo</h2>' +
+        '<p class="mystyle-subtitle">We’ll estimate your measurements from one full-body photo. You can check and edit every number before continuing.</p>' +
+        '<div class="mystyle-box" data-disclosure><p class="mystyle-check__note">Loading privacy information…</p></div>' +
         ((this.root.querySelector('template[data-mystyle-framing]') || {}).innerHTML || '') +
         '<div class="mystyle-fields">' +
-          '<label class="mystyle-field"><span>Full-body photo</span><input type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" required><small>JPEG, PNG, HEIC (iPhone) or WEBP</small></label>' +
-          '<label class="mystyle-field"><span>Your height</span><input type="number" step="0.5" inputmode="decimal" name="height" value="' + (heightCm ? esc(this.toUnit(heightCm)) : '') + '" required><small>A photo alone can’t tell your scale (' + this.rangeText('height') + ')</small></label>' +
-          '<label class="mystyle-field"><span>Usual size — tops</span><select name="top" required><option value="">Select</option>' + sizes + '</select><small>Used for your bust and waist</small></label>' +
-          '<label class="mystyle-field"><span>Usual size — bottoms</span><select name="bottom" required><option value="">Select</option>' + sizes + '</select><small>Used for your hips and waist</small></label>' +
+          '<label class="mystyle-field mystyle-field--wide"><span>Full-body photo</span><input type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"><small>JPEG, PNG, HEIC (iPhone) or WEBP</small></label>' +
+          '<label class="mystyle-field"><span>Height (' + unitName + ')</span><input type="number" step="0.5" inputmode="decimal" name="height" value="' + (heightCm ? esc(this.toUnit(heightCm)) : '') + '" placeholder="e.g., ' + EXAMPLES[this.unit].height + '"><small>A photo alone can’t tell your scale (' + this.rangeText('height') + ')</small></label>' +
+          '<span></span>' +
+          '<label class="mystyle-field"><span>Usual size — tops</span><select name="top"><option value="">Select</option>' + sizes + '</select><small>Used for your bust and waist</small></label>' +
+          '<label class="mystyle-field"><span>Usual size — bottoms</span><select name="bottom"><option value="">Select</option>' + sizes + '</select><small>Used for your hips and waist</small></label>' +
         '</div>' +
-        '<p class="mystyle-muted">A photo can’t see body depth, so on its own it can be well off — your usual sizes keep your bust and hips grounded, the photo fine-tunes them, and your waist is worked out from your shape in the photo.</p>' +
-        '<p class="mystyle-note"><strong>How accurate is this?</strong> Our image recognition estimates are accurate to an average of about 3 cm from your measured bust, waist and hips. Loose clothing hides your shape — especially your waist — and makes the estimate less accurate. You can check and edit every number before continuing.</p>' +
-        '<label class="mystyle-check"><input type="checkbox" name="adult" required> <span>I’m 18 or older (or have a parent or guardian’s permission), and I understand my photo will be used only to estimate my measurements, as described above.</span></label>' +
-        '<p class="mystyle-error" data-mystyle-error hidden></p>' +
-        '<button class="button" type="submit">Scan photo</button>' +
-        '<p class="mystyle-alt">Prefer not to upload a photo? <button type="button" class="mystyle-link" data-manual>Enter measurements instead</button></p>' +
+        '<p class="mystyle-callout">A photo can’t see body depth, so on its own it can be well off — your usual sizes keep your bust and hips grounded, the photo fine-tunes them, and your waist is worked out from your shape in the photo.</p>' +
+        '<p class="mystyle-callout"><strong>How accurate is this?</strong> Our image recognition estimates are accurate to an average of about 3 cm from your measured bust, waist and hips. Loose clothing hides your shape — especially your waist — and makes the estimate less accurate.</p>' +
+        '<label class="mystyle-check"><input type="checkbox" name="adult"><span>I’m 18 or older (or have a parent or guardian’s permission), and I understand my photo will be used only to estimate my measurements, as described above.</span></label>' +
+        '<p class="mystyle-error" data-error hidden></p>' +
+        this.actions('Back', 'Scan Photo') +
+        '<p class="mystyle-note">Prefer not to upload a photo? <button type="button" class="mystyle-link" data-manual>Enter measurements manually</button></p>' +
       '</form>');
-    var form = this.view.querySelector('form');
+    var form = this.view.querySelector('[data-form]');
     form.querySelector('[data-manual]').addEventListener('click', function () { self.showMeasurements(); });
+    this.onBack(function () { this.showMeasurements(); });
     api('/intake/photo-disclosure').then(function (d) {
       form.querySelector('[data-disclosure]').innerHTML =
-        '<p><strong>Your photo:</strong> processed by ' + esc(d.processor_name) + '. ' + esc(d.retention) + '</p>';
+        '<h3>Your photo</h3><p class="mystyle-check__note">Processed by ' + esc(d.processor_name) + '. ' + esc(d.retention) + '</p>';
     }).catch(function () {
-      form.querySelector('[data-disclosure]').innerHTML = '<p>Your photo is used only to estimate your measurements and is not stored.</p>';
+      form.querySelector('[data-disclosure]').innerHTML = '<h3>Your photo</h3><p class="mystyle-check__note">Used only to estimate your measurements, and not stored.</p>';
     });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -535,10 +675,10 @@
       if (!form.adult.checked) problems.push('Please confirm the statement above the button');
       var heightCm = self.toCm(height);
       if (!isNaN(height) && (heightCm < RANGES_CM.height[0] || heightCm > RANGES_CM.height[1])) problems.push('Height should be ' + self.rangeText('height'));
-      if (problems.length) { self.error(null, { message: problems.join('. ') + '.' }); return; }
-      var button = form.querySelector('button[type="submit"]');
-      button.disabled = true;
-      button.textContent = 'Estimating your measurements…';
+      if (problems.length) { self.error({ message: problems.join('. ') + '.' }); return; }
+      var next = form.querySelector('[data-next]');
+      next.disabled = true;
+      next.textContent = 'Estimating…';
       shrinkPhoto(file).then(function (photo) {
         var data = new FormData();
         data.append('session_id', self.session);
@@ -546,7 +686,7 @@
         data.append('photo', photo);
         data.append('usual_top_size', form.top.value);
         data.append('usual_bottom_size', form.bottom.value);
-        return api('/intake/photo-measure', { method: 'POST', form: data, onSlow: function () { button.textContent = 'Still working — waking up My Style…'; } });
+        return api('/intake/photo-measure', { method: 'POST', form: data, onSlow: function () { next.textContent = 'Still working…'; } });
       }).then(function (r) {
         var m = r.measurements || {};
         var checkable = (r.low_confidence_fields || []).filter(function (f) { return f in RANGES_CM; });
@@ -555,154 +695,262 @@
           : { tone: 'success', text: 'These measurements were estimated from your photo. Check them, edit anything that looks off, then continue.' };
         self.showMeasurements({ bust: m.bust, waist: m.waist, hips: m.hips, height: m.height || heightCm });
       }).catch(function (err) {
-        button.disabled = false;
-        button.textContent = 'Scan photo';
-        self.error(null, { message: err.message + ' It’s usually the framing or the pose: face the camera with your whole body in the shot and your arms a little away from your sides — or enter your measurements instead.' });
+        next.disabled = false;
+        next.textContent = 'Scan Photo';
+        self.error({ message: err.message + ' It’s usually the framing or the pose: face the camera with your whole body in the shot and your arms a little away from your sides — or enter your measurements instead.' });
       });
     });
   };
 
   // Step 3: shape profile
-  MyStylePage.prototype.showShape = function (shape) {
+  Quiz.prototype.showShape = function (shape) {
     var self = this;
-    this.show(
-      '<div class="mystyle-panel" data-step="shape">' +
-        '<p class="mystyle-step">Step 3 of 4</p>' +
-        shapeHtml(shape, false, this.unit) +
-        '<div class="mystyle-actions"><button type="button" class="button button--secondary" data-back>Edit measurements</button>' +
-        '<button type="button" class="button" data-next>Continue to style</button></div>' +
-      '</div>');
-    this.view.querySelector('[data-back]').addEventListener('click', function () { self.showMeasurements(); });
+    var unit = this.unit;
+    var c = shape.comparisons_cm || {};
+    var diff = function (value, fuller, smaller) {
+      if (value == null) return '';
+      return value === 0 ? 'The same' : length(Math.abs(value), unit) + ' ' + (value > 0 ? fuller : smaller);
+    };
+    var ratios = [
+      ['Bust vs Hips', c.bust_minus_hips == null ? '' : (c.bust_minus_hips === 0 ? 'Even' :
+        (c.bust_minus_hips > 0 ? 'Bust ' : 'Hips ') + length(Math.abs(c.bust_minus_hips), unit) + ' fuller')],
+      ['Waist vs Bust', diff(c.bust_minus_waist, 'smaller', 'larger')],
+      ['Waist vs Hips', diff(c.hips_minus_waist, 'smaller', 'larger')],
+      ['Waist-to-Hip Ratio', shape.ratios && shape.ratios.waist_hip != null ? Number(shape.ratios.waist_hip).toFixed(2) : '']
+    ].filter(function (r) { return r[1]; });
+    this.card(3,
+      '<h2>Your Shape Profile</h2>' +
+      '<p class="mystyle-subtitle">Based on your measurements, here’s your shape and sizing recommendations.</p>' +
+      '<div class="mystyle-box"><p class="mystyle-label">Shape class</p>' +
+        '<p class="mystyle-value">' + esc(capitalize(shape.shape_class)) + '</p>' +
+        (shape.shape_summary ? '<p class="mystyle-summary">' + esc(inUnit(shape.shape_summary, unit)) + '</p>' : '') + '</div>' +
+      (ratios.length ? '<div class="mystyle-box"><p class="mystyle-label">How your measurements compare</p><dl class="mystyle-ratios">' +
+        ratios.map(function (r) { return '<div><dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd></div>'; }).join('') + '</dl></div>' : '') +
+      '<div class="mystyle-box"><p class="mystyle-label">Recommended sizes</p>' + sizeTiles(shape) + '</div>' +
+      this.actions('Back', 'Continue to Style', 'button'));
+    this.onBack(function () { self.showMeasurements(); });
     this.view.querySelector('[data-next]').addEventListener('click', function () { self.showPreferences(); });
   };
 
-  // Step 4: style choices
-  MyStylePage.prototype.showPreferences = function (current) {
+  // Step 4: style preferences
+  Quiz.prototype.showPreferences = function () {
     var self = this;
-    current = current || {};
+    var current = (this.profile && this.profile.style_profile) || {};
     var picked = function (list, value) { return (list || []).some(function (v) { return String(v).toLowerCase() === String(value).toLowerCase(); }); };
     var colours = (C.launch.colors || []).map(function (c) {
-      return '<label class="mystyle-swatch"><input type="checkbox" name="color" value="' + esc(c.name) + '"' + (picked(current.preferred_colors, c.name) ? ' checked' : '') + '>' +
-        '<span><span class="mystyle-swatch__sample" style="background:' + esc(c.hex || '#ccc') + '"></span>' + esc(c.name) + '</span></label>';
+      return '<label class="mystyle-colour"><input type="checkbox" name="color" value="' + esc(c.name) + '"' + (picked(current.preferred_colors, c.name) ? ' checked' : '') + '>' +
+        '<span><span class="mystyle-colour__swatch" style="background:' + esc(c.hex || '#ccc') + ';--ink:' + inkFor(c.hex) + '"></span>' +
+        '<span class="mystyle-colour__name">' + esc(c.name) + '</span></span></label>';
     }).join('');
     var options = function (name, list, chosen) {
       return list.map(function (o) {
-        return '<label class="mystyle-pill"><input type="checkbox" name="' + name + '" value="' + o[0] + '"' + (picked(chosen, o[0]) ? ' checked' : '') + '><span>' + o[1] + '</span></label>';
+        return '<label class="mystyle-option"><input type="checkbox" name="' + name + '" value="' + o[0] + '"' + (picked(chosen, o[0]) ? ' checked' : '') + '><span>' + o[1] + '</span></label>';
       }).join('');
     };
-    this.show(
-      '<form class="mystyle-panel" data-step="style">' +
-        (this.profile ? '' : '<p class="mystyle-step">Step 4 of 4</p>') +
-        '<h2>Your style</h2>' +
-        '<fieldset><legend>Colors you love</legend><div class="mystyle-swatches">' + colours + '</div></fieldset>' +
-        '<fieldset><legend>Silhouettes</legend><div class="mystyle-pills">' + options('silhouette', SILHOUETTES, current.preferred_silhouettes) + '</div></fieldset>' +
-        '<fieldset><legend>Occasions</legend><div class="mystyle-pills">' + options('occasion', OCCASIONS, current.occasions) + '</div></fieldset>' +
-        '<p class="mystyle-error" data-mystyle-error hidden></p>' +
-        '<button class="button" type="submit">' + (this.profile ? 'Save my style' : 'See my picks') + '</button>' +
+    this.card(4,
+      '<form data-form novalidate>' +
+        '<h2>Your Style Preferences</h2>' +
+        '<p class="mystyle-subtitle">Help us personalize recommendations by sharing your style preferences.</p>' +
+        '<fieldset><legend>Preferred Colors</legend><div class="mystyle-colours">' + colours + '</div></fieldset>' +
+        '<fieldset><legend>Preferred Silhouettes</legend><div class="mystyle-options">' + options('silhouette', SILHOUETTES, current.preferred_silhouettes) + '</div></fieldset>' +
+        '<fieldset><legend>Occasions</legend><div class="mystyle-options">' + options('occasion', OCCASIONS, current.occasions) + '</div></fieldset>' +
+        '<p class="mystyle-error" data-error hidden></p>' +
+        this.actions('Back', 'Get Recommendations') +
       '</form>');
-    var form = this.view.querySelector('form');
+    var form = this.view.querySelector('[data-form]');
+    this.onBack(function () {
+      var shape = this.shape || (this.profile && this.profile.shape_profile);
+      if (shape) this.showShape(shape); else this.showMeasurements();
+    });
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var values = function (name) { return Array.prototype.map.call(form.querySelectorAll('[name="' + name + '"]:checked'), function (i) { return i.value; }); };
-      var button = form.querySelector('button[type="submit"]');
-      button.disabled = true;
+      var next = form.querySelector('[data-next]');
+      next.disabled = true;
       storeProducts().then(function (products) {
-        return api('/shopify/preferences', { method: 'POST', onSlow: function () { button.textContent = 'Waking up…'; }, body: {
-          session_id: self.session || (self.profile && self.profile.session_id),
+        return api('/shopify/preferences', { method: 'POST', onSlow: function () { next.textContent = 'Waking up…'; }, body: {
+          session_id: self.session,
           preferred_colors: values('color'), preferred_silhouettes: values('silhouette'), occasions: values('occasion'),
           products: products, launch: C.launch } });
       }).then(function (r) {
         rememberProfile(r.profile);
-        self.showProfile(r.profile);
+        self.profile = r.profile;
+        self.shape = null;
+        self.lastMeasurements = null;
+        self.showComplete();
       }).catch(function (err) {
-        button.disabled = false;
-        button.textContent = self.profile ? 'Save my style' : 'See my picks';
-        self.error(null, err);
+        next.disabled = false;
+        next.textContent = 'Get Recommendations';
+        self.error(err);
       });
     });
   };
 
-  // The finished profile, with Picked for you and New for you
-  MyStylePage.prototype.showProfile = function (profile) {
+  // Step 5: complete, with a first look at her picks
+  Quiz.prototype.showComplete = function () {
     var self = this;
-    this.profile = profile;
-    this.session = profile.session_id;
+    var profile = this.profile;
+    this.card(5,
+      '<div class="mystyle-complete">' +
+        '<p class="mystyle-complete__tick" aria-hidden="true">✓</p>' +
+        '<h2>Profile Complete!</h2>' +
+        '<p>Your personalized style recommendations are ready.</p>' +
+        '<ul class="mystyle-preview" data-preview><li class="mystyle-note" data-status>Finding your picks…</li></ul>' +
+        '<div class="mystyle-actions">' +
+          '<a class="mystyle-btn" href="' + esc(C.recommendationsUrl) + '">View All Recommendations</a>' +
+          '<a class="mystyle-btn mystyle-btn--secondary" href="' + esc(C.shopUrl) + '">Continue Shopping</a></div>' +
+        '<button type="button" class="mystyle-text-link mystyle-text-link--caps" data-back>← Back to Preferences</button>' +
+      '</div>');
+    this.onBack(function () { this.showPreferences(); });
+    var preview = this.view.querySelector('[data-preview]');
+    getPicks(profile, 4, function () { self.slow(); }).then(function (items) {
+      var shown = items.filter(function (i) { return productInfo[i.handle]; });
+      preview.innerHTML = shown.length ? shown.map(function (i) {
+        var p = productInfo[i.handle];
+        return '<li><a href="' + esc(C.rootUrl + 'products/' + i.handle) + '">' +
+          (p.image ? '<img src="' + esc(withParam(p.image, 'width=300')) + '" alt="" loading="lazy" width="150" height="200">' : '<span class="mystyle-preview__blank"></span>') +
+          '<span class="mystyle-preview__name">' + esc(p.title) + '</span><span class="mystyle-preview__price">' + esc(money(p.price)) + '</span></a></li>';
+      }).join('') : '<li class="mystyle-note">Your picks will appear here as the new collection arrives.</li>';
+    }).catch(function (err) { preview.innerHTML = '<li class="mystyle-error">' + esc(err.message) + '</li>'; });
+  };
+
+  function sizeTiles(shape) {
+    return '<ul class="mystyle-size-tiles">' + Object.keys(shape.size_recommendation_by_category || {}).map(function (key) {
+      var size = String(shape.size_recommendation_by_category[key]);
+      var halves = size.split('/');
+      if (halves.length === 2 && halves[0] === halves[1]) size = halves[0];   // co-ords "XS/XS" -> "XS"
+      return '<li><span>' + esc(SIZE_LABELS[key] || key.replace(/([A-Z])/g, ' $1').toLowerCase()) + '</span><strong>' + esc(size) + '</strong></li>';
+    }).join('') + '</ul>';
+  }
+
+  // ------------------------------------------------- My Recommendations
+
+  function Recommendations(root) { Page.call(this, root); }
+  Recommendations.prototype = Object.create(Page.prototype);
+
+  Recommendations.prototype.start = function () {
+    var self = this;
+    var title = 'Your Personalized Recommendations';
+    if (!token) { this.notice(title, 'Sign in to see pieces chosen for your shape and style.', ['Sign In', signInUrl()]); return; }
+    this.show(LOADING);
+    loadProfile(function () { self.slow(); }).then(function (profile) {
+      if (!profile) { self.notice(title, 'Build your style profile and we’ll pick pieces for your shape and style.', ['Get Your Style Profile', C.pageUrl]); return; }
+      self.render(profile);
+    }).catch(function (err) { self.notice(title, esc(err.message)); });
+  };
+
+  Recommendations.prototype.render = function (profile) {
+    var self = this;
+    var shape = profile.shape_profile || {};
+    var sizes = shape.size_recommendation_by_category || {};
     var style = profile.style_profile || {};
-    var list = function (items, labels) {
+    var named = function (items, labels) {
       var map = {};
       (labels || []).forEach(function (o) { map[o[0]] = o[1]; });
       return (items || []).map(function (v) { return map[v] || v; }).join(', ') || 'Any';
     };
+    var row = function (label, value) { return value ? '<div><dt>' + esc(label) + '</dt><dd>' + esc(value) + '</dd></div>' : ''; };
     this.show(
-      '<div class="mystyle-panel" data-step="profile">' +
-        shapeHtml(profile.shape_profile, true, this.unit) +
-        '<dl class="mystyle-style"><div><dt>Colors</dt><dd>' + esc(list(style.preferred_colors)) + '</dd></div>' +
-        '<div><dt>Silhouettes</dt><dd>' + esc(list(style.preferred_silhouettes, SILHOUETTES)) + '</dd></div>' +
-        '<div><dt>Occasions</dt><dd>' + esc(list(style.occasions, OCCASIONS)) + '</dd></div></dl>' +
-        '<div class="mystyle-actions">' +
-          '<button type="button" class="button button--secondary" data-edit-style>Update my style</button>' +
-          '<button type="button" class="button button--secondary" data-remeasure>Update my measurements</button></div>' +
-      '</div>' +
-      '<div class="mystyle-results">' +
-        '<h2>Picked for you</h2><p class="mystyle-muted" data-mystyle-status></p>' +
-        '<ul class="grid product-grid grid--2-col-tablet-down grid--4-col-desktop mystyle-grid" data-picks></ul>' +
-        '<h2>New for you</h2>' +
-        '<ul class="grid product-grid grid--2-col-tablet-down grid--4-col-desktop mystyle-grid" data-new></ul>' +
-      '</div>' +
-      '<div class="mystyle-panel mystyle-danger">' +
-        '<p>Want us to forget your measurements and style? This deletes your style profile from Eighth Hour.</p>' +
-        '<button type="button" class="mystyle-link" data-delete>Delete my style profile</button>' +
-        '<p class="mystyle-error" data-mystyle-error hidden></p>' +
+      '<div class="mystyle-recs">' +
+        '<aside class="mystyle-recs__side">' +
+          '<h2 class="mystyle-side-title">Filters</h2><div class="mystyle-filters" data-filters></div>' +
+          '<h2 class="mystyle-side-title">Your Profile</h2>' +
+          '<dl class="mystyle-profile-card">' +
+            row('Shape', capitalize(shape.shape_class)) +
+            row('Tops size', sizes.tops) + row('Bottoms size', sizes.trousers || sizes.skirts) + row('Dresses size', sizes.dresses) +
+            row('Colors', named(style.preferred_colors)) +
+            row('Silhouettes', named(style.preferred_silhouettes, SILHOUETTES)) +
+            row('Occasions', named(style.occasions, OCCASIONS)) +
+          '</dl>' +
+          '<p class="mystyle-side-links"><a href="' + esc(withParam(C.pageUrl, 'step=style')) + '">Update Style</a></p>' +
+        '</aside>' +
+        '<div class="mystyle-recs__main">' +
+          '<header class="mystyle-page-header"><h1>Your Personalized Recommendations</h1><p class="mystyle-subtitle">Based on your shape and style preferences</p></header>' +
+          '<p class="mystyle-note" data-status></p>' +
+          '<ul class="grid product-grid grid--2-col-tablet-down grid--4-col-desktop mystyle-grid" data-list></ul>' +
+        '</div>' +
       '</div>');
-    this.view.querySelector('[data-edit-style]').addEventListener('click', function () { self.showPreferences(style); });
-    this.view.querySelector('[data-remeasure]').addEventListener('click', function () { self.profile = null; self.showConsent(); });
-    this.view.querySelector('[data-delete]').addEventListener('click', function () {
-      if (!window.confirm('Delete your style profile? Your measurements and style choices will be removed.')) return;
-      api('/shopify/profile', { method: 'DELETE' }).then(function () {
-        saved(BACKUP_KEY, null);
-        profilePromise = Promise.resolve(null);
-        self.profile = null;
-        self.session = null;
-        self.showConsent();
-      }).catch(function (err) { self.error(null, err); });
-    });
-    var slow = function () { self.slow(); };
-    loadPicks(profile, this.view.querySelector('[data-picks]'), 8, slow)
-      .catch(function (err) { self.view.querySelector('[data-picks]').innerHTML = '<li class="mystyle-empty">' + esc(err.message) + '</li>'; });
-    loadNew(profile, this.view.querySelector('[data-new]'), 8, slow)
-      .catch(function (err) { self.view.querySelector('[data-new]').innerHTML = '<li class="mystyle-empty">' + esc(err.message) + '</li>'; });
+    var list = this.view.querySelector('[data-list]');
+    getPicks(profile, 24, function () { self.slow(); }).then(function (items) {
+      var status = self.view.querySelector('[data-status]');
+      if (status) status.textContent = '';
+      self.filters(items);
+      return renderCards(list, items.map(function (i) { return pickCard(profile, i); }), 'Your recommendations will appear here as the new collection arrives.');
+    }).catch(function (err) { list.innerHTML = '<li class="mystyle-empty">' + esc(err.message) + '</li>'; });
   };
 
-  function shapeHtml(shape, compact, unit) {
-    shape = shape || {};
-    var c = shape.comparisons_cm || {};
-    var diff = function (value, fuller, smaller) {
-      if (value == null) return '';
-      return value === 0 ? 'the same' : length(Math.abs(value), unit) + ' ' + (value > 0 ? fuller : smaller);
+  Recommendations.prototype.filters = function (items) {
+    var box = this.view.querySelector('[data-filters]');
+    var list = this.view.querySelector('[data-list]');
+    var present = {};
+    items.forEach(function (i) { present[i.category] = true; });
+    var categories = CATEGORY_ORDER.filter(function (c) { return present[c]; });
+    box.innerHTML = categories.map(function (c) {
+      return '<label class="mystyle-filter"><input type="checkbox" value="' + esc(c) + '"><span>' + esc(c) + '</span></label>';
+    }).join('') || '<p class="mystyle-note">No filters yet.</p>';
+    box.addEventListener('change', function () {
+      var chosen = Array.prototype.map.call(box.querySelectorAll('input:checked'), function (i) { return i.value; });
+      var shown = 0;
+      list.querySelectorAll('.mystyle-card').forEach(function (card) {
+        card.hidden = chosen.length > 0 && chosen.indexOf(card.dataset.category) === -1;
+        if (!card.hidden) shown++;
+      });
+      var empty = list.querySelector('[data-filter-empty]');
+      if (!shown && !empty) {
+        empty = el('<li class="mystyle-empty" data-filter-empty>No recommendations match your selected filters. <button type="button" class="mystyle-link">Clear filters</button></li>');
+        empty.querySelector('button').addEventListener('click', function () {
+          box.querySelectorAll('input').forEach(function (i) { i.checked = false; });
+          box.dispatchEvent(new Event('change'));
+        });
+        list.appendChild(empty);
+      } else if (shown && empty) {
+        empty.remove();
+      }
+    });
+  };
+
+  // ------------------------------------------------- New Releases
+
+  function NewReleases(root) { Page.call(this, root); }
+  NewReleases.prototype = Object.create(Page.prototype);
+
+  NewReleases.prototype.start = function () {
+    var self = this;
+    this.show(
+      '<header class="mystyle-page-header"><h1>New Releases</h1><p class="mystyle-subtitle" data-subtitle>The newest pieces from the collection</p></header>' +
+      '<div data-banner></div><p class="mystyle-note" data-status></p>' +
+      '<ul class="grid product-grid grid--2-col-tablet-down grid--5-col-desktop mystyle-grid" data-list></ul>');
+    var list = this.view.querySelector('[data-list]');
+    var banner = this.view.querySelector('[data-banner]');
+    var invite = function (text, action) {
+      banner.innerHTML = '<p class="mystyle-banner">' + text + ' <a href="' + esc(action[1]) + '">' + esc(action[0]) + '</a></p>';
     };
-    var comparisons = [
-      ['Bust vs hips', c.bust_minus_hips == null ? '' : (c.bust_minus_hips === 0 ? 'Even' :
-        (c.bust_minus_hips > 0 ? 'Bust ' : 'Hips ') + length(Math.abs(c.bust_minus_hips), unit) + ' fuller')],
-      ['Waist vs bust', diff(c.bust_minus_waist, 'smaller', 'larger')],
-      ['Waist vs hips', diff(c.hips_minus_waist, 'smaller', 'larger')]
-    ].filter(function (row) { return row[1]; });
-    var sizes = Object.keys(shape.size_recommendation_by_category || {}).map(function (key) {
-      var size = String(shape.size_recommendation_by_category[key]);
-      var halves = size.split('/');
-      if (halves.length === 2 && halves[0] === halves[1]) size = halves[0];   // co-ords "XS/XS" -> "XS"
-      return '<li><span>' + esc(SIZE_LABELS[key] || key.replace(/([A-Z])/g, ' $1').toLowerCase()) + '</span><strong>' +
-        esc(size) + '</strong></li>';
-    }).join('');
-    var summary = inUnit(shape.shape_summary, unit);
-    return '<h2>' + (compact ? 'Your style profile' : 'Your shape profile') + '</h2>' +
-      '<p class="mystyle-shape"><strong>' + esc(capitalize(shape.shape_class)) + '</strong></p>' +
-      (summary ? '<p>' + esc(summary) + '</p>' : '') +
-      (comparisons.length && !compact ? '<ul class="mystyle-compare">' + comparisons.map(function (r) {
-        return '<li><span>' + esc(r[0]) + '</span><strong>' + esc(r[1]) + '</strong></li>'; }).join('') + '</ul>' : '') +
-      '<h3>Your sizes</h3><ul class="mystyle-sizes">' + sizes + '</ul>' +
-      (!compact && shape.fit_notes && shape.fit_notes.length ? '<ul class="mystyle-tips">' + shape.fit_notes.map(function (n) {
-        return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' : '');
-  }
+    var newest = function () {
+      return storeProducts().then(function (products) {
+        var items = products.slice().sort(function (a, b) { return String(b.published_at).localeCompare(String(a.published_at)); })
+          .map(function (p) { return { handle: p.handle, category: productInfo[p.handle] && productInfo[p.handle].category }; });
+        return renderCards(list, items, 'New pieces will appear here as the collection arrives.');
+      });
+    };
+    if (!token) { invite('Sign in to see how each piece matches your shape and style.', ['Sign in', signInUrl()]); newest(); return; }
+    loadProfile(function () { self.slow(); }).then(function (profile) {
+      if (!profile) { invite('Build your style profile to see your match and size for each piece.', ['Get your style profile', C.pageUrl]); return newest(); }
+      self.view.querySelector('[data-subtitle]').textContent = 'Matched to your shape and style';
+      return storeProducts().then(function (products) {
+        return api('/shopify/new-releases', { method: 'POST', onSlow: function () { self.slow(); },
+          body: { session_id: profile.session_id, limit: 20, products: products, launch: C.launch } });
+      }).then(function (data) {
+        var status = self.view.querySelector('[data-status]');
+        if (status) status.textContent = '';
+        return renderCards(list, data.items.map(function (i) {
+          var a = i.availability || {};
+          var line = sizeLine(a, 'Recommended size: ');
+          return { handle: i.handle, match: i.match_score, category: i.category, reason: i.reason,
+                   size: line.size, sizeTone: line.sizeTone, soldOut: i.in_stock_in_size === false };
+        }), 'New pieces matched to you will appear here as the collection arrives.');
+      });
+    }).catch(function (err) { list.innerHTML = '<li class="mystyle-empty">' + esc(err.message) + '</li>'; });
+  };
 
   // Shrink a photo before upload: phones take 12-48 MP images, and the API only
   // needs ~1600 px. Falls back to the original if the browser can't decode it.
@@ -726,10 +974,15 @@
 
   // ---------------------------------------------------------------------- boot
 
+  var PAGES = { style: Quiz, recommendations: Recommendations, 'new': NewReleases };
+
   function boot() {
     document.querySelectorAll('[data-mystyle-fit]').forEach(initFit);
     document.querySelectorAll('[data-mystyle-picks]').forEach(initPicks);
-    document.querySelectorAll('[data-mystyle-page]').forEach(function (root) { new MyStylePage(root).start(); });
+    document.querySelectorAll('[data-mystyle-page]').forEach(function (root) {
+      var Kind = PAGES[root.dataset.mystylePage] || Quiz;
+      new Kind(root).start();
+    });
   }
 
   // setToken: lets a reviewer previewing the unpublished theme (who is staff,

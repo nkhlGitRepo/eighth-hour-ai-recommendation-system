@@ -1,17 +1,38 @@
 {%- comment -%}
-  MyStyle: the "My Style" link at the end of the header menu. Written into the
-  theme rather than added to the store's navigation menu, so it only appears in
-  this theme. Usage: {% render 'mystyle-nav-link', variant: 'desktop' %} or 'drawer'.
+  MyStyle: its header links, placed after the menu's first item ("Shop"), as in
+  the original MyStyle storefront: My Style (Update Style once she has a style
+  profile), New Releases, and My Recommendations (shown once she has one).
+  Written into the theme rather than added to the store's navigation menu, so
+  they only appear in this theme. The script switches them from this browser's
+  record of her profile (assets/mystyle.js keeps them right as it changes).
+  Usage: {% render 'mystyle-nav-link', variant: 'desktop' %} or 'drawer'.
 {%- endcomment -%}
-{%- assign mystyle_url = routes.all_products_collection_url | append: '?view=mystyle' -%}
-{%- if variant == 'drawer' -%}
-  <li>
-    <a href="{{ mystyle_url }}" class="menu-drawer__menu-item list-menu__item link link--text focus-inset{% if template.suffix == 'mystyle' %} menu-drawer__menu-item--active{% endif %}"{% if template.suffix == 'mystyle' %} aria-current="page"{% endif %}>My Style</a>
+{%- assign mystyle_links = 'style|My Style|mystyle,new|New Releases|mystyle-new,recommendations|My Recommendations|mystyle-recommendations' | split: ',' -%}
+{%- for entry in mystyle_links -%}
+  {%- assign parts = entry | split: '|' -%}
+  {%- assign mystyle_url = routes.all_products_collection_url | append: '?view=' | append: parts[2] -%}
+  {%- assign mystyle_current = false -%}
+  {%- if template.suffix == parts[2] -%}{%- assign mystyle_current = true -%}{%- endif -%}
+  <li{% if parts[0] == 'recommendations' %} style="display: none"{% endif %}>
+    {%- if variant == 'drawer' -%}
+      <a href="{{ mystyle_url }}" data-mystyle-nav="{{ parts[0] }}" class="menu-drawer__menu-item list-menu__item link link--text focus-inset{% if mystyle_current %} menu-drawer__menu-item--active{% endif %}"{% if mystyle_current %} aria-current="page"{% endif %}><span data-mystyle-nav-label>{{ parts[1] }}</span></a>
+    {%- else -%}
+      <a href="{{ mystyle_url }}" data-mystyle-nav="{{ parts[0] }}" class="header__menu-item list-menu__item link link--text focus-inset"{% if mystyle_current %} aria-current="page"{% endif %}>
+        <span data-mystyle-nav-label{% if mystyle_current %} class="header__active-menu-item"{% endif %}>{{ parts[1] }}</span>
+      </a>
+    {%- endif -%}
   </li>
-{%- else -%}
-  <li>
-    <a href="{{ mystyle_url }}" class="header__menu-item list-menu__item link link--text focus-inset"{% if template.suffix == 'mystyle' %} aria-current="page"{% endif %}>
-      <span{% if template.suffix == 'mystyle' %} class="header__active-menu-item"{% endif %}>My Style</span>
-    </a>
-  </li>
-{%- endif -%}
+{%- endfor -%}
+<script>
+  (function () {
+    var id = {{ customer.id | json }};
+    var hasProfile = false;
+    try { hasProfile = !!(id && localStorage.getItem('mystyle:profile:' + id)); } catch (e) {}
+    if (!hasProfile) return;
+    document.querySelectorAll('[data-mystyle-nav="style"]').forEach(function (a) {
+      a.setAttribute('href', {{ routes.all_products_collection_url | append: '?view=mystyle&step=style' | json }});
+      a.querySelector('[data-mystyle-nav-label]').textContent = 'Update Style';
+    });
+    document.querySelectorAll('[data-mystyle-nav="recommendations"]').forEach(function (a) { a.closest('li').style.display = ''; });
+  })();
+</script>

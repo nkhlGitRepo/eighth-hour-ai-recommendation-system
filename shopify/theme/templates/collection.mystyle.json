@@ -3,9 +3,7 @@
     "main": {
       "type": "mystyle-page",
       "settings": {
-        "heading": "My Style",
-        "heading_size": "h1",
-        "intro": "Your size in every piece, and pieces chosen for your shape and style."
+        "page": "style"
       }
     }
   },

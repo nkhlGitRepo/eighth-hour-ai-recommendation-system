@@ -1621,7 +1621,8 @@ async def store_get_profile(customer: dict = Depends(get_store_customer)):
     to /shopify/restore, or the quiz)."""
     try:
         session = session_repo.get_latest_completed_session_by_user(customer["user_id"])
-        return {"profile": _store_profile(session, customer) if session else None}
+        # With its encrypted backup, so every browser she signs in on keeps one.
+        return {"profile": _store_profile(session, customer, include_token=True) if session else None}
     except Exception as err:
         _store_errors("profile", err)
 
@@ -1633,7 +1634,7 @@ async def store_restore_profile(request: StoreRestoreRequest, customer: dict = D
     try:
         existing = session_repo.get_latest_completed_session_by_user(customer["user_id"])
         if existing:
-            return {"restored": False, "profile": _store_profile(existing, customer)}
+            return {"restored": False, "profile": _store_profile(existing, customer, include_token=True)}
         payload = profile_tokens.read(request.profile_token, customer["store"], customer["customer_id"])
         session = intake_orchestrator.create_session(customer["user_id"])
         intake_orchestrator.record_consent(session.session_id, photo_consent=True, measurement_consent=True)
@@ -1646,7 +1647,7 @@ async def store_restore_profile(request: StoreRestoreRequest, customer: dict = D
             occasions=preferences["occasions"],
             preference_capture=PreferenceCapture(catalog=_ColourCatalog(preferences["colors"])),
         )
-        return {"restored": True, "profile": _store_profile(session, customer)}
+        return {"restored": True, "profile": _store_profile(session, customer, include_token=True)}
     except Exception as err:
         _store_errors("restore", err)
 
@@ -1685,8 +1686,9 @@ async def store_new_releases(request: StoreNewReleasesRequest, customer: dict = 
     try:
         session = _store_session(request.session_id, customer)
         _require_profile(session)
+        catalog = _store_catalog(request)
         feed = NewReleasesFeed(
-            catalog=_store_catalog(request), fit_checker=fit_checker, consent_tracker=consent_tracker,
+            catalog=catalog, fit_checker=fit_checker, consent_tracker=consent_tracker,
         ).generate_feed(
             user_id=session.user_id,
             body_shape_profile=session.shape_profile,
@@ -1702,6 +1704,8 @@ async def store_new_releases(request: StoreNewReleasesRequest, customer: dict = 
                 "match_score": item["match_score"],
                 "reason": item["reason"],
                 "availability": item["availability"],
+                "in_stock_in_size": (catalog.get_item(item["sku"]) or {}).get("sizes_in_stock", {}).get(
+                    item["availability"].get("recommended_size")),
             }
             for item in feed
         ]}
