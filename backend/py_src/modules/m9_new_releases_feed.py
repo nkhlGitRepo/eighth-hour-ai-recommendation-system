@@ -47,6 +47,15 @@ class NewReleasesFeed:
         "Co-ord Sets": "co-ord set",
         "Jackets": "jacket",
     }
+    # Categories named in the plural ("these trousers flatter").
+    PLURAL_CATEGORIES = {"Trousers"}
+    SILHOUETTE_NAMES = {"a_line": "A-line"}
+    OCCASION_PHRASES = {
+        "work": "the office",
+        "casual": "everyday wear",
+        "evening": "evenings out",
+        "weekend": "weekends",
+    }
 
     def __init__(
         self,
@@ -545,38 +554,48 @@ class NewReleasesFeed:
         category = self.CATEGORY_SINGULAR.get(
             product.get("category"), (product.get("category") or "item").lower()
         )
+        plural = product.get("category") in self.PLURAL_CATEGORIES
         shape = body_shape_profile.get("shape_class") if body_shape_profile else None
 
+        # (singular verb, plural verb, rest): "this dress flatters" / "these trousers flatter".
         clauses = []
 
         if shape and shape in product.get("flatters_shapes", []):
-            clauses.append(f"flatters your {shape} shape")
+            clauses.append(("flatters", "flatter", f"your {shape} shape"))
 
         if style_profile:
             preferred_colors = style_profile.get("preferred_colors", [])
             matching_colors = self._matching_colors(preferred_colors, product.get("colors", []))
             if matching_colors:
-                clauses.append(f"comes in {matching_colors[0]}, one of your preferred colors")
+                clauses.append(("comes in", "come in", f"{matching_colors[0]} (one of your colors)"))
 
             preferred_silhouettes = style_profile.get("preferred_silhouettes", [])
             matching_silhouettes = [
                 s for s in self._product_silhouettes(product) if s in preferred_silhouettes
             ]
             if matching_silhouettes:
-                clauses.append(f"has the {matching_silhouettes[0].replace('_', ' ')} silhouette you prefer")
+                name = self.SILHOUETTE_NAMES.get(matching_silhouettes[0], matching_silhouettes[0].replace("_", " "))
+                clauses.append(("has", "have", f"the {name} silhouette you like"))
 
             preferred_occasions = style_profile.get("occasions", [])
             matching_occasions = [o for o in product.get("occasions", []) if o in preferred_occasions]
             if matching_occasions:
-                clauses.append(f"suits {matching_occasions[0]} occasions, like you're looking for")
+                occasion = matching_occasions[0]
+                clauses.append(("works for", "work for", self.OCCASION_PHRASES.get(occasion, occasion)))
 
         if clauses:
-            return f"This {category} " + " and ".join(clauses) + "."
+            parts = [f"{plural_verb if plural else verb} {rest}" for verb, plural_verb, rest in clauses]
+            listed = parts[0] if len(parts) == 1 else ", ".join(parts[:-1]) + " and " + parts[-1]
+            return f"{'These' if plural else 'This'} {category} {listed}."
 
         # No specific signal matched (the item cleared the threshold via
         # the softer category-level shape affinity, or via relaxation) --
         # still say something true and product-specific rather than the
         # same catch-all for every item.
+        if plural:
+            if shape:
+                return f"New {category} that generally suit {shape} shapes."
+            return f"Newly added {category} that match your style profile."
         if shape:
             return f"A new {category} that generally suits {shape} shapes."
         return f"A newly added {category} that matches your style profile."

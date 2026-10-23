@@ -639,6 +639,29 @@ class TestM9MatchReasonGeneration:
         assert "vest" in reason.lower()
         assert reason.endswith(".")
 
+    def test_plural_garments_take_plural_verbs(self, feed_manager, hourglass_profile):
+        """"This trousers flatters" was shown on the store."""
+        product = {"category": "Trousers", "flatters_shapes": ["hourglass"], "colors": [],
+                   "silhouette_classes": ["straight"], "occasions": ["work"]}
+        style = {"preferred_colors": [], "preferred_silhouettes": ["straight"], "occasions": ["work"]}
+        reason = feed_manager._generate_match_reason(product, hourglass_profile, style)
+        assert reason.startswith("These trousers flatter your hourglass shape, have ")
+        assert " and work for " in reason
+        fallback = feed_manager._generate_match_reason(
+            {"category": "Trousers", "flatters_shapes": [], "colors": [], "occasions": []}, hourglass_profile, None)
+        assert fallback.startswith("New trousers that generally suit ")
+
+    def test_signals_read_as_one_list_with_readable_names(self, feed_manager, hourglass_profile):
+        """Silhouette keys are named as customers know them ("a_line" is
+        "A-line"), and the matches read as a list, not "... and ... and"."""
+        product = {"category": "Dresses", "flatters_shapes": ["hourglass"], "colors": ["Sky Captain"],
+                   "silhouette_classes": ["a_line"], "occasions": ["evening"]}
+        style = {"preferred_colors": ["Sky Captain"], "preferred_silhouettes": ["a_line"], "occasions": ["evening"]}
+        reason = feed_manager._generate_match_reason(product, hourglass_profile, style)
+        assert "A-line" in reason and "a line" not in reason
+        assert reason.count(" and ") == 1
+        assert reason.startswith("This dress flatters your hourglass shape, comes in Sky Captain")
+
 
 class TestM9AuditLogging:
     """Test audit trail logging."""
