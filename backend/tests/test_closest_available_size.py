@@ -41,7 +41,7 @@ XS_TO_M = ["XS", "S", "M"]
 
 def product(sku, category, sizes):
     return {"sku": sku, "slug": sku, "name": sku, "category": category, "sizes": sizes,
-            "fabric": "Silk", "price": 250.0, "colors": ["Jet Black"]}
+            "fabric": "Silk", "price": 250.0, "colors": ["Black"]}
 
 
 @pytest.fixture
