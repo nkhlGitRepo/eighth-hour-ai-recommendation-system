@@ -766,7 +766,8 @@
       }).catch(function (err) {
         next.disabled = false;
         next.textContent = 'Scan Photo';
-        self.error({ message: err.message + ' It’s usually the framing or the pose: face the camera with your whole body in the shot and your arms a little away from your sides — or enter your measurements instead.' });
+        // A refused scan (too many this hour) says what to do itself; framing advice is for a scan that failed.
+        self.error({ message: err.status === 429 ? err.message : err.message + ' It’s usually the framing or the pose: face the camera with your whole body in the shot and your arms a little away from your sides — or enter your measurements instead.' });
       });
     });
   };

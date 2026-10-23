@@ -47,7 +47,7 @@ from py_src.modules.m4_style_preference import PreferenceCapture
 from py_src.shopify import theme_auth
 from py_src.shopify import profile_token as profile_tokens
 from py_src.shopify.catalog import LaunchData, to_engine_products
-from py_src.shopify.rate_limit import ClientLimiter, RateLimited, client_address
+from py_src.shopify.rate_limit import ClientLimiter, PhotoScanLimiter, RateLimited, client_address
 
 # Initialize FastAPI app
 app = FastAPI(title="AI Styling Engine", version="1.0.0")
@@ -376,6 +376,8 @@ def get_current_user_id(token: str = Depends(get_bearer_token)) -> str:
 
 # One per process, like the catalog: see py_src/shopify/rate_limit.
 store_customer_limiter = ClientLimiter()
+# Photo scans, store and demo alike: the one expensive request (rate_limit).
+photo_scan_limiter = PhotoScanLimiter()
 
 
 def get_store_customer(request: Request, x_mystyle_customer: Optional[str] = Header(None)) -> dict:
@@ -961,6 +963,7 @@ async def get_photo_disclosure():
 
 @app.post("/intake/photo-measure")
 async def measure_from_photo(
+    request: Request,
     session_id: str = Form(...),
     height_cm: float = Form(...),
     photo: UploadFile = File(...),
@@ -996,6 +999,7 @@ async def measure_from_photo(
       "provider": "mock"
     }
     """
+    photo_scan_limiter.check(client_address(request), user_id)
     try:
         # Ownership: the session must belong to the authenticated caller.
         session = intake_orchestrator.get_session(session_id)
