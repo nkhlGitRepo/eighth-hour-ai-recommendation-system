@@ -11,7 +11,8 @@
     apiBase: "https://eighth-hour-api.onrender.com",
     token: {{ mystyle_token | strip | json }} || null,
     customerId: {{ customer.id | json }},
-    loginUrl: {{ routes.account_login_url | json }},
+    {%- comment -%} Sign-in that comes back to this page (account_login_url goes to her orders). {%- endcomment %}
+    loginUrl: {{ routes.storefront_login_url | default: routes.account_login_url | json }},
     rootUrl: {{ mystyle_root | json }},
     pageUrl: {{ routes.all_products_collection_url | append: '?view=mystyle' | json }},
     recommendationsUrl: {{ routes.all_products_collection_url | append: '?view=mystyle-recommendations' | json }},

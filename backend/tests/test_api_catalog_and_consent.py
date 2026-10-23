@@ -7,6 +7,8 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.signed_in_client import SignedInClient
+
 from main import app
 
 SYNC_TOKEN = "test-catalog-sync-token"
@@ -15,7 +17,7 @@ SYNC_HEADERS = {"X-Catalog-Sync-Token": SYNC_TOKEN}
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app) as c:
+    with SignedInClient(app) as c:
         yield c
 
 
@@ -286,7 +288,7 @@ class TestProfile:
 
 class TestConsentEndpoints:
     def test_record_and_retrieve_consent(self, client):
-        user_id = unique_user()
+        user_id = client.new_account()
         r = client.post("/consent", json={
             "user_id": user_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -302,13 +304,13 @@ class TestConsentEndpoints:
         assert get_r.json()["measurement_consent"] is True
 
     def test_unknown_user_has_no_consent(self, client):
-        user_id = unique_user()
+        user_id = client.new_account()
         r = client.get(f"/consent/{user_id}")
         assert r.status_code == 200
         assert r.json()["has_any_consent"] is False
 
     def test_consent_can_be_updated_to_withdraw(self, client):
-        user_id = unique_user()
+        user_id = client.new_account()
         client.post("/consent", json={
             "user_id": user_id, "photo_consent": True, "measurement_consent": True,
         })

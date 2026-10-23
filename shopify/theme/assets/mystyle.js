@@ -58,8 +58,12 @@
   }
   function capitalize(text) { return String(text || '').replace(/^./, function (c) { return c.toUpperCase(); }); }
   function withParam(url, param) { return url + (url.indexOf('?') === -1 ? '?' : '&') + param; }
+  // Back to this page after signing in -- so a shopper who lands on a product
+  // from an ad returns to it. Shopify's storefront sign-in link already does;
+  // otherwise ask for it (return_to takes a relative path).
   function signInUrl() {
-    return withParam(C.loginUrl, 'return_url=' + encodeURIComponent(window.location.pathname + window.location.search));
+    if (/[?&]return_to=/.test(C.loginUrl)) return C.loginUrl;
+    return withParam(C.loginUrl, 'return_to=' + encodeURIComponent(window.location.pathname + window.location.search));
   }
 
   // The engine works in cm; everything she reads is in the unit she measures in
@@ -376,11 +380,28 @@
     box.hidden = false;
     var prompt = function (html) { body.innerHTML = '<p class="mystyle-fit__prompt">' + html + '</p>'; };
 
-    if (!token) { prompt('<a href="' + esc(signInUrl()) + '">Sign in</a> to see the size that fits you best.'); return; }
+    // Shoppers often land here straight from an ad: tell them what My Style
+    // would show them, and how to get it.
+    var invite = function (title, text, action) {
+      body.innerHTML = '<div class="mystyle-fit__invite"><p class="mystyle-fit__invite-title">' + esc(title) + '</p>' +
+        '<p>' + esc(text) + '</p><a class="mystyle-btn mystyle-btn--small" href="' + esc(action[1]) + '">' + esc(action[0]) + '</a>' +
+        (action[2] ? '<p class="mystyle-fit__invite-note">' + esc(action[2]) + '</p>' : '') + '</div>';
+    };
+    if (!token) {
+      invite('How will this fit you?',
+        'Sign in and answer a few quick questions to see your size in this piece, how it fits you, and styling tips for your shape.',
+        ['Sign in to see your fit', signInUrl(), 'New here? You can create a free account on the next page.']);
+      return;
+    }
     prompt('Finding your size…');
     loadProfile(function () { prompt('Waking up My Style — this can take up to a minute.'); })
       .then(function (profile) {
-        if (!profile) { prompt('<a href="' + esc(C.pageUrl) + '">Build your style profile</a> to see the size that fits you best.'); return null; }
+        if (!profile) {
+          invite('See how this fits you',
+            'Build your style profile in about 5 minutes — with your measurements or a photo — to see your size in this piece and how it fits you.',
+            ['Build my style profile', C.pageUrl]);
+          return null;
+        }
         return api('/shopify/fit-check', {
           method: 'POST',
           body: { session_id: profile.session_id, product: slimProduct(product), launch: C.launch }
@@ -407,10 +428,16 @@
         '<button type="button" class="mystyle-link" data-select-size>Select ' + esc(size) + '</button>' +
       '</div>' +
       (fit.in_stock_in_size === false ? '<p class="mystyle-fit__stock">' + esc(size) + ' is sold out right now.</p>' : '') +
+      ((fit.fit_by_area || []).length ? '<p class="mystyle-fit__sub">How ' + esc(size) + ' fits you:</p><ul class="mystyle-areas">' +
+        fit.fit_by_area.map(function (a) {
+          return '<li class="is-' + esc(String(a.fit).replace(/\s+/g, '-')) + '"><span>' + esc(capitalize(a.area)) + '</span><strong>' + esc(capitalize(a.fit)) + '</strong></li>';
+        }).join('') + '</ul>' : '') +
       '<p class="mystyle-fit__sub">How each size fits you:</p>' +
       '<ul class="mystyle-bars">' + bars + '</ul>' +
       '<p class="mystyle-fit__sub">Fit Details</p>' +
       '<ul class="mystyle-ticks">' + fit.fit_notes.map(function (n) { return '<li>' + esc(inUnit(n)) + '</li>'; }).join('') + '</ul>' +
+      ((fit.tips || []).length ? '<p class="mystyle-fit__sub">Tips for You</p><ul class="mystyle-tips">' +
+        fit.tips.map(function (t) { return '<li>' + esc(inUnit(t)) + '</li>'; }).join('') + '</ul>' : '') +
       '<div class="mystyle-fit__feedback" data-feedback>' +
         '<button type="button" class="mystyle-btn mystyle-btn--secondary mystyle-btn--small" data-open>Share Your Fit Feedback</button></div>';
     body.querySelector('[data-select-size]').addEventListener('click', function () {

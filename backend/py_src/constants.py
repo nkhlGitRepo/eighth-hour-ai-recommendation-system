@@ -403,6 +403,87 @@ FIT_NOTE_RELEVANT_DIMENSIONS = {
 }
 FIT_NOTE_RELEVANT_DIMENSIONS["Jackets"] = set(FIT_NOTE_RELEVANT_DIMENSIONS["Tops"])
 
+# Styling advice on the product page, for her shape (M3's classes) and the
+# piece's silhouette -- standard styling guidance for each figure: show a
+# defined waist (hourglass); balance fuller hips (pear); skim the middle
+# (apple); add volume below to balance the shoulders (athletic); create or
+# enjoy clean lines (straight); most things work (balanced). An entry is one
+# sentence, or one per garment type ("top": tops, vests, jackets; "bottom":
+# skirts, trousers; "full": dresses, co-ord sets) where the advice differs.
+# Copy, not a model: the brand can rewrite any of it.
+CATEGORY_ZONE = {
+    "Tops": "top", "Vests": "top", "Jackets": "top",
+    "Skirts": "bottom", "Trousers": "bottom",
+    "Dresses": "full", "Co-ord Sets": "full",
+}
+# Which of a piece's silhouettes the tip speaks to, most telling first.
+SILHOUETTE_TIP_ORDER = ["a_line", "fitted", "oversized", "straight", "flowing"]
+STYLING_TIPS = {
+    "hourglass": {
+        "fitted": "Fitted pieces follow your defined waist, the line that suits you best.",
+        "a_line": "The A-line shape marks your waist and flares gently from it, keeping your curves balanced.",
+        "flowing": "Flowing fabric can soften your waist; a belt or a front tuck keeps your shape defined.",
+        "straight": "A straight cut skims past your waist; tuck it in or add a belt to show your shape.",
+        "oversized": "Balance the extra volume by defining your waist; a belt works well.",
+    },
+    "pear": {
+        "fitted": {
+            "top": "Fitted through the top, it shows off your shoulders and waist and balances fuller hips.",
+            "bottom": "A close fit through the hips draws the eye there; pair it with a structured or detailed top for balance.",
+            "full": "The fitted shape shows your waist; one with a little ease through the skirt will skim your hips.",
+        },
+        "a_line": "The A-line flares past your hips without clinging, one of the most balancing shapes for you.",
+        "flowing": "Flowing fabric falls softly past your hips rather than clinging to them.",
+        "straight": {
+            "top": "A straight cut skims past your hips; a defined shoulder or neckline balances your shape.",
+            "bottom": "A straight line from hip to hem balances fuller hips and lengthens your legs.",
+            "full": "A straight cut skims past your hips; draw the eye up with a defined shoulder or neckline.",
+        },
+        "oversized": "Keep the volume on top and a cleaner line below to balance your hips.",
+    },
+    "apple": {
+        "fitted": "A close fit at the waist can cling; choose your size for the middle, or wear it open or layered.",
+        "a_line": "The A-line falls away from your waist, skimming your middle and lengthening your shape.",
+        "flowing": "Flowing lines skim your middle rather than clinging to it, easy and flattering on you.",
+        "straight": "A straight cut skims your middle and gives you a long, clean line.",
+        "oversized": "Easy through the middle; balance the volume with a slimmer line below.",
+    },
+    "athletic": {
+        "fitted": {
+            "top": "A fitted top highlights your shoulders; an open or V neck softens them.",
+            "bottom": "A close fit through the hips adds shape below your waist, balancing your shoulders.",
+            "full": "The fitted shape defines your waist; a fuller skirt balances your shoulders.",
+        },
+        "a_line": "The A-line adds volume below your waist to balance your shoulders.",
+        "flowing": "Flowing pieces soften your shoulders and add movement below.",
+        "straight": {
+            "top": "A clean, straight top keeps your shoulders understated.",
+            "bottom": "A straight line keeps you long; a wider leg or fuller hem adds balance to your shoulders.",
+            "full": "A straight cut keeps a clean line; a belt adds definition at your waist.",
+        },
+        "oversized": "Keep the volume away from your shoulders, with a defined waist or a slimmer top.",
+    },
+    "straight": {
+        "fitted": "A fitted cut creates shape at your waist.",
+        "a_line": "The A-line flare adds curve at your hips and definition at your waist.",
+        "flowing": "Flowing fabric adds movement and softness to your straight frame.",
+        "straight": "Clean, straight lines suit your frame; a belt adds waist definition when you want it.",
+        "oversized": "Relaxed volume suits your frame; a belt or a tuck adds shape when you want it.",
+    },
+    "balanced": {
+        "fitted": "With your balanced proportions, a fitted cut simply follows your shape.",
+        "a_line": "Your balanced proportions suit the A-line's gentle flare.",
+        "flowing": "Flowing pieces drape easily on your balanced frame.",
+        "straight": "A straight cut keeps a clean line on your balanced frame.",
+        "oversized": "Relaxed volume works on your balanced frame; define the waist for more shape.",
+    },
+}
+
+# Fabrics by give, for advice on choosing between two sizes. Matched as words
+# in the piece's fabric; anything unrecognised gets advice that doesn't assume.
+LOW_GIVE_FABRICS = ("silk", "satin", "linen", "cotton", "crepe", "wool", "chiffon", "georgette", "organza", "taffeta")
+STRETCH_FABRICS = ("stretch", "jersey", "knit", "elastane", "spandex", "lycra")
+
 # New releases feed configuration
 NEW_RELEASES_MATCH_THRESHOLD = 0.65  # Minimum match score to include in feed
 NEW_RELEASES_WINDOW_DAYS = 30  # Products launched within this many days count as "new"

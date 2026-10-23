@@ -8,12 +8,14 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.signed_in_client import SignedInClient
+
 from main import app
 
 
 @pytest.fixture(scope="module")
 def client():
-    with TestClient(app) as c:
+    with SignedInClient(app) as c:
         yield c
 
 
@@ -104,7 +106,7 @@ class TestUserHistory:
         assert len(r.json()) <= 1
 
     def test_invalid_limit_rejected(self, client):
-        user_id = unique_user()
+        user_id = client.new_account()
         client.post("/consent", json={
             "user_id": user_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -116,7 +118,7 @@ class TestUserHistory:
         assert r2.status_code == 400
 
     def test_user_with_no_history_returns_empty_list(self, client):
-        user_id = unique_user()
+        user_id = client.new_account()
         client.post("/consent", json={
             "user_id": user_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -126,7 +128,7 @@ class TestUserHistory:
         assert r.json() == []
 
     def test_without_consent_rejected(self, client):
-        user_id = unique_user()  # never consented
+        user_id = client.new_account()  # never consented
         r = client.get(f"/history/{user_id}")
         assert r.status_code == 403
 
@@ -144,7 +146,7 @@ class TestSessionChecks:
     def test_non_owner_cannot_read_session_history(self, client):
         """Regression coverage for the cross-user data leak fix."""
         session_id, real_owner, _, _ = complete_intake_and_check_fit(client, unique_user())
-        attacker_id = unique_user()
+        attacker_id = client.new_account()
         # Attacker needs their own consent on file to get past the consent gate.
         client.post("/consent", json={
             "user_id": attacker_id, "photo_consent": True, "measurement_consent": True,
@@ -156,13 +158,14 @@ class TestSessionChecks:
     def test_requester_without_consent_is_rejected(self, client):
         session_id, real_owner, _, _ = complete_intake_and_check_fit(client, unique_user())
 
-        r = client.get(f"/history/session/{session_id}", params={"user_id": "no-consent-user"})
+        no_consent = client.new_account()
+        r = client.get(f"/history/session/{session_id}", params={"user_id": no_consent})
         assert r.status_code == 403
 
     def test_nonexistent_session_returns_empty_list_not_a_leak(self, client):
         """A session_id with no matching intake_sessions row (and thus no
         real owner to check) should just return no records, not error."""
-        user_id = unique_user()
+        user_id = client.new_account()
         client.post("/consent", json={
             "user_id": user_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -185,7 +188,7 @@ class TestProductTrend:
         """get_fit_check_trend filters by user_id at the query level already."""
         session_a, real_a, sku, _ = complete_intake_and_check_fit(client, unique_user())
         # A second user who never checked this product.
-        other_user = unique_user()
+        other_user = client.new_account()
         client.post("/consent", json={
             "user_id": other_user, "photo_consent": True, "measurement_consent": True,
         })
@@ -212,7 +215,7 @@ class TestUserTrends:
         assert body["date_range"] is not None
 
     def test_user_with_no_checks_returns_empty_analysis(self, client):
-        user_id = unique_user()
+        user_id = client.new_account()
         client.post("/consent", json={
             "user_id": user_id, "photo_consent": True, "measurement_consent": True,
         })
@@ -225,7 +228,7 @@ class TestUserTrends:
         assert body["date_range"] is None
 
     def test_requires_consent(self, client):
-        user_id = unique_user()  # never consented
+        user_id = client.new_account()  # never consented
         r = client.get(f"/trends/{user_id}")
         assert r.status_code == 403
 

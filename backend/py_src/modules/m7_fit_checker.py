@@ -35,6 +35,12 @@ from py_src.constants import (
     COORD_LENGTH_CHART_ORDER,
     LENGTH_CHART_REFERENCE_HEIGHT_CM,
     LENGTH_NOTE_SAME_AS_SHOWN_CM,
+    SIZE_CHART_SOURCE,
+    CATEGORY_ZONE,
+    SILHOUETTE_TIP_ORDER,
+    STYLING_TIPS,
+    LOW_GIVE_FABRICS,
+    STRETCH_FABRICS,
 )
 from py_src.guardrails.audit_logger import AuditLogger
 from py_src.guardrails.consent_tracker import ConsentTracker
@@ -153,6 +159,10 @@ class FitChecker:
         if length_note:
             fit_notes.append(length_note)
 
+        fit_by_area, tips = self._fit_advice(
+            measurements, product, recommended_size, note_dimensions, shape_class, advice["closest_available"]
+        )
+
         # Calculate overall confidence -- already rounded to 2 decimals in
         # _calculate_fit_scores, so this is guaranteed to equal
         # fit_scores[recommended_size] exactly.
@@ -166,6 +176,8 @@ class FitChecker:
             "confidence": confidence,
             "customer_size": advice["customer_size"],
             "closest_available": advice["closest_available"],
+            "fit_by_area": fit_by_area,
+            "tips": tips,
         }
 
         # Audit log
@@ -710,6 +722,148 @@ class FitChecker:
         if nearest == cut_for:
             return f"{moved}."
         return f"{moved} — {'at' if inside else 'closer to'} {nearest}."
+
+    # ----------------------------------------------- advice beyond the size
+
+    def _fit_advice(self, measurements, product, recommended_size, note_dimensions, shape_class, closest_available):
+        """
+        Advice beyond the headline size, for every customer, from the brand's
+        published ranges and the piece's own data:
+
+          - fit_by_area: where she sits in her size's published range at each
+            area the garment is sized on -- roomy, relaxed, true to size,
+            close or snug;
+          - tips: when she measures a different size at one of those areas,
+            which to choose (weighing the piece's cut and fabric); and a
+            styling tip for her shape and the piece's silhouette.
+
+        With a custom per-product chart (no published ranges) only the styling
+        tip applies; when her size isn't stocked, the closest-available note
+        already says what the size comparison would.
+        """
+        areas = [a for a in ("bust", "waist", "hips") if a in note_dimensions]
+        if CATEGORY_ZONE.get(product.get("category")) == "top":
+            # Tops are sized on the bust -- or, for some shapes, the waist.
+            sized_on = TOP_SIZE_DIMENSION_BY_SHAPE.get(shape_class, DEFAULT_TOP_SIZE_DIMENSION)
+            if sized_on not in areas:
+                areas.append(sized_on)
+        areas = [a for a in ("bust", "waist", "hips") if a in areas and measurements.get(a)]
+
+        fit_by_area, tips = [], []
+        if not product.get("size_chart") and recommended_size in SIZE_CHART_SOURCE:
+            for area in areas:
+                low, high = SIZE_CHART_SOURCE[recommended_size][area]
+                fit_by_area.append({"area": area, "fit": self._describe_area_fit(measurements[area], low, high)})
+            if not closest_available:
+                tip = self._between_sizes_tip(measurements, product, recommended_size, areas)
+                if tip:
+                    tips.append(tip)
+        styling = self._styling_tip(product, shape_class)
+        if styling:
+            tips.append(styling)
+        return fit_by_area, tips
+
+    @staticmethod
+    def _describe_area_fit(value, low, high):
+        """Where a measurement sits in a size's published range, in the words
+        a customer uses. The thirds split the range for description; they are
+        not a fitted threshold."""
+        if value < low:
+            return "roomy"
+        if value > high:
+            return "snug"
+        third = (high - low) / 3
+        if value < low + third:
+            return "relaxed"
+        if value > high - third:
+            return "close"
+        return "true to size"
+
+    @staticmethod
+    def _sizes_at(area, value):
+        """(smaller, larger) published sizes around a measurement: the same
+        size twice when its range holds the measurement, the two neighbours
+        when it falls in the gap between them, None past an end of the chart."""
+        previous = None
+        for size in STANDARD_SIZES:
+            low, high = SIZE_CHART_SOURCE[size][area]
+            if value < low:
+                return (previous, size)
+            if value <= high:
+                return (size, size)
+            previous = size
+        return (previous, None)
+
+    def _between_sizes_tip(self, measurements, product, recommended_size, areas):
+        """When she measures a different size at one of the garment's areas
+        than the one recommended -- most often in the gap between two sizes --
+        say so, and which to choose. Larger first: a tight fit matters more
+        than a little room."""
+        order = {size: i for i, size in enumerate(STANDARD_SIZES)}
+        stocked = [s for s in STANDARD_SIZES if s in (product.get("sizes") or [])]
+        rec = order[recommended_size]
+        larger = smaller = None
+        for area in areas:
+            low_size, high_size = self._sizes_at(area, measurements[area])
+            if high_size is not None and order[high_size] > rec and larger is None:
+                larger = (area, low_size, high_size)
+            elif low_size is not None and order[low_size] < rec and smaller is None:
+                smaller = (area, low_size, high_size)
+
+        def measured(low_size, high_size):
+            if low_size == high_size:
+                return low_size
+            if low_size is None:
+                return f"under {high_size}"
+            if high_size is None:
+                return f"over {low_size}"
+            return f"between {low_size} and {high_size}"
+
+        if larger:
+            area, low_size, high_size = larger
+            said = f"At the {area} you measure {measured(low_size, high_size)}"
+            bigger = [s for s in stocked if order[s] > rec]
+            if not bigger:
+                return f"{said}, so {recommended_size} may feel close there."
+            # The stocked size that gives her room there, or the largest there is.
+            up = next((s for s in bigger if order[s] >= order[high_size]), bigger[-1])
+            if order[up] < order[high_size]:
+                return f"{said}; the largest size here is {up}, which may still feel snug there."
+            one_step = order[high_size] - rec == 1
+            fabric = str(product.get("fabric") or "").strip()
+            words = set(fabric.lower().replace("-", " ").split())
+            cut = str(product.get("fit") or "").lower()
+            if cut == "relaxed" and one_step:
+                return f"{said}, but this piece is cut relaxed, so {recommended_size} should still be comfortable there."
+            if cut in ("slim", "snug"):
+                return f"{said}, and this piece is cut close to the body, so {up} will feel easier there."
+            if words & set(STRETCH_FABRICS) and one_step:
+                return f"{said}; the fabric has some stretch, so {recommended_size} should be comfortable there."
+            if words & set(LOW_GIVE_FABRICS):
+                return f"{said}. {fabric} has little give, so choose {up} if you'd like more room through the {area}."
+            return f"{said}. Choose {up} if you'd like more room through the {area}."
+        if smaller:
+            area, low_size, high_size = smaller
+            room = "a little extra room" if rec - order[low_size] == 1 else "extra room"
+            return f"At the {area} you measure {measured(low_size, high_size)}, so {recommended_size} will have {room} there."
+        return None
+
+    @staticmethod
+    def _styling_tip(product, shape_class):
+        """A styling tip for her shape and this piece's silhouette
+        (STYLING_TIPS), or None."""
+        tips = STYLING_TIPS.get(shape_class)
+        if not tips:
+            return None
+        silhouettes = product.get("silhouette_classes") or (
+            [product["silhouette_class"]] if product.get("silhouette_class") else []
+        )
+        zone = CATEGORY_ZONE.get(product.get("category"), "full")
+        for silhouette in SILHOUETTE_TIP_ORDER:
+            if silhouette in silhouettes:
+                tip = tips[silhouette]
+                return tip[zone] if isinstance(tip, dict) else tip
+        return None
 
     def _generate_fit_notes(
         self,
