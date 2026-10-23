@@ -1,7 +1,7 @@
 {%- comment -%}
   MyStyle: settings for assets/mystyle.js, plus its stylesheet and script.
   Rendered by layout/theme.liquid only on the pages that use My Style (product,
-  home and the My Style page).
+  home and the three My Style pages).
 {%- endcomment -%}
 {%- capture mystyle_token -%}{%- render 'mystyle-token' -%}{%- endcapture -%}
 {%- assign mystyle_root = routes.root_url | append: '/' | replace: '//', '/' -%}
@@ -14,6 +14,9 @@
     loginUrl: {{ routes.account_login_url | json }},
     rootUrl: {{ mystyle_root | json }},
     pageUrl: {{ routes.all_products_collection_url | append: '?view=mystyle' | json }},
+    recommendationsUrl: {{ routes.all_products_collection_url | append: '?view=mystyle-recommendations' | json }},
+    newUrl: {{ routes.all_products_collection_url | append: '?view=mystyle-new' | json }},
+    shopUrl: {{ linklists['main-menu'].links.first.url | default: routes.all_products_collection_url | json }},
     tokenUrl: {{ routes.all_products_collection_url | append: '?view=mystyle-token' | json }},
     defaultUnit: "in",
     launch: {% render 'mystyle-launch-data' %}

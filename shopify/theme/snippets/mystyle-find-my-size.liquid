@@ -1,10 +1,10 @@
 {%- comment -%}
-  MyStyle: Find my size, under the size picker on product pages. Stays hidden
+  MyStyle: Fit Recommendation, under the size picker on product pages. Stays hidden
   unless the product is one of the launch pieces (assets/mystyle.js checks its
   SKUs against the launch data). Usage: {% render 'mystyle-find-my-size', product: product %}
 {%- endcomment -%}
 <div class="mystyle mystyle-fit" data-mystyle-fit hidden>
-  <p class="mystyle-fit__heading">Find my size</p>
+  <p class="mystyle-fit__title">Fit Recommendation for You</p>
   <div data-mystyle-fit-body></div>
   <script type="application/json" data-mystyle-product>{{ product | json }}</script>
 </div>

@@ -262,9 +262,11 @@ class TestStoreEndpoints:
 
         items = client.post("/shopify/new-releases", headers=h, json={
             "session_id": session_id, "products": PRODUCTS, "launch": LAUNCH}).json()["items"]
-        assert items and items[0]["reason"]
+        assert items and items[0]["reason"] and items[0]["in_stock_in_size"] is True
 
-        assert client.get("/shopify/profile", headers=h).json()["profile"]["session_id"] == session_id
+        loaded = client.get("/shopify/profile", headers=h).json()["profile"]
+        assert loaded["session_id"] == session_id
+        assert loaded["profile_token"]      # any browser she signs in on keeps a backup
 
     def test_measurements_are_never_sent_back(self, client):
         session_id, profile = build_profile(client, "2002", size="L")
