@@ -45,6 +45,7 @@ class NewReleasesFeed:
         "Skirts": "skirt",
         "Trousers": "trousers",
         "Co-ord Sets": "co-ord set",
+        "Jackets": "jacket",
     }
 
     def __init__(
@@ -426,17 +427,15 @@ class NewReleasesFeed:
         user_colors = style_profile.get("preferred_colors", [])
         product_colors = product.get("colors", [])
         if user_colors and product_colors:
-            matching_colors = set(user_colors) & set(product_colors)
+            matching_colors = self._matching_colors(user_colors, product_colors)
             color_score = len(matching_colors) / len(user_colors) if user_colors else 0
             scores.append(color_score)
 
-        # Silhouette matching. The catalog stores a single silhouette_class
-        # string per product (not a list called "silhouettes"), so this is
-        # a membership check, not a set intersection.
+        # Silhouette matching: a product may carry several silhouettes.
         user_silhouettes = style_profile.get("preferred_silhouettes", [])
-        product_silhouette = product.get("silhouette_class")
-        if user_silhouettes and product_silhouette:
-            sil_score = 1.0 if product_silhouette in user_silhouettes else 0.0
+        product_silhouettes = self._product_silhouettes(product)
+        if user_silhouettes and product_silhouettes:
+            sil_score = 1.0 if any(s in user_silhouettes for s in product_silhouettes) else 0.0
             scores.append(sil_score)
 
         # Occasion matching
@@ -451,6 +450,19 @@ class NewReleasesFeed:
         if scores:
             return sum(scores) / len(scores)
         return 0.5
+
+    @staticmethod
+    def _matching_colors(wanted, product_colors):
+        """The product's colours that she picked, ignoring case, in the
+        product's own spelling."""
+        wanted_keys = {c.casefold() for c in wanted}
+        return [c for c in product_colors if c.casefold() in wanted_keys]
+
+    @staticmethod
+    def _product_silhouettes(product):
+        return product.get("silhouette_classes") or (
+            [product["silhouette_class"]] if product.get("silhouette_class") else []
+        )
 
     def _score_availability(
         self,
@@ -491,13 +503,12 @@ class NewReleasesFeed:
             colors = style_profile.get("preferred_colors", [])
             product_colors = product.get("colors", [])
             if colors and product_colors:
-                matches = set(colors) & set(product_colors)
+                matches = self._matching_colors(colors, product_colors)
                 if matches:
-                    attrs.append(f"Available in your colors ({', '.join(list(matches)[:2])})")
+                    attrs.append(f"Available in your colors ({', '.join(matches[:2])})")
 
             silhouettes = style_profile.get("preferred_silhouettes", [])
-            product_silhouette = product.get("silhouette_class")
-            if silhouettes and product_silhouette and product_silhouette in silhouettes:
+            if silhouettes and any(s in silhouettes for s in self._product_silhouettes(product)):
                 attrs.append("Your silhouette style")
 
             occasions = style_profile.get("occasions", [])
@@ -543,14 +554,16 @@ class NewReleasesFeed:
 
         if style_profile:
             preferred_colors = style_profile.get("preferred_colors", [])
-            matching_colors = [c for c in product.get("colors", []) if c in preferred_colors]
+            matching_colors = self._matching_colors(preferred_colors, product.get("colors", []))
             if matching_colors:
                 clauses.append(f"comes in {matching_colors[0]}, one of your preferred colors")
 
             preferred_silhouettes = style_profile.get("preferred_silhouettes", [])
-            product_silhouette = product.get("silhouette_class")
-            if product_silhouette and product_silhouette in preferred_silhouettes:
-                clauses.append(f"has the {product_silhouette.replace('_', ' ')} silhouette you prefer")
+            matching_silhouettes = [
+                s for s in self._product_silhouettes(product) if s in preferred_silhouettes
+            ]
+            if matching_silhouettes:
+                clauses.append(f"has the {matching_silhouettes[0].replace('_', ' ')} silhouette you prefer")
 
             preferred_occasions = style_profile.get("occasions", [])
             matching_occasions = [o for o in product.get("occasions", []) if o in preferred_occasions]

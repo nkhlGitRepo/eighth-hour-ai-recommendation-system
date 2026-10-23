@@ -210,6 +210,26 @@ class SQLiteSessionRepository(SessionRepository):
             logger.error("Session deletion failed", err)
             raise
 
+    def delete_user_data(self, user_id: str) -> dict:
+        """
+        Remove everything kept about one user -- sessions (with their
+        measurements and profiles), fit checks, feedback and consent records --
+        for "delete my profile" and privacy requests. Returns rows removed per
+        table. Tables another component owns are skipped if they don't exist.
+        """
+        removed = {}
+        with sqlite3.connect(self.db_path) as conn:
+            existing = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            for table in ("intake_sessions", "fit_check_history", "fit_feedback",
+                          "product_feedback", "consent_records"):
+                if table in existing:
+                    removed[table] = conn.execute(
+                        f"DELETE FROM {table} WHERE user_id = ?", (user_id,)
+                    ).rowcount
+            conn.commit()
+        logger.info("User data deleted", {"user_id": user_id, "removed": removed})
+        return removed
+
     def get_latest_completed_session_by_user(self, user_id: str) -> Optional["IntakeSession"]:
         """
         The user's most recent session holding a finished profile (for account

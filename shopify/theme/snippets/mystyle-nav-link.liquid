@@ -1,0 +1,17 @@
+{%- comment -%}
+  MyStyle: the "My Style" link at the end of the header menu. Written into the
+  theme rather than added to the store's navigation menu, so it only appears in
+  this theme. Usage: {% render 'mystyle-nav-link', variant: 'desktop' %} or 'drawer'.
+{%- endcomment -%}
+{%- assign mystyle_url = routes.all_products_collection_url | append: '?view=mystyle' -%}
+{%- if variant == 'drawer' -%}
+  <li>
+    <a href="{{ mystyle_url }}" class="menu-drawer__menu-item list-menu__item link link--text focus-inset{% if template.suffix == 'mystyle' %} menu-drawer__menu-item--active{% endif %}"{% if template.suffix == 'mystyle' %} aria-current="page"{% endif %}>My Style</a>
+  </li>
+{%- else -%}
+  <li>
+    <a href="{{ mystyle_url }}" class="header__menu-item list-menu__item link link--text focus-inset"{% if template.suffix == 'mystyle' %} aria-current="page"{% endif %}>
+      <span{% if template.suffix == 'mystyle' %} class="header__active-menu-item"{% endif %}>My Style</span>
+    </a>
+  </li>
+{%- endif -%}

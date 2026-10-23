@@ -1,0 +1,17 @@
+{%- comment -%}
+  MyStyle: the signed-in customer's token for the styling API, or nothing for a
+  guest. Rendered on Shopify's servers -- the secret never reaches the browser.
+
+  Format: {store}.{customer id}.{issued at}.{signature}, where signature is
+  HMAC-SHA256 over "{store}:{customer id}:{issued at}" with the secret in
+  snippets/mystyle-secret. The API (py_src/shopify/theme_auth.py) recomputes it
+  and accepts it for 24 hours.
+{%- endcomment -%}
+{%- if customer -%}
+  {%- capture mystyle_secret -%}{%- render 'mystyle-secret' -%}{%- endcapture -%}
+  {%- assign mystyle_secret = mystyle_secret | strip -%}
+  {%- assign mystyle_issued = 'now' | date: '%s' -%}
+  {%- capture mystyle_message -%}eighth-hour-us:{{ customer.id }}:{{ mystyle_issued }}{%- endcapture -%}
+  {%- assign mystyle_signature = mystyle_message | hmac_sha256: mystyle_secret -%}
+  {{- 'eighth-hour-us.' -}}{{- customer.id -}}.{{- mystyle_issued -}}.{{- mystyle_signature -}}
+{%- endif -%}

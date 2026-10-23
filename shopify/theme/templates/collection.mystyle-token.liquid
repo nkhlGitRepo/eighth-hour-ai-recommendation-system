@@ -1,0 +1,8 @@
+{%- layout none -%}
+{%- comment -%}
+  MyStyle: a fresh customer token for assets/mystyle.js when the one in the page
+  has expired (/collections/all?view=mystyle-token). Same token, same rules, as
+  snippets/mystyle-token.
+{%- endcomment -%}
+{%- capture mystyle_token -%}{%- render 'mystyle-token' -%}{%- endcapture -%}
+{"token": {{ mystyle_token | strip | json }}}

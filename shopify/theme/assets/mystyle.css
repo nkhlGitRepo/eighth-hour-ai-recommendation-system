@@ -1,0 +1,140 @@
+/* MyStyle: styles for the My Style page, Find my size and Picked for you.
+   Built on the theme's own variables and .button classes, so it follows the
+   theme's colours and type. */
+
+.mystyle {
+  --mystyle-ink: rgb(var(--color-foreground, 18, 18, 18));
+  --mystyle-muted: rgba(var(--color-foreground, 18, 18, 18), 0.68);
+  --mystyle-line: rgba(var(--color-foreground, 18, 18, 18), 0.14);
+  --mystyle-soft: rgba(var(--color-foreground, 18, 18, 18), 0.04);
+  --mystyle-accent: #493b39;
+  --mystyle-caution: #9a6b16;
+  color: var(--mystyle-ink);
+}
+.mystyle [hidden] { display: none !important; }
+.mystyle h2 { margin: 0 0 0.75rem; }
+.mystyle h3 { margin: 1.5rem 0 0.5rem; font-size: 1.05em; }
+.mystyle-muted { color: var(--mystyle-muted); font-size: 0.92em; }
+.mystyle-center { text-align: center; }
+.mystyle-error { color: #b42318; font-size: 0.92em; }
+.mystyle-step { margin: 0 0 0.25rem; font-size: 0.8em; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mystyle-muted); }
+
+.mystyle-panel {
+  max-width: 46rem;
+  margin: 0 auto 2.5rem;
+  padding: 2rem;
+  border: 1px solid var(--mystyle-line);
+}
+@media (max-width: 749px) { .mystyle-panel { padding: 1.25rem; } }
+.mystyle-panel .button { margin-top: 0.75rem; }
+.mystyle-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; }
+.mystyle-actions .button { margin-top: 0; }
+.mystyle-alt { margin-top: 1rem; font-size: 0.92em; }
+.mystyle-link {
+  background: none; border: 0; padding: 0; color: inherit; font: inherit;
+  text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer;
+}
+
+.mystyle-check { display: flex; gap: 0.75rem; align-items: flex-start; margin: 1rem 0; line-height: 1.5; }
+.mystyle-check input { margin-top: 0.3rem; flex: none; }
+
+.mystyle-units { display: inline-flex; border: 1px solid var(--mystyle-line); margin-bottom: 1rem; }
+.mystyle-units button { background: none; border: 0; padding: 0.45rem 0.9rem; font: inherit; cursor: pointer; color: var(--mystyle-muted); }
+.mystyle-units button.is-active { background: var(--mystyle-ink); color: rgb(var(--color-background, 255, 255, 255)); }
+
+.mystyle-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.25rem; margin: 1rem 0; }
+@media (max-width: 749px) { .mystyle-fields { grid-template-columns: 1fr; } }
+.mystyle-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.mystyle-field span { font-weight: 600; }
+.mystyle-field input, .mystyle-field select {
+  font: inherit; padding: 0.65rem 0.75rem; border: 1px solid var(--mystyle-line); background: transparent; color: inherit;
+}
+.mystyle-field small { color: var(--mystyle-muted); }
+
+.mystyle-note { padding: 0.75rem 1rem; background: var(--mystyle-soft); border-left: 3px solid var(--mystyle-accent); font-size: 0.92em; line-height: 1.5; }
+.mystyle-note.is-caution { border-left-color: var(--mystyle-caution); }
+.mystyle-disclosure { font-size: 0.92em; color: var(--mystyle-muted); }
+
+.mystyle-shape { font-size: 1.4em; margin: 0.25rem 0 0.5rem; }
+.mystyle-compare, .mystyle-sizes, .mystyle-tips { list-style: none; padding: 0; margin: 0; }
+.mystyle-compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; margin-top: 1rem; }
+.mystyle-compare li, .mystyle-sizes li { border: 1px solid var(--mystyle-line); padding: 0.6rem; text-align: center; display: flex; flex-direction: column; gap: 0.2rem; }
+.mystyle-compare span, .mystyle-sizes span { font-size: 0.85em; color: var(--mystyle-muted); }
+.mystyle-sizes { display: grid; grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); gap: 0.5rem; }
+.mystyle-tips { margin-top: 1rem; }
+.mystyle-tips li { padding: 0.25rem 0 0.25rem 1.25rem; position: relative; }
+.mystyle-tips li::before { content: "\2013"; position: absolute; left: 0; color: var(--mystyle-muted); }
+
+.mystyle fieldset { border: 0; padding: 0; margin: 1.25rem 0; }
+.mystyle legend { font-weight: 600; margin-bottom: 0.6rem; }
+.mystyle-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.75rem; }
+.mystyle-swatch input, .mystyle-pill input { position: absolute; opacity: 0; pointer-events: none; }
+.mystyle-swatch > span { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.88em; text-align: center; cursor: pointer; padding: 0.4rem; border: 1px solid transparent; }
+.mystyle-swatch__sample { display: block; height: 3.5rem; border: 1px solid var(--mystyle-line); }
+.mystyle-swatch input:checked + span { border-color: var(--mystyle-ink); }
+.mystyle-swatch input:focus-visible + span, .mystyle-pill input:focus-visible + span { outline: 2px solid var(--mystyle-ink); outline-offset: 2px; }
+.mystyle-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.mystyle-pill span { display: inline-block; padding: 0.5rem 1rem; border: 1px solid var(--mystyle-line); cursor: pointer; }
+.mystyle-pill input:checked + span { background: var(--mystyle-ink); color: rgb(var(--color-background, 255, 255, 255)); border-color: var(--mystyle-ink); }
+
+.mystyle-style { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; margin: 1.25rem 0 0; }
+.mystyle-style dt { font-size: 0.85em; color: var(--mystyle-muted); }
+.mystyle-style dd { margin: 0.2rem 0 0; }
+@media (max-width: 749px) { .mystyle-style, .mystyle-compare { grid-template-columns: 1fr; } }
+
+.mystyle-results { margin: 0 auto 2.5rem; }
+.mystyle-results h2 { margin-top: 2rem; }
+.mystyle-grid { margin-top: 1rem; }
+.mystyle-empty { list-style: none; color: var(--mystyle-muted); padding: 1rem 0; grid-column: 1 / -1; }
+.mystyle-card__reason, .mystyle-card__size, .mystyle-card__stock { margin: 0.4rem 0 0; font-size: 0.85em; line-height: 1.4; color: var(--mystyle-muted); }
+.mystyle-card__size.is-closest { color: var(--mystyle-caution); }
+.mystyle-danger { border-style: dashed; font-size: 0.92em; }
+
+/* Find my size, on product pages */
+.mystyle-fit { margin: 1rem 0; padding: 1rem 1.1rem; border: 1px solid var(--mystyle-line); }
+.mystyle-fit__heading { margin: 0 0 0.5rem; font-weight: 600; letter-spacing: 0.04em; }
+.mystyle-fit__prompt { margin: 0; }
+.mystyle-fit__result { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; }
+.mystyle-fit__label { color: var(--mystyle-muted); }
+.mystyle-fit__size { font-size: 1.5em; font-weight: 600; }
+.mystyle-fit__notes { margin: 0.6rem 0 0; padding-left: 1.1rem; font-size: 0.92em; line-height: 1.5; }
+.mystyle-fit__stock { color: var(--mystyle-caution); margin: 0.4rem 0 0; font-size: 0.92em; }
+.mystyle-fit__details { margin-top: 0.6rem; font-size: 0.9em; }
+.mystyle-fit__details summary { cursor: pointer; }
+.mystyle-bars { list-style: none; padding: 0; margin: 0.6rem 0 0; }
+.mystyle-bars li { display: grid; grid-template-columns: 3rem 1fr 3rem; gap: 0.5rem; align-items: center; padding: 0.15rem 0; }
+.mystyle-bars li.is-recommended { font-weight: 600; }
+.mystyle-bar { height: 0.5rem; background: var(--mystyle-soft); border: 1px solid var(--mystyle-line); }
+.mystyle-bar span { display: block; height: 100%; background: var(--mystyle-ink); }
+.mystyle-fit__feedback { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.75rem; font-size: 0.88em; color: var(--mystyle-muted); }
+.mystyle-fit__feedback button { font: inherit; padding: 0.3rem 0.7rem; border: 1px solid var(--mystyle-line); background: none; cursor: pointer; color: var(--mystyle-ink); }
+
+/* Picked for you, on the home page */
+.mystyle-picks .title { margin-bottom: 0.5rem; }
+.mystyle-picks [data-mystyle-intro] { margin: 0 0 1rem; color: var(--mystyle-muted); }
+
+/* Photo framing examples (same drawings as the demo quiz) */
+.framing-guide { margin: 1rem 0; }
+.framing-guide .photo-tips-heading { font-weight: 600; margin: 0 0 0.5rem; }
+.framing-examples { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+@media (max-width: 749px) { .framing-examples { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.framing-example { margin: 0; padding: 0.6rem 0.5rem 0.7rem; border: 1px solid var(--mystyle-line); text-align: center; font-size: 0.82em; line-height: 1.35; }
+.framing-example.is-good { border-color: var(--mystyle-accent); box-shadow: inset 0 0 0 1px var(--mystyle-accent); }
+.framing-example svg { display: block; width: 100%; max-width: 6.5rem; height: auto; margin: 0 auto 0.5rem; }
+.framing-example figcaption strong { display: block; }
+.framing-example .frame { fill: var(--mystyle-soft); stroke: var(--mystyle-muted); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.framing-example .frame-fill { stroke: none; }
+.framing-example .frame-edge { fill: none; }
+.framing-example .person { fill: var(--mystyle-muted); stroke: var(--mystyle-muted); }
+.framing-example.is-good .person { fill: var(--mystyle-accent); stroke: var(--mystyle-accent); }
+.framing-example .person path, .framing-example .person circle { stroke: none; }
+.framing-example .limb, .framing-example .arm { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.framing-example .limb { stroke-width: 8; }
+.framing-example .arm { stroke-width: 5.5; }
+.framing-example .badge { fill: #c0392b; }
+.framing-example.is-good .badge { fill: var(--mystyle-accent); }
+.framing-example.is-caution .badge { fill: var(--mystyle-caution); }
+.framing-example .badge-mark { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.framing-clothing { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 50%; }
+@media (max-width: 749px) { .framing-clothing { max-width: none; } }
+.framing-subheading { margin-top: 1.25rem !important; }

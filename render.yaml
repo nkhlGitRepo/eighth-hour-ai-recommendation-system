@@ -42,6 +42,11 @@ services:
       # Where the API's own address sends a browser (it has no page of its own).
       - key: STOREFRONT_URL
         value: https://nkhlgitrepo.github.io/eighth-hour-ai-recommendation-system/
+    # The Shopify store integration (the /shopify/* endpoints) needs
+    # MYSTYLE_THEME_SECRET and MYSTYLE_SERVER_KEY, set in the Render dashboard
+    # (never here: this file is public). Without them every store request is
+    # refused. See shopify/README.md.
+    #
     # POST /catalog/sync stays switched off (403) while CATALOG_SYNC_TOKEN is
     # unset, which is right for now: nothing pushes a catalog. If something
     # ever needs it, set a long random value in the Render dashboard -- never

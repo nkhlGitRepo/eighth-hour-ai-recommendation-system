@@ -1,0 +1,61 @@
+{%- comment -%}
+  MyStyle: the My Style page -- the style profile quiz for signed-in customers,
+  then their profile, Picked for you and New for you. Lives at
+  /collections/all?view=mystyle (templates/collection.mystyle.json), so it needs
+  no store page; everything inside [data-mystyle-view] is drawn by
+  assets/mystyle.js.
+{%- endcomment -%}
+{{ 'template-collection.css' | asset_url | stylesheet_tag }}
+{{ 'component-card.css' | asset_url | stylesheet_tag }}
+{{ 'component-price.css' | asset_url | stylesheet_tag }}
+
+<div class="mystyle page-width mystyle-page" data-mystyle-page>
+  <div class="mystyle-page__intro center">
+    <h1 class="title {{ section.settings.heading_size }}">{{ section.settings.heading | escape }}</h1>
+    {%- if section.settings.intro != blank -%}
+      <p class="mystyle-muted">{{ section.settings.intro | escape }}</p>
+    {%- endif -%}
+  </div>
+  <div data-mystyle-view>
+    <noscript><p class="center">My Style needs JavaScript turned on in your browser.</p></noscript>
+  </div>
+  <template data-mystyle-framing>{%- render 'mystyle-framing-guide' -%}</template>
+</div>
+
+<style>
+  .mystyle-page { padding-top: 3rem; padding-bottom: 3rem; }
+  .mystyle-page__intro { max-width: 46rem; margin: 0 auto 2rem; }
+</style>
+
+{% schema %}
+{
+  "name": "My Style",
+  "tag": "section",
+  "class": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "My Style"
+    },
+    {
+      "type": "select",
+      "id": "heading_size",
+      "label": "Heading size",
+      "options": [
+        { "value": "h2", "label": "Small" },
+        { "value": "h1", "label": "Medium" },
+        { "value": "h0", "label": "Large" }
+      ],
+      "default": "h1"
+    },
+    {
+      "type": "textarea",
+      "id": "intro",
+      "label": "Introduction",
+      "default": "Your size in every piece, and pieces chosen for your shape and style."
+    }
+  ]
+}
+{% endschema %}

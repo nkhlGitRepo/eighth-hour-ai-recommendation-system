@@ -109,3 +109,7 @@ backend/PHASE_3_FIXES.md
 backend/README_PYTHON.md
 Base_Website/README.md
 Base_Website/frontend/README.md
+
+# Shopify theme integration: the theme secret, server keys, the unreleased
+# launch list and pulled copies of the brand's theme never go in this public repo.
+shopify/private/
